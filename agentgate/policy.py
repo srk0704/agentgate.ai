@@ -1,0 +1,154 @@
+from __future__ import annotations
+import logging
+import operator
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+import yaml
+
+from agentgate.models import Effect, ToolCall
+
+logger = logging.getLogger(__name__)
+
+
+OPS = {
+    "eq": operator.eq,
+    "ne": operator.ne,
+    "gt": operator.gt,
+    "gte": operator.ge,
+    "lt": operator.lt,
+    "lte": operator.le,
+    "in": lambda a, b: a in b,
+    "not_in": lambda a, b: a not in b,
+}
+
+
+@dataclass
+class PolicyResult:
+    effect: Effect
+    policy_name: str | None
+    reason: str
+
+
+class PolicyLoader:
+    def __init__(self, path: str):
+        self.path = Path(path)
+        self._policies: list[dict] = []
+        self._observer: Any = None
+        self._load()
+
+    @classmethod
+    def from_list(cls, policies: list) -> "PolicyLoader":
+        """Create a PolicyLoader from a list of policy dicts — no file needed."""
+        instance = object.__new__(cls)
+        instance.path = Path(":memory:")
+        instance._policies = policies
+        instance._observer = None
+        return instance
+
+    def _load(self) -> None:
+        if not self.path.exists():
+            self._policies = []
+            return
+        with open(self.path) as f:
+            data = yaml.safe_load(f) or {}
+        self._policies = data.get("policies", [])
+
+    def reload(self) -> None:
+        self._load()
+        logger.info("Policies reloaded from %s (%d rules)", self.path, len(self._policies))
+
+    def start_watching(self) -> None:
+        """
+        Watch the policy YAML file for changes and reload automatically.
+        Uses watchdog if available; logs a warning and skips if not installed.
+        Does nothing if already watching.
+        """
+        if self._observer is not None:
+            return
+        try:
+            from watchdog.events import FileSystemEventHandler  # type: ignore[import]
+            from watchdog.observers import Observer  # type: ignore[import]
+        except ImportError:
+            logger.warning(
+                "watchdog not installed — policy hot-reload disabled. "
+                "Install with: pip install watchdog"
+            )
+            return
+
+        loader = self
+
+        class _Handler(FileSystemEventHandler):
+            def on_modified(self, event: Any) -> None:
+                if Path(event.src_path).resolve() == loader.path.resolve():
+                    try:
+                        loader.reload()
+                    except Exception as exc:
+                        logger.error("Policy reload failed: %s", exc)
+
+        observer = Observer()
+        observer.schedule(_Handler(), str(self.path.parent), recursive=False)
+        observer.daemon = True
+        observer.start()
+        self._observer = observer
+        logger.info("Watching %s for policy changes", self.path)
+
+    def stop_watching(self) -> None:
+        """Stop the file watcher if running."""
+        if self._observer is not None:
+            self._observer.stop()
+            self._observer = None
+
+    @property
+    def policies(self) -> list[dict]:
+        return self._policies
+
+
+class PolicyEvaluator:
+    def __init__(self, loader: PolicyLoader):
+        self._loader = loader
+
+    def evaluate(self, tool_call: ToolCall) -> PolicyResult:
+        for policy in self._loader.policies:
+            if self._matches(policy, tool_call):
+                effect = Effect(policy.get("effect", "allow"))
+                return PolicyResult(
+                    effect=effect,
+                    policy_name=policy.get("name"),
+                    reason=policy.get("reason", f"Matched policy: {policy.get('name')}"),
+                )
+        # No policy matched — default allow
+        return PolicyResult(
+            effect=Effect.ALLOW,
+            policy_name=None,
+            reason="No policy matched",
+        )
+
+    def _matches(self, policy: dict, tool_call: ToolCall) -> bool:
+        match = policy.get("match", {})
+        # Check tool name
+        if "tool" in match and match["tool"] != tool_call.tool_name:
+            return False
+
+        # Check conditions
+        for condition in policy.get("conditions", []):
+            value = self._resolve_field(condition["field"], tool_call)
+            op_fn = OPS.get(condition["op"])
+            if op_fn is None:
+                continue
+            if not op_fn(value, condition.get("value") or condition.get("values")):
+                return False
+
+        return True
+
+    def _resolve_field(self, field: str, tool_call: ToolCall) -> Any:
+        """Resolve dot-notation field like 'args.amount' or 'context.user_role'"""
+        parts = field.split(".")
+        obj: Any = tool_call
+        for part in parts:
+            if isinstance(obj, dict):
+                obj = obj.get(part)
+            else:
+                obj = getattr(obj, part, None)
+        return obj

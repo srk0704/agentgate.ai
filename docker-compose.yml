@@ -1,0 +1,31 @@
+version: "3.9"
+
+services:
+  agentgate:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - AGENTGATE_API_KEY=${AGENTGATE_API_KEY:-}
+      - AGENTGATE_DB_PATH=/data/agentgate.db
+      - AGENTGATE_POLICY_PATH=/data/policies.yaml
+      - AGENTGATE_FAIL_OPEN=${AGENTGATE_FAIL_OPEN:-true}
+      - AGENTGATE_TIMEOUT_MS=${AGENTGATE_TIMEOUT_MS:-5000}
+      - AGENTGATE_RISK_THRESHOLD_BLOCK=${AGENTGATE_RISK_THRESHOLD_BLOCK:-80}
+      - AGENTGATE_RISK_THRESHOLD_ESCALATE=${AGENTGATE_RISK_THRESHOLD_ESCALATE:-60}
+      - AGENTGATE_INJECTION_THRESHOLD_BLOCK=${AGENTGATE_INJECTION_THRESHOLD_BLOCK:-70}
+      - AGENTGATE_ANOMALY_SCORE_BLOCK=${AGENTGATE_ANOMALY_SCORE_BLOCK:-80}
+      - AGENTGATE_ANOMALY_SCORE_ESCALATE=${AGENTGATE_ANOMALY_SCORE_ESCALATE:-50}
+      - AGENTGATE_ANOMALY_VELOCITY_THRESHOLD=${AGENTGATE_ANOMALY_VELOCITY_THRESHOLD:-5}
+      - AGENTGATE_ANOMALY_VELOCITY_WINDOW_SEC=${AGENTGATE_ANOMALY_VELOCITY_WINDOW_SEC:-60}
+      - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL:-}
+    volumes:
+      - ./agentgate.db:/data/agentgate.db
+      - ./policies.yaml:/data/policies.yaml
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

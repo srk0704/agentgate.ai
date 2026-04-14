@@ -1,0 +1,1876 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AgentGate Dashboard</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface2: #21262d;
+    --border: #30363d;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --allowed: #3fb950;
+    --blocked: #f85149;
+    --escalated: #d29922;
+    --injection: #bc8cff;
+    --anomaly: #ff7b72;
+    --excess-agency: #f0883e;
+    --blue: #58a6ff;
+    --radius: 8px;
+    --shadow: 0 1px 3px rgba(0,0,0,0.4);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    min-height: 100vh;
+  }
+
+  /* ── Header ── */
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px;
+    height: 52px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .logo {
+    font-size: 16px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--text);
+    letter-spacing: -0.3px;
+  }
+
+  .logo-icon {
+    width: 28px;
+    height: 28px;
+    background: linear-gradient(135deg, #238636, #1f6feb);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+  }
+
+  .header-right {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .status-badge {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--muted);
+    flex-shrink: 0;
+  }
+  .dot.green { background: var(--allowed); box-shadow: 0 0 6px var(--allowed); }
+  .dot.red   { background: var(--blocked); }
+  .dot.pulse { animation: pulse 2s infinite; }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  .agent-count {
+    font-size: 12px;
+    color: var(--muted);
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 2px 10px;
+  }
+
+  /* ── Run Demo Button ── */
+  .btn-demo {
+    padding: 5px 14px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .btn-demo:hover:not(:disabled) {
+    background: var(--surface2);
+    border-color: var(--blue);
+    color: var(--blue);
+  }
+  .btn-demo:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  /* ── Layout ── */
+  .container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 24px;
+  }
+
+  /* ── Metric Cards ── */
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+
+  @media (max-width: 900px) {
+    .cards { grid-template-columns: repeat(2, 1fr); }
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    box-shadow: var(--shadow);
+  }
+
+  .card-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+
+  .card-value {
+    font-size: 32px;
+    font-weight: 700;
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+
+  .card-sub { font-size: 12px; color: var(--muted); }
+  .card.allowed .card-value  { color: var(--allowed); }
+  .card.blocked .card-value  { color: var(--blocked); }
+  .card.escalated .card-value{ color: var(--escalated); }
+  .card.injection .card-value{ color: var(--injection); }
+
+  /* ── Agent Breakdown ── */
+  .breakdown-section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    margin-bottom: 16px;
+    overflow: hidden;
+    box-shadow: var(--shadow);
+  }
+
+  .breakdown-header {
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    user-select: none;
+  }
+  .breakdown-header:hover { background: var(--surface2); }
+
+  .breakdown-title {
+    font-size: 13px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .breakdown-toggle {
+    font-size: 11px;
+    color: var(--muted);
+    transition: transform 0.2s;
+  }
+  .breakdown-section.open .breakdown-toggle { transform: rotate(180deg); }
+
+  .breakdown-content {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+  }
+  .breakdown-section.open .breakdown-content { max-height: 600px; }
+
+  .agent-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .at-header, .at-row {
+    display: grid;
+    grid-template-columns: 1fr 80px 80px 80px 80px 90px;
+    gap: 0;
+  }
+
+  .at-cell {
+    padding: 8px 16px;
+    font-size: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .at-cell:not(:first-child) { text-align: right; }
+
+  .at-header .at-cell {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--muted);
+    background: var(--surface2);
+  }
+
+  .at-row:last-child .at-cell { border-bottom: none; }
+  .at-row:hover .at-cell { background: var(--surface2); }
+
+  .at-cell.agent-id {
+    font-family: "SFMono-Regular", Consolas, monospace;
+    font-size: 12px;
+    color: var(--blue);
+  }
+
+  .at-rate { color: var(--blocked); font-weight: 600; }
+  .at-allowed { color: var(--allowed); }
+  .at-blocked  { color: var(--blocked); }
+  .at-esc      { color: var(--escalated); }
+
+  /* ── Filter Bar ── */
+  .filter-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface2);
+    flex-wrap: wrap;
+  }
+
+  .filter-select, .filter-input {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 12px;
+    padding: 4px 8px;
+    outline: none;
+    cursor: pointer;
+  }
+  .filter-select:focus, .filter-input:focus {
+    border-color: var(--blue);
+  }
+  .filter-input { width: 180px; cursor: text; }
+  .filter-input::placeholder { color: var(--muted); }
+
+  .filter-clear {
+    padding: 4px 10px;
+    border-radius: 6px;
+    border: 1px solid rgba(248,81,73,0.3);
+    background: rgba(248,81,73,0.08);
+    color: var(--blocked);
+    font-size: 12px;
+    cursor: pointer;
+    display: none;
+  }
+  .filter-clear:hover { background: rgba(248,81,73,0.15); }
+
+  .filter-count {
+    font-size: 11px;
+    color: var(--muted);
+    padding: 4px 8px;
+    margin-left: auto;
+    white-space: nowrap;
+  }
+
+  /* ── Main Grid ── */
+  .main-grid {
+    display: grid;
+    grid-template-columns: 1fr 380px;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+
+  @media (max-width: 1100px) {
+    .main-grid { grid-template-columns: 1fr; }
+  }
+
+  /* ── Panel ── */
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+
+  .panel-header {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .panel-title {
+    font-size: 13px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .badge {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1px 8px;
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  /* ── Feed ── */
+  .feed-list {
+    max-height: 600px;
+    overflow-y: auto;
+  }
+
+  .feed-list::-webkit-scrollbar { width: 4px; }
+  .feed-list::-webkit-scrollbar-track { background: transparent; }
+  .feed-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .feed-item {
+    border-bottom: 1px solid var(--border);
+  }
+  .feed-item:last-child { border-bottom: none; }
+
+  .feed-item.new .feed-row-main {
+    animation: fadeIn 0.4s ease;
+  }
+  @keyframes fadeIn {
+    from { background: rgba(56, 139, 253, 0.1); }
+    to   { background: transparent; }
+  }
+
+  .feed-row-main {
+    display: grid;
+    grid-template-columns: auto 1fr auto auto;
+    gap: 10px;
+    align-items: start;
+    padding: 10px 14px 10px 16px;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .feed-row-main:hover { background: var(--surface2); }
+
+  .expand-toggle {
+    font-size: 10px;
+    color: var(--muted);
+    padding: 2px 4px;
+    transition: transform 0.2s;
+    flex-shrink: 0;
+    align-self: center;
+    user-select: none;
+  }
+  .feed-item.expanded .expand-toggle { transform: rotate(180deg); }
+
+  /* ── Pills ── */
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    white-space: nowrap;
+    flex-shrink: 0;
+    align-self: start;
+    margin-top: 1px;
+  }
+
+  .pill.allowed    { background: rgba(63,185,80,0.15);  color: var(--allowed); }
+  .pill.blocked    { background: rgba(248,81,73,0.15);  color: var(--blocked); }
+  .pill.escalated,
+  .pill.escalation_approved,
+  .pill.escalation_rejected { background: rgba(210,153,34,0.15); color: var(--escalated); }
+  .pill.injection  { background: rgba(188,140,255,0.15); color: var(--injection); }
+  .pill.failed_open{ background: rgba(139,148,158,0.15); color: var(--muted); }
+
+  .feed-body { min-width: 0; }
+
+  .feed-tool {
+    font-size: 13px;
+    font-weight: 500;
+    font-family: "SFMono-Regular", Consolas, monospace;
+    color: var(--blue);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .feed-reason {
+    font-size: 12px;
+    color: var(--muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .feed-scores {
+    display: flex;
+    gap: 6px;
+    font-size: 11px;
+    margin-top: 3px;
+    flex-wrap: wrap;
+  }
+
+  .score-badge {
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-weight: 600;
+  }
+  .score-badge.risk    { background: rgba(248,81,73,0.12);  color: #f85149; }
+  .score-badge.inj     { background: rgba(188,140,255,0.12); color: #bc8cff; }
+  .score-badge.anomaly { background: rgba(255,123,114,0.12); color: #ff7b72; }
+
+  .attack-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    margin-left: 4px;
+    flex-shrink: 0;
+  }
+  .attack-badge.goal_hijacking      { background: rgba(248,81,73,0.18); color: #f85149; }
+  .attack-badge.data_exfiltration   { background: rgba(248,81,73,0.18); color: #f85149; }
+  .attack-badge.privilege_escalation{ background: rgba(248,81,73,0.18); color: #f85149; }
+  .attack-badge.excessive_agency    { background: rgba(240,136,62,0.18); color: #f0883e; }
+  .attack-badge.other               { background: rgba(188,140,255,0.15); color: #bc8cff; }
+
+  .blast-row {
+    display: flex;
+    gap: 4px;
+    margin-top: 3px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .blast-chip {
+    font-size: 10px;
+    padding: 1px 5px;
+    border-radius: 3px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  .blast-chip.irreversible { color: #f85149; border-color: rgba(248,81,73,0.3); background: rgba(248,81,73,0.08); }
+  .blast-chip.critical     { color: #f85149; }
+  .blast-chip.high         { color: var(--escalated); }
+  .blast-chip.reg          { color: #79c0ff; border-color: rgba(121,192,255,0.3); background: rgba(121,192,255,0.08); }
+
+  .feed-meta {
+    text-align: right;
+    flex-shrink: 0;
+    min-width: 70px;
+  }
+
+  .feed-time  { font-size: 11px; color: var(--muted); white-space: nowrap; }
+  .feed-agent { font-size: 11px; color: var(--muted); }
+
+  /* ── Expanded Feed Row ── */
+  .feed-expanded {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.25s ease;
+    border-top: 0px solid var(--border);
+  }
+  .feed-expanded.open {
+    max-height: 700px;
+    border-top-width: 1px;
+  }
+
+  .detail-grid {
+    padding: 12px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    background: rgba(13,17,23,0.5);
+  }
+
+  .detail-section { }
+
+  .detail-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.7px;
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+
+  .detail-value {
+    font-size: 12px;
+    color: var(--text);
+    line-height: 1.5;
+  }
+
+  .detail-muted { color: var(--muted); font-style: italic; }
+
+  .detail-footer {
+    border-top: 1px solid var(--border);
+    padding-top: 8px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .detail-meta-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .detail-meta-item code { font-family: "SFMono-Regular", Consolas, monospace; color: var(--text); font-size: 11px; }
+
+  .copy-btn {
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--muted);
+    font-size: 11px;
+    padding: 1px 5px;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .copy-btn:hover { background: var(--surface2); color: var(--text); }
+
+  .score-detail {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 3px;
+  }
+
+  .arg-row {
+    display: flex;
+    gap: 6px;
+    font-size: 12px;
+    margin-bottom: 2px;
+  }
+  .arg-key {
+    color: var(--muted);
+    font-family: "SFMono-Regular", Consolas, monospace;
+    font-size: 11px;
+    flex-shrink: 0;
+  }
+  .arg-val {
+    color: var(--text);
+    font-family: "SFMono-Regular", Consolas, monospace;
+    font-size: 11px;
+    word-break: break-all;
+  }
+
+  .blast-detail-row {
+    display: flex;
+    gap: 8px;
+    font-size: 12px;
+    margin-bottom: 2px;
+  }
+  .blast-detail-key { color: var(--muted); flex-shrink: 0; min-width: 100px; }
+
+  /* ── Empty States ── */
+  .empty-state {
+    padding: 36px 24px;
+    text-align: center;
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.8;
+  }
+
+  .empty-state .empty-sub {
+    font-size: 12px;
+    margin-top: 4px;
+  }
+
+  .empty-state .btn-demo-inline {
+    margin-top: 12px;
+    padding: 6px 16px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--text);
+    font-size: 12px;
+    cursor: pointer;
+    transition: background 0.15s;
+    display: inline-block;
+  }
+  .empty-state .btn-demo-inline:hover { background: var(--border); }
+
+  .empty-clear-link {
+    background: none;
+    border: none;
+    color: var(--blue);
+    font-size: 12px;
+    cursor: pointer;
+    text-decoration: underline;
+    padding: 0;
+    display: inline;
+  }
+
+  .empty-state-esc {
+    padding: 28px 16px;
+    text-align: center;
+    font-size: 13px;
+    color: #3d9450;
+  }
+  .empty-check { margin-right: 4px; }
+
+  /* ── Escalation Inbox ── */
+  .inbox-list {
+    max-height: 600px;
+    overflow-y: auto;
+  }
+
+  .inbox-item {
+    border-bottom: 1px solid var(--border);
+  }
+  .inbox-item:last-child { border-bottom: none; }
+
+  .inbox-header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 16px 6px;
+    cursor: pointer;
+    user-select: none;
+  }
+  .inbox-header-row:hover { background: var(--surface2); }
+
+  .inbox-header-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .inbox-tool {
+    font-family: "SFMono-Regular", Consolas, monospace;
+    font-size: 13px;
+    color: var(--blue);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .inbox-header-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  .inbox-risk-badge {
+    font-size: 12px;
+    color: var(--escalated);
+    font-weight: 600;
+  }
+
+  .esc-toggle {
+    font-size: 10px;
+    color: var(--muted);
+    transition: transform 0.2s;
+    padding: 2px 4px;
+  }
+
+  .inbox-meta {
+    font-size: 11px;
+    color: var(--muted);
+    padding: 0 16px 4px;
+  }
+
+  .inbox-blast {
+    font-size: 11px;
+    color: var(--muted);
+    padding: 0 16px 4px;
+  }
+
+  .inbox-inj-warn {
+    font-size: 11px;
+    color: var(--blocked);
+    padding: 0 16px 4px;
+  }
+
+  /* ── Escalation Expanded ── */
+  .inbox-expanded {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.25s ease;
+  }
+  .inbox-expanded.open { max-height: 800px; }
+
+  .esc-detail-grid {
+    padding: 10px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    background: rgba(13,17,23,0.5);
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .esc-section { }
+
+  /* ── Inbox Actions ── */
+  .inbox-actions {
+    display: flex;
+    gap: 8px;
+    padding: 8px 16px 12px;
+  }
+
+  .btn {
+    padding: 5px 14px;
+    border-radius: 6px;
+    border: none;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: opacity 0.15s;
+  }
+  .btn:hover { opacity: 0.85; }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .btn-approve {
+    background: rgba(63,185,80,0.2);
+    color: var(--allowed);
+    border: 1px solid rgba(63,185,80,0.3);
+  }
+  .btn-reject {
+    background: rgba(248,81,73,0.15);
+    color: var(--blocked);
+    border: 1px solid rgba(248,81,73,0.25);
+  }
+
+  /* ── Confirm Panel ── */
+  .confirm-wrap { padding: 0 16px 12px; }
+  .confirm-panel {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .confirm-label { font-size: 12px; color: var(--muted); }
+  .confirm-input {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text);
+    font-size: 12px;
+    padding: 5px 8px;
+    outline: none;
+    width: 100%;
+  }
+  .confirm-input:focus { border-color: var(--blue); }
+  .confirm-btns { display: flex; gap: 8px; }
+  .btn-confirm {
+    padding: 4px 12px;
+    border-radius: 4px;
+    border: 1px solid rgba(63,185,80,0.3);
+    background: rgba(63,185,80,0.15);
+    color: var(--allowed);
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .btn-confirm:hover { background: rgba(63,185,80,0.25); }
+  .btn-cancel {
+    padding: 4px 12px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--muted);
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .btn-cancel:hover { background: var(--surface2); }
+
+  /* ── Flagged Sessions ── */
+  .sessions-panel { margin-top: 16px; }
+
+  .session-item {
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .session-item:last-child { border-bottom: none; }
+
+  .session-score {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--anomaly);
+    width: 44px;
+    text-align: center;
+    flex-shrink: 0;
+  }
+
+  .session-body { flex: 1; min-width: 0; }
+
+  .session-agent {
+    font-family: "SFMono-Regular", Consolas, monospace;
+    font-size: 12px;
+    color: var(--blue);
+  }
+
+  .session-reason {
+    font-size: 12px;
+    color: var(--muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .session-time { font-size: 11px; color: var(--muted); flex-shrink: 0; }
+
+  /* ── WS status ── */
+  .ws-status {
+    font-size: 11px;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  /* ── System Status Bar ── */
+  .system-status-bar {
+    width: 100%;
+    padding: 6px 24px;
+    font-size: 12px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border-bottom: 1px solid var(--border);
+    transition: background 0.3s;
+  }
+  .system-status-bar.ok      { background: rgba(63, 185, 80, 0.08);  color: var(--allowed); }
+  .system-status-bar.degraded{ background: rgba(210, 153, 34, 0.12); color: var(--escalated); }
+  .system-status-bar.error   { background: rgba(248, 81, 73, 0.12);  color: var(--blocked); }
+  .system-status-bar .status-icon  { font-size: 13px; }
+  .system-status-bar .status-detail{ margin-left: auto; font-size: 11px; opacity: 0.75; }
+
+  /* ── Toast ── */
+  #toast-container {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    pointer-events: none;
+  }
+
+  .toast {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 16px;
+    font-size: 13px;
+    color: var(--text);
+    opacity: 0;
+    transform: translateY(8px);
+    transition: opacity 0.2s, transform 0.2s;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+    max-width: 320px;
+  }
+  .toast.toast-visible { opacity: 1; transform: translateY(0); }
+  .toast.toast-error { border-color: rgba(248,81,73,0.4); color: var(--blocked); }
+</style>
+</head>
+<body>
+
+<!-- ── System Status Bar ── -->
+<div class="system-status-bar ok" id="system-status-bar">
+  <span class="status-icon">●</span>
+  <span id="system-status-text">All systems operational</span>
+  <span class="status-detail" id="system-status-detail"></span>
+</div>
+
+<!-- ── Header ── -->
+<header>
+  <div class="logo">
+    <div class="logo-icon">⊕</div>
+    AgentGate
+  </div>
+  <div class="header-right">
+    <button class="btn-demo" id="demo-btn" onclick="triggerDemo()">▶ Run Demo</button>
+    <div class="agent-count" id="agent-count">0 active agents</div>
+    <div class="status-badge">
+      <div class="dot green pulse" id="status-dot"></div>
+      <span id="status-text">Connecting…</span>
+    </div>
+    <div class="ws-status">
+      <div class="dot" id="ws-dot"></div>
+      <span id="ws-label">—</span>
+    </div>
+  </div>
+</header>
+
+<!-- ── Main ── -->
+<div class="container">
+
+  <!-- Metric Cards -->
+  <div class="cards">
+    <div class="card allowed">
+      <div class="card-label">Total Actions Today</div>
+      <div class="card-value" id="card-total">—</div>
+      <div class="card-sub">tool calls evaluated</div>
+    </div>
+    <div class="card blocked">
+      <div class="card-label">Block Rate</div>
+      <div class="card-value" id="card-block">—</div>
+      <div class="card-sub">% of actions blocked</div>
+    </div>
+    <div class="card escalated">
+      <div class="card-label">Escalation Rate</div>
+      <div class="card-value" id="card-escalation">—</div>
+      <div class="card-sub">% sent to human review</div>
+    </div>
+    <div class="card injection">
+      <div class="card-label">Injection Attempts</div>
+      <div class="card-value" id="card-injection">—</div>
+      <div class="card-sub">detected today</div>
+    </div>
+  </div>
+
+  <!-- Agent Breakdown -->
+  <div class="breakdown-section" id="breakdown-section">
+    <div class="breakdown-header" onclick="toggleBreakdown()">
+      <div class="breakdown-title">
+        Agent breakdown
+        <span class="badge" id="breakdown-count">—</span>
+      </div>
+      <span class="breakdown-toggle">▼</span>
+    </div>
+    <div class="breakdown-content">
+      <div id="breakdown-body">
+        <div class="empty-state" style="padding:20px">No agent data yet — run the demo to populate</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Live Feed + Escalation Inbox -->
+  <div class="main-grid">
+
+    <!-- Live Feed -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title">
+          Live Decision Feed
+          <span class="badge" id="feed-count">0</span>
+        </div>
+      </div>
+      <!-- Filter Bar -->
+      <div class="filter-bar" id="filter-bar">
+        <select class="filter-select" id="filter-outcome" onchange="onOutcomeFilter()">
+          <option value="">All outcomes</option>
+          <option value="allowed">Allowed</option>
+          <option value="blocked">Blocked</option>
+          <option value="escalated">Escalated</option>
+        </select>
+        <select class="filter-select" id="filter-attack" onchange="onAttackFilter()">
+          <option value="">All types</option>
+          <option value="goal_hijacking">Goal hijacking</option>
+          <option value="data_exfiltration">Data exfiltration</option>
+          <option value="privilege_escalation">Privilege escalation</option>
+          <option value="excessive_agency">Excessive agency</option>
+        </select>
+        <input class="filter-input" id="filter-tool" type="text"
+               placeholder="Filter by tool name…" oninput="onToolFilter()">
+        <button class="filter-clear" id="filter-clear" onclick="clearFilters()">✕ Clear</button>
+        <span class="filter-count" id="filter-count"></span>
+      </div>
+      <div class="feed-list" id="feed-list">
+        <div class="empty-state">
+          <div>No decisions yet</div>
+          <div class="empty-sub">Click ▶ Run Demo to see AgentGate in action</div>
+          <button class="btn-demo-inline" onclick="triggerDemo()">▶ Run Demo</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Escalation Inbox -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title">
+          Escalation Inbox
+          <span class="badge" id="inbox-count">0</span>
+        </div>
+      </div>
+      <div class="inbox-list" id="inbox-list">
+        <div class="empty-state-esc"><span class="empty-check">✓</span> No pending escalations</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Flagged Sessions (hidden when empty) -->
+  <div class="panel sessions-panel" id="sessions-panel" style="display:none">
+    <div class="panel-header">
+      <div class="panel-title">
+        Flagged Sessions
+        <span class="badge" id="sessions-count">0</span>
+      </div>
+    </div>
+    <div id="sessions-list"></div>
+  </div>
+
+</div>
+
+<!-- Toast Container -->
+<div id="toast-container"></div>
+
+<script>
+  const BASE    = `${window.location.protocol}//${window.location.host}`;
+  const WS_BASE = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}`;
+
+  const MAX_FEED = 50;
+
+  // ── State ──────────────────────────────────────────────────────────────────
+  let feedDecisions  = [];
+  let expandedRows   = new Set();
+  let expandedEscalations = new Set();
+  let activeConfirms = new Set();
+  let filterOutcome  = '';
+  let filterAttack   = '';
+  let filterTool     = '';
+  let ws             = null;
+  let demoRunning    = false;
+  let _lastNewCallId = null;
+
+  // ── Escape helper ─────────────────────────────────────────────────────────
+  function escHtml(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  // ── Time ──────────────────────────────────────────────────────────────────
+  function relativeTime(iso) {
+    if (!iso) return '';
+    const diff = Date.now() - new Date(iso + (iso.endsWith('Z') ? '' : 'Z')).getTime();
+    const s = Math.floor(diff / 1000);
+    if (s < 5)  return 'just now';
+    if (s < 60) return `${s}s ago`;
+    const m = Math.floor(s / 60);
+    if (m < 60) return `${m}m ago`;
+    return `${Math.floor(m / 60)}h ago`;
+  }
+
+  function refreshTimestamps() {
+    document.querySelectorAll('[data-ts]').forEach(el => {
+      el.textContent = relativeTime(el.getAttribute('data-ts'));
+    });
+  }
+
+  // ── Labels / pills ────────────────────────────────────────────────────────
+  function outcomeLabel(outcome) {
+    const map = {
+      allowed: 'allowed', blocked: 'blocked',
+      escalated: 'escalated', escalation_approved: 'approved',
+      escalation_rejected: 'rejected', failed_open: 'fail-open',
+    };
+    return map[outcome] || outcome;
+  }
+
+  function pillClass(outcome, injScore) {
+    if (injScore >= 70) return 'injection';
+    return outcome || 'allowed';
+  }
+
+  const ATTACK_LABELS = {
+    goal_hijacking:       'INJECTION',
+    data_exfiltration:    'DATA LEAK',
+    privilege_escalation: 'PRIV ESC',
+    excessive_agency:     'EXCESS AGENCY',
+    other:                'SUSPICIOUS',
+  };
+
+  function attackBadgeHtml(attackType) {
+    if (!attackType || attackType === 'none') return '';
+    const label = ATTACK_LABELS[attackType] || attackType.toUpperCase();
+    return `<span class="attack-badge ${escHtml(attackType)}">${escHtml(label)}</span>`;
+  }
+
+  // ── Blast radius chips (collapsed) ───────────────────────────────────────
+  function blastRadiusHtml(blastRadius) {
+    if (!blastRadius) return '';
+    let br;
+    try { br = typeof blastRadius === 'string' ? JSON.parse(blastRadius) : blastRadius; }
+    catch { return ''; }
+    const chips = [];
+    if (br.financial_impact && br.financial_impact !== 'unknown')
+      chips.push(`<span class="blast-chip">${escHtml(br.financial_impact)}</span>`);
+    if (br.reversibility === 'irreversible')
+      chips.push(`<span class="blast-chip irreversible">irreversible 🔴</span>`);
+    else if (br.reversibility === 'partially_reversible')
+      chips.push(`<span class="blast-chip">partial</span>`);
+    if (br.severity && br.severity !== 'low')
+      chips.push(`<span class="blast-chip ${br.severity}">${escHtml(br.severity.toUpperCase())}</span>`);
+    (br.regulatory_flags || []).forEach(f =>
+      chips.push(`<span class="blast-chip reg">${escHtml(f)}</span>`)
+    );
+    return chips.length ? `<div class="blast-row">${chips.join('')}</div>` : '';
+  }
+
+  // ── Blast radius one-liner (escalation collapsed) ─────────────────────────
+  function blastOneliner(br) {
+    if (!br) return '';
+    let parsed;
+    try { parsed = typeof br === 'string' ? JSON.parse(br) : br; }
+    catch { return ''; }
+    const parts = [];
+    if (parsed.financial_impact && parsed.financial_impact !== 'unknown')
+      parts.push(parsed.financial_impact);
+    if (parsed.reversibility)
+      parts.push(parsed.reversibility.replace(/_/g, ' '));
+    if (parsed.severity)
+      parts.push(parsed.severity.toUpperCase());
+    return parts.join(' | ');
+  }
+
+  // ── Blast radius full detail (expanded) ───────────────────────────────────
+  function blastFullHtml(br) {
+    if (!br) return '<span class="detail-muted">Not available</span>';
+    let parsed;
+    try { parsed = typeof br === 'string' ? JSON.parse(br) : br; }
+    catch { return '<span class="detail-muted">Not available</span>'; }
+    const rows = [
+      ['Financial', parsed.financial_impact || 'unknown'],
+      ['Reversibility', (parsed.reversibility || 'unknown').replace(/_/g, ' ')],
+      ['Severity', (parsed.severity || 'unknown').toUpperCase()],
+    ];
+    if (parsed.regulatory_flags && parsed.regulatory_flags.length)
+      rows.push(['Regulatory', parsed.regulatory_flags.join(', ')]);
+    if (parsed.estimated_affected_users)
+      rows.push(['Affected users', `~${parsed.estimated_affected_users}`]);
+    return rows.map(([k, v]) =>
+      `<div class="blast-detail-row"><span class="blast-detail-key">${escHtml(k)}:</span><span>${escHtml(String(v))}</span></div>`
+    ).join('');
+  }
+
+  // ── Score chips ───────────────────────────────────────────────────────────
+  function scoreHtml(risk, inj, anomaly) {
+    let html = '';
+    if (risk != null)               html += `<span class="score-badge risk">R:${risk}</span>`;
+    if (inj != null && inj > 0)     html += `<span class="score-badge inj">I:${inj}</span>`;
+    if (anomaly != null && anomaly > 0) html += `<span class="score-badge anomaly">A:${anomaly}</span>`;
+    return html ? `<div class="feed-scores">${html}</div>` : '';
+  }
+
+  // ── Formatted args ────────────────────────────────────────────────────────
+  function formatArgsHtml(argsJson) {
+    if (!argsJson) return '<span class="detail-muted">No arguments</span>';
+    let args;
+    try { args = typeof argsJson === 'string' ? JSON.parse(argsJson) : argsJson; }
+    catch { return `<span class="detail-muted">${escHtml(String(argsJson))}</span>`; }
+    if (!args || typeof args !== 'object' || Array.isArray(args))
+      return `<span class="detail-muted">${escHtml(JSON.stringify(args))}</span>`;
+    const entries = Object.entries(args);
+    if (!entries.length) return '<span class="detail-muted">No arguments</span>';
+    const currencyKeys = new Set(['amount','price','total','balance','value','fee']);
+    return entries.map(([k, v]) => {
+      let display;
+      if (currencyKeys.has(k.toLowerCase()) && typeof v === 'number')
+        display = `$${v.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+      else
+        display = typeof v === 'object' ? JSON.stringify(v) : String(v);
+      return `<div class="arg-row"><span class="arg-key">${escHtml(k)}:</span><span class="arg-val">${escHtml(display)}</span></div>`;
+    }).join('');
+  }
+
+  // ── Feed row HTML ─────────────────────────────────────────────────────────
+  function feedRowHtml(d) {
+    const cid      = d.call_id || '';
+    const cidEsc   = escHtml(cid);
+    const outcome  = d.outcome || 'allowed';
+    const injScore = d.injection_score || 0;
+    const pClass   = pillClass(outcome, injScore);
+    const isNew    = _lastNewCallId === cid;
+    const reason   = (d.reason || '');
+    const reasonTrunc = reason.length > 80 ? reason.slice(0, 80) + '…' : reason;
+
+    const scores = `
+      ${d.risk_score    != null ? `<div class="score-detail"><span class="score-badge risk">Risk ${d.risk_score}/100</span>${d.risk_reason ? ` — ${escHtml(d.risk_reason)}` : ''}</div>` : ''}
+      ${d.injection_score != null ? `<div class="score-detail"><span class="score-badge inj">Injection ${d.injection_score}/100</span>${d.injection_reason ? ` — ${escHtml(d.injection_reason)}` : ''}</div>` : ''}
+      ${d.anomaly_score   != null ? `<div class="score-detail"><span class="score-badge anomaly">Anomaly ${d.anomaly_score}/100</span>${d.anomaly_reason ? ` — ${escHtml(d.anomaly_reason)}` : ' — Normal behavior'}</div>` : ''}
+      ${d.risk_score == null && d.injection_score == null && d.anomaly_score == null ? '<span class="detail-muted">No scores</span>' : ''}
+    `;
+
+    const cpBtnId = `cpbtn-${cidEsc}`;
+
+    return `
+      <div class="feed-item${isNew ? ' new' : ''}" id="row-${cidEsc}">
+        <div class="feed-row-main" onclick="toggleFeedRow('${cidEsc}')">
+          <span class="pill ${pClass}">${outcomeLabel(outcome)}</span>
+          <div class="feed-body">
+            <div class="feed-tool">${escHtml(d.tool_name || '')}${attackBadgeHtml(d.attack_type)}</div>
+            <div class="feed-reason">${escHtml(reasonTrunc)}</div>
+            ${scoreHtml(d.risk_score, d.injection_score, d.anomaly_score)}
+            ${blastRadiusHtml(d.blast_radius)}
+          </div>
+          <div class="feed-meta">
+            <div class="feed-time" data-ts="${escHtml(d.decided_at || '')}">${relativeTime(d.decided_at)}</div>
+            <div class="feed-agent">${escHtml(d.agent_id || '')}</div>
+          </div>
+          <div class="expand-toggle">▼</div>
+        </div>
+        <div class="feed-expanded" id="exp-${cidEsc}">
+          <div class="detail-grid">
+            <div class="detail-section">
+              <div class="detail-label">Customer request</div>
+              <div class="detail-value">${d.original_task ? escHtml(d.original_task) : '<span class="detail-muted">No task context provided</span>'}</div>
+            </div>
+            <div class="detail-section">
+              <div class="detail-label">Agent was about to</div>
+              <div class="detail-value">${formatArgsHtml(d.args)}</div>
+            </div>
+            <div class="detail-section">
+              <div class="detail-label">Scores</div>
+              <div class="detail-value">${scores}</div>
+            </div>
+            <div class="detail-section">
+              <div class="detail-label">Blast radius</div>
+              <div class="detail-value">${blastFullHtml(d.blast_radius)}</div>
+            </div>
+            <div class="detail-section detail-footer">
+              <div class="detail-meta-item">
+                <span>Policy:</span>
+                ${d.policy_matched ? `<code>${escHtml(d.policy_matched)}</code>` : '<span class="detail-muted">None matched</span>'}
+              </div>
+              <div class="detail-meta-item">
+                <span>Decision in:</span>
+                <code>${d.latency_ms ? Math.round(d.latency_ms) + 'ms' : '—'}</code>
+              </div>
+              <div class="detail-meta-item">
+                <span>ID:</span>
+                <code>${cidEsc}</code>
+                <button class="copy-btn" id="${cpBtnId}"
+                  onclick="copyToClipboard('${cidEsc}','${cpBtnId}');event.stopPropagation()">📋</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>`;
+  }
+
+  // ── Escalation inbox item HTML ────────────────────────────────────────────
+  function inboxItemHtml(e) {
+    const id      = e.id || '';
+    const idEsc   = escHtml(id);
+    const callId  = e.call_id || '';
+    const blast   = blastOneliner(e.blast_radius);
+    const injScore = e.injection_score || 0;
+
+    const cpBtnId = `esc-cp-${idEsc}`;
+
+    const detailScores = `
+      ${e.risk_score    != null ? `<div class="score-detail"><span class="score-badge risk">Risk ${e.risk_score}/100</span>${e.risk_reason ? ` — ${escHtml(e.risk_reason)}` : ''}</div>` : ''}
+      ${injScore > 0 ? `<div class="score-detail"><span class="score-badge inj">Injection ${injScore}/100</span>${e.injection_reason ? ` — ${escHtml(e.injection_reason)}` : ''}</div>` : ''}
+      ${e.anomaly_score != null && e.anomaly_score > 0 ? `<div class="score-detail"><span class="score-badge anomaly">Anomaly ${e.anomaly_score}/100</span>${e.anomaly_reason ? ` — ${escHtml(e.anomaly_reason)}` : ''}</div>` : ''}
+      ${e.risk_score == null && injScore === 0 ? '<span class="detail-muted">No scores available</span>' : ''}
+    `;
+
+    return `
+      <div class="inbox-item" id="esc-${idEsc}">
+        <div class="inbox-header-row" onclick="toggleEscalation('${idEsc}')">
+          <div class="inbox-header-left">
+            <span class="pill escalated">escalated</span>
+            <span class="inbox-tool">${escHtml(e.tool_name || '')}</span>
+          </div>
+          <div class="inbox-header-right">
+            <span class="inbox-risk-badge">Risk ${e.risk_score != null ? e.risk_score : '—'}/100</span>
+            <span class="esc-toggle" id="esc-toggle-${idEsc}">▼</span>
+          </div>
+        </div>
+        <div class="inbox-meta">
+          ${escHtml(e.agent_id || '')} · <span data-ts="${escHtml(e.created_at || '')}">${relativeTime(e.created_at)}</span>
+        </div>
+        ${blast ? `<div class="inbox-blast">${escHtml(blast)}</div>` : ''}
+        ${injScore > 0 ? `<div class="inbox-inj-warn">⚠ Injection: ${injScore}/100${e.attack_type ? ` [${escHtml(e.attack_type)}]` : ''}</div>` : ''}
+
+        <div class="inbox-expanded" id="esc-exp-${idEsc}">
+          <div class="esc-detail-grid">
+            <div class="esc-section">
+              <div class="detail-label">Customer request</div>
+              <div class="detail-value">${e.original_task ? escHtml(e.original_task) : '<span class="detail-muted">No task context provided</span>'}</div>
+            </div>
+            <div class="esc-section">
+              <div class="detail-label">Agent was about to</div>
+              <div class="detail-value">${formatArgsHtml(e.args)}</div>
+            </div>
+            <div class="esc-section">
+              <div class="detail-label">Scores</div>
+              <div class="detail-value">${detailScores}</div>
+            </div>
+            <div class="esc-section">
+              <div class="detail-label">Blast radius</div>
+              <div class="detail-value">${blastFullHtml(e.blast_radius)}</div>
+            </div>
+            <div class="esc-section">
+              <div class="detail-label">Policy</div>
+              <div class="detail-value">${e.policy_matched ? escHtml(e.policy_matched) : '<span class="detail-muted">No policy matched</span>'}</div>
+            </div>
+            <div class="detail-section detail-footer" style="border-top:1px solid var(--border);padding-top:8px">
+              <div class="detail-meta-item">
+                <span>Decision ID:</span>
+                <code>${escHtml(callId)}</code>
+                <button class="copy-btn" id="${cpBtnId}"
+                  onclick="copyToClipboard('${escHtml(callId)}','${cpBtnId}')">📋</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="inbox-actions" id="actions-${idEsc}">
+          <button class="btn btn-approve" onclick="startConfirm('${idEsc}','approve')">Approve</button>
+          <button class="btn btn-reject"  onclick="startConfirm('${idEsc}','reject')">Reject</button>
+        </div>
+        <div id="confirm-${idEsc}"></div>
+      </div>`;
+  }
+
+  // ── Toggle feed row ───────────────────────────────────────────────────────
+  function toggleFeedRow(callId) {
+    const rowEl = document.getElementById(`row-${callId}`);
+    const expEl = document.getElementById(`exp-${callId}`);
+    if (!expEl) return;
+    if (expandedRows.has(callId)) {
+      expandedRows.delete(callId);
+      expEl.classList.remove('open');
+      if (rowEl) rowEl.classList.remove('expanded');
+    } else {
+      expandedRows.add(callId);
+      expEl.classList.add('open');
+      if (rowEl) rowEl.classList.add('expanded');
+    }
+  }
+
+  // ── Toggle escalation ─────────────────────────────────────────────────────
+  function toggleEscalation(id) {
+    const expEl    = document.getElementById(`esc-exp-${id}`);
+    const toggleEl = document.getElementById(`esc-toggle-${id}`);
+    if (!expEl) return;
+    if (expandedEscalations.has(id)) {
+      expandedEscalations.delete(id);
+      expEl.classList.remove('open');
+      if (toggleEl) toggleEl.style.transform = '';
+    } else {
+      expandedEscalations.add(id);
+      expEl.classList.add('open');
+      if (toggleEl) toggleEl.style.transform = 'rotate(180deg)';
+    }
+  }
+
+  // ── Confirm flow ──────────────────────────────────────────────────────────
+  function startConfirm(id, action) {
+    activeConfirms.add(id);
+    const actionsEl = document.getElementById(`actions-${id}`);
+    const confirmEl = document.getElementById(`confirm-${id}`);
+    if (actionsEl) actionsEl.style.display = 'none';
+    const color = action === 'approve' ? 'var(--allowed)' : 'var(--blocked)';
+    const label = action === 'approve' ? 'Approving' : 'Rejecting';
+    if (confirmEl) confirmEl.innerHTML = `
+      <div class="confirm-wrap">
+        <div class="confirm-panel">
+          <div class="confirm-label" style="color:${color}">${label} — add a note (optional):</div>
+          <input class="confirm-input" id="note-${escHtml(id)}" type="text" placeholder="Reason…">
+          <div class="confirm-btns">
+            <button class="btn-confirm" onclick="confirmEscalation('${escHtml(id)}','${action}')">Confirm</button>
+            <button class="btn-cancel"  onclick="cancelConfirm('${escHtml(id)}')">Cancel</button>
+          </div>
+        </div>
+      </div>`;
+  }
+
+  function cancelConfirm(id) {
+    activeConfirms.delete(id);
+    const actionsEl = document.getElementById(`actions-${id}`);
+    const confirmEl = document.getElementById(`confirm-${id}`);
+    if (actionsEl) actionsEl.style.display = '';
+    if (confirmEl) confirmEl.innerHTML = '';
+  }
+
+  async function confirmEscalation(id, action) {
+    const noteEl = document.getElementById(`note-${id}`);
+    const note   = noteEl ? noteEl.value.trim() : '';
+    const item   = document.getElementById(`esc-${id}`);
+    if (!item) return;
+    item.querySelectorAll('button').forEach(b => b.disabled = true);
+    try {
+      const r = await fetch(`${BASE}/escalations/${encodeURIComponent(id)}/${action}`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({reason: note || `Dashboard ${action}`}),
+      });
+      if (!r.ok) throw new Error(await r.text());
+      item.style.transition = 'opacity 0.4s';
+      item.style.opacity = '0';
+      setTimeout(() => {
+        item.remove();
+        activeConfirms.delete(id);
+        expandedEscalations.delete(id);
+        const list = document.getElementById('inbox-list');
+        if (list && list.querySelectorAll('.inbox-item').length === 0)
+          list.innerHTML = '<div class="empty-state-esc"><span class="empty-check">✓</span> No pending escalations</div>';
+        const badge = document.getElementById('inbox-count');
+        if (badge) badge.textContent = Math.max(0, parseInt(badge.textContent || '0') - 1);
+      }, 400);
+      showToast('Decision recorded');
+    } catch (err) {
+      item.querySelectorAll('button').forEach(b => b.disabled = false);
+      showToast(`Failed: ${err.message}`, true);
+    }
+  }
+
+  // ── Filters ───────────────────────────────────────────────────────────────
+  function getFilteredDecisions() {
+    return feedDecisions.filter(d => {
+      if (filterOutcome) {
+        if (filterOutcome === 'escalated') {
+          if (!['escalated','escalation_approved','escalation_rejected'].includes(d.outcome))
+            return false;
+        } else if (d.outcome !== filterOutcome) {
+          return false;
+        }
+      }
+      if (filterAttack && d.attack_type !== filterAttack) return false;
+      if (filterTool   && !(d.tool_name || '').toLowerCase().includes(filterTool.toLowerCase()))
+        return false;
+      return true;
+    });
+  }
+
+  function onOutcomeFilter() {
+    filterOutcome = document.getElementById('filter-outcome').value;
+    // Hide attack filter when outcome is 'allowed' or 'escalated'
+    const showAttack = filterOutcome === '' || filterOutcome === 'blocked';
+    const attackEl = document.getElementById('filter-attack');
+    attackEl.style.display = showAttack ? '' : 'none';
+    if (!showAttack) { filterAttack = ''; attackEl.value = ''; }
+    updateFilterClear();
+    renderFeed();
+  }
+
+  function onAttackFilter() {
+    filterAttack = document.getElementById('filter-attack').value;
+    updateFilterClear();
+    renderFeed();
+  }
+
+  function onToolFilter() {
+    filterTool = document.getElementById('filter-tool').value;
+    updateFilterClear();
+    renderFeed();
+  }
+
+  function updateFilterClear() {
+    const active = filterOutcome || filterAttack || filterTool;
+    document.getElementById('filter-clear').style.display = active ? '' : 'none';
+  }
+
+  function clearFilters() {
+    filterOutcome = '';
+    filterAttack  = '';
+    filterTool    = '';
+    document.getElementById('filter-outcome').value = '';
+    document.getElementById('filter-attack').value  = '';
+    document.getElementById('filter-tool').value    = '';
+    document.getElementById('filter-attack').style.display = '';
+    document.getElementById('filter-clear').style.display  = 'none';
+    renderFeed();
+  }
+
+  // ── Render feed ───────────────────────────────────────────────────────────
+  function renderFeed() {
+    const list     = document.getElementById('feed-list');
+    const filtered = getFilteredDecisions();
+    const countEl  = document.getElementById('filter-count');
+
+    if (countEl) {
+      if (feedDecisions.length === 0) {
+        countEl.textContent = '';
+      } else if (filtered.length === feedDecisions.length) {
+        countEl.textContent = `Showing ${feedDecisions.length} decisions`;
+      } else {
+        countEl.textContent = `Showing ${filtered.length} of ${feedDecisions.length} decisions`;
+      }
+    }
+
+    if (filtered.length === 0) {
+      if (feedDecisions.length === 0) {
+        list.innerHTML = `
+          <div class="empty-state">
+            <div>No decisions yet</div>
+            <div class="empty-sub">Click ▶ Run Demo to see AgentGate in action</div>
+            <button class="btn-demo-inline" onclick="triggerDemo()">▶ Run Demo</button>
+          </div>`;
+      } else {
+        list.innerHTML = `
+          <div class="empty-state">
+            <div>No decisions match these filters</div>
+            <div class="empty-sub">
+              <button class="empty-clear-link" onclick="clearFilters()">Clear filters</button>
+            </div>
+          </div>`;
+      }
+      document.getElementById('feed-count').textContent = '0';
+      return;
+    }
+
+    list.innerHTML = filtered.map(d => feedRowHtml(d)).join('');
+    document.getElementById('feed-count').textContent = filtered.length;
+
+    // Re-apply expanded states
+    expandedRows.forEach(cid => {
+      const expEl = document.getElementById(`exp-${cid}`);
+      const rowEl = document.getElementById(`row-${cid}`);
+      if (expEl) expEl.classList.add('open');
+      if (rowEl) rowEl.classList.add('expanded');
+    });
+  }
+
+  function prependDecision(d) {
+    feedDecisions.unshift(d);
+    if (feedDecisions.length > MAX_FEED) feedDecisions = feedDecisions.slice(0, MAX_FEED);
+    _lastNewCallId = d.call_id;
+    renderFeed();
+    _lastNewCallId = null;
+  }
+
+  // ── Render escalation inbox ────────────────────────────────────────────────
+  function renderInbox(escalations) {
+    // Don't disrupt an in-progress confirm
+    if (activeConfirms.size > 0) return;
+
+    const list = document.getElementById('inbox-list');
+    document.getElementById('inbox-count').textContent = escalations.length;
+
+    if (escalations.length === 0) {
+      list.innerHTML = '<div class="empty-state-esc"><span class="empty-check">✓</span> No pending escalations</div>';
+      return;
+    }
+
+    list.innerHTML = escalations.map(e => inboxItemHtml(e)).join('');
+
+    // Re-apply expanded states
+    expandedEscalations.forEach(id => {
+      const expEl    = document.getElementById(`esc-exp-${id}`);
+      const toggleEl = document.getElementById(`esc-toggle-${id}`);
+      if (expEl) expEl.classList.add('open');
+      if (toggleEl) toggleEl.style.transform = 'rotate(180deg)';
+    });
+  }
+
+  // ── Render flagged sessions ────────────────────────────────────────────────
+  function renderFlaggedSessions(decisions) {
+    const flagged = decisions
+      .filter(d => d.anomaly_score && d.anomaly_score > 30)
+      .reduce((acc, d) => {
+        const key = d.agent_id;
+        if (!acc[key] || acc[key].anomaly_score < d.anomaly_score) acc[key] = d;
+        return acc;
+      }, {});
+
+    const items  = Object.values(flagged).sort((a, b) => b.anomaly_score - a.anomaly_score);
+    const panel  = document.getElementById('sessions-panel');
+    const list   = document.getElementById('sessions-list');
+
+    if (items.length === 0) { panel.style.display = 'none'; return; }
+
+    panel.style.display = '';
+    document.getElementById('sessions-count').textContent = items.length;
+    list.innerHTML = items.map(d => `
+      <div class="session-item">
+        <div class="session-score">${d.anomaly_score}</div>
+        <div class="session-body">
+          <div class="session-agent">${escHtml(d.agent_id)}</div>
+          <div class="session-reason">${escHtml(d.anomaly_reason || 'Anomalous behavior detected')}</div>
+        </div>
+        <div class="session-time" data-ts="${escHtml(d.decided_at || '')}">${relativeTime(d.decided_at)}</div>
+      </div>`).join('');
+  }
+
+  // ── Agent breakdown ────────────────────────────────────────────────────────
+  let breakdownOpen = false;
+
+  function toggleBreakdown() {
+    breakdownOpen = !breakdownOpen;
+    const section = document.getElementById('breakdown-section');
+    if (breakdownOpen) section.classList.add('open');
+    else section.classList.remove('open');
+  }
+
+  function renderAgentBreakdown(byAgentOutcomes) {
+    const body = document.getElementById('breakdown-body');
+    const countEl = document.getElementById('breakdown-count');
+
+    if (!byAgentOutcomes || Object.keys(byAgentOutcomes).length === 0) {
+      countEl.textContent = '0';
+      body.innerHTML = '<div class="empty-state" style="padding:20px">No agent data yet — run the demo to populate</div>';
+      return;
+    }
+
+    const agents = Object.entries(byAgentOutcomes)
+      .map(([id, data]) => ({id, ...data}))
+      .sort((a, b) => (b.total || 0) - (a.total || 0));
+
+    countEl.textContent = agents.length;
+
+    const rows = agents.map(a => {
+      const total    = a.total || 0;
+      const allowed  = a.allowed || 0;
+      const blocked  = a.blocked || 0;
+      const escalated = (a.escalated || 0) + (a.escalation_approved || 0) + (a.escalation_rejected || 0);
+      const rate     = total ? Math.round(blocked / total * 100) : 0;
+      return `
+        <div class="at-row">
+          <div class="at-cell agent-id">${escHtml(a.id)}</div>
+          <div class="at-cell">${total.toLocaleString()}</div>
+          <div class="at-cell at-allowed">${allowed.toLocaleString()}</div>
+          <div class="at-cell at-blocked">${blocked.toLocaleString()}</div>
+          <div class="at-cell at-esc">${escalated.toLocaleString()}</div>
+          <div class="at-cell at-rate">${rate}%</div>
+        </div>`;
+    }).join('');
+
+    body.innerHTML = `
+      <div class="agent-table">
+        <div class="at-header">
+          <div class="at-cell">Agent ID</div>
+          <div class="at-cell">Total</div>
+          <div class="at-cell">Allowed</div>
+          <div class="at-cell">Blocked</div>
+          <div class="at-cell">Escalated</div>
+          <div class="at-cell">Block Rate</div>
+        </div>
+        ${rows}
+      </div>`;
+  }
+
+  // ── Status ─────────────────────────────────────────────────────────────────
+  function setStatus(online) {
+    const dot  = document.getElementById('status-dot');
+    const text = document.getElementById('status-text');
+    dot.className  = online ? 'dot green pulse' : 'dot red';
+    text.textContent = online ? 'Running' : 'Disconnected';
+  }
+
+  function setWsStatus(connected) {
+    const dot   = document.getElementById('ws-dot');
+    const label = document.getElementById('ws-label');
+    dot.className    = connected ? 'dot green' : 'dot red';
+    label.textContent = connected ? 'Live' : 'Reconnecting…';
+  }
+
+  // ── Stats polling ─────────────────────────────────────────────────────────
+  async function loadStats() {
+    try {
+      const r = await fetch(`${BASE}/dashboard/stats`);
+      if (!r.ok) throw new Error(r.status);
+      const data = await r.json();
+
+      document.getElementById('card-total').textContent     = data.total_actions_today;
+      document.getElementById('card-block').textContent     = `${data.block_rate}%`;
+      document.getElementById('card-escalation').textContent= `${data.escalation_rate}%`;
+      document.getElementById('card-injection').textContent = data.injection_attempts_today;
+      document.getElementById('agent-count').textContent    =
+        `${data.active_agents} active agent${data.active_agents !== 1 ? 's' : ''}`;
+
+      renderInbox(data.pending_escalations || []);
+      renderFlaggedSessions(data.recent_decisions || []);
+      setStatus(true);
+    } catch {
+      setStatus(false);
+    }
+  }
+
+  // ── Usage polling ─────────────────────────────────────────────────────────
+  async function loadUsage() {
+    try {
+      const r = await fetch(`${BASE}/usage`);
+      if (!r.ok) return;
+      const data = await r.json();
+      renderAgentBreakdown(data.by_agent_outcomes || {});
+    } catch { /* silently ignore */ }
+  }
+
+  // ── System health bar ──────────────────────────────────────────────────────
+  async function loadSystemHealth() {
+    const bar    = document.getElementById('system-status-bar');
+    const text   = document.getElementById('system-status-text');
+    const detail = document.getElementById('system-status-detail');
+    try {
+      const r = await fetch(`${BASE}/health/detailed`);
+      if (!r.ok) throw new Error(r.status);
+      const h = await r.json();
+
+      bar.className = `system-status-bar ${h.status}`;
+      if (h.status === 'ok') {
+        const note = h.components.compliance_mode ? ' — Compliance mode (no LLM)' : '';
+        text.textContent = `All systems operational${note}`;
+        detail.textContent = h.failed_open_today > 0 ? `${h.failed_open_today} fail-open today` : '';
+      } else if (h.status === 'degraded') {
+        text.textContent = `LLM API ${h.components.llm_api} — using heuristics`;
+        detail.textContent = `${h.decisions_today} decisions today`;
+      } else {
+        text.textContent = 'Database error — decisions may not be logged';
+        detail.textContent = `DB: ${h.components.database}`;
+      }
+    } catch {
+      bar.className = 'system-status-bar error';
+      text.textContent = 'AgentGate unreachable';
+      detail.textContent = '';
+    }
+  }
+
+  // ── WebSocket ──────────────────────────────────────────────────────────────
+  function connectWs() {
+    ws = new WebSocket(`${WS_BASE}/ws/feed`);
+    ws.onopen = () => setWsStatus(true);
+    ws.onmessage = (evt) => {
+      try {
+        const msg = JSON.parse(evt.data);
+        if (msg.type === 'initial') {
+          feedDecisions = msg.decisions || [];
+          renderFeed();
+          renderFlaggedSessions(feedDecisions);
+        } else if (msg.type === 'decision') {
+          prependDecision(msg.decision);
+          renderFlaggedSessions(feedDecisions);
+        }
+      } catch { /* ignore malformed */ }
+    };
+    ws.onclose = () => { setWsStatus(false); setTimeout(connectWs, 3000); };
+    ws.onerror = () => ws.close();
+  }
+
+  // ── Demo trigger ───────────────────────────────────────────────────────────
+  async function triggerDemo() {
+    if (demoRunning) return;
+    demoRunning = true;
+    const btn = document.getElementById('demo-btn');
+    if (btn) { btn.textContent = 'Running…'; btn.disabled = true; }
+
+    try {
+      const r = await fetch(`${BASE}/demo/run`, {method: 'POST'});
+      const data = await r.json().catch(() => ({}));
+      if (data.status === 'already_running') {
+        showToast('Demo is already running');
+        demoRunning = false;
+        if (btn) { btn.textContent = '▶ Run Demo'; btn.disabled = false; }
+        return;
+      }
+      if (!r.ok) throw new Error(`Server error ${r.status}`);
+      // Re-enable after estimated run time (~30s with LLM calls + escalation wait)
+      setTimeout(() => {
+        demoRunning = false;
+        if (btn) { btn.textContent = '▶ Run Demo'; btn.disabled = false; }
+        showToast('Demo complete — 7 scenarios run. Check the live feed.');
+      }, 30000);
+    } catch (err) {
+      demoRunning = false;
+      if (btn) { btn.textContent = '▶ Run Demo'; btn.disabled = false; }
+      showToast(`Failed to start demo: ${err.message}`, true);
+    }
+  }
+
+  // ── Toast ──────────────────────────────────────────────────────────────────
+  function showToast(msg, isError = false) {
+    const container = document.getElementById('toast-container');
+    const toast = document.createElement('div');
+    toast.className = `toast${isError ? ' toast-error' : ''}`;
+    toast.textContent = msg;
+    container.appendChild(toast);
+    setTimeout(() => toast.classList.add('toast-visible'), 10);
+    setTimeout(() => {
+      toast.classList.remove('toast-visible');
+      setTimeout(() => toast.remove(), 250);
+    }, 2500);
+  }
+
+  // ── Copy to clipboard ──────────────────────────────────────────────────────
+  async function copyToClipboard(text, btnId) {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    }
+    const btn = document.getElementById(btnId);
+    if (btn) {
+      const orig = btn.textContent;
+      btn.textContent = '✓ Copied';
+      setTimeout(() => { btn.textContent = orig; }, 2000);
+    }
+  }
+
+  // ── Boot ───────────────────────────────────────────────────────────────────
+  loadStats();
+  loadSystemHealth();
+  loadUsage();
+  connectWs();
+
+  setInterval(() => {
+    loadStats();
+    loadSystemHealth();
+    refreshTimestamps();
+  }, 5000);
+
+  setInterval(loadUsage, 30000);
+</script>
+</body>
+</html>

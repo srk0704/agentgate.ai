@@ -1,0 +1,119 @@
+from __future__ import annotations
+import json
+import logging
+from datetime import datetime, timedelta
+from uuid import uuid4
+
+import aiosqlite
+
+from agentgate.models import ToolCall
+
+logger = logging.getLogger(__name__)
+
+CREATE_SESSION_TABLE = """
+CREATE TABLE IF NOT EXISTS session_calls (
+    id           TEXT PRIMARY KEY,
+    agent_id     TEXT NOT NULL,
+    session_id   TEXT,
+    tool_name    TEXT NOT NULL,
+    original_task TEXT,
+    called_at    TEXT NOT NULL
+);
+"""
+
+
+class SessionTracker:
+    """
+    Records every tool call per agent/session and provides stats
+    needed by AnomalyScorer.
+
+    Shares the same SQLite DB as AuditLogger and EscalationQueue.
+    """
+
+    def __init__(self, db_path: str):
+        self.db_path = db_path
+        self._initialized = False
+
+    async def _ensure_init(self) -> None:
+        if self._initialized:
+            return
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute("PRAGMA journal_mode=WAL")
+            await db.execute(CREATE_SESSION_TABLE)
+            await db.commit()
+        self._initialized = True
+
+    async def record(self, tool_call: ToolCall) -> None:
+        """Insert a call record. Called before the decision is made."""
+        await self._ensure_init()
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute(
+                "INSERT INTO session_calls VALUES (?, ?, ?, ?, ?, ?)",
+                (
+                    str(uuid4()),
+                    tool_call.agent_id,
+                    tool_call.session_id,
+                    tool_call.tool_name,
+                    tool_call.original_task,
+                    datetime.utcnow().isoformat(),
+                ),
+            )
+            await db.commit()
+
+    async def get_session_stats(
+        self,
+        agent_id: str,
+        window_minutes: int = 5,
+        session_id: str | None = None,
+    ) -> dict:
+        """
+        Return call stats within the last `window_minutes` for this agent.
+
+        Returns:
+            call_count       — total calls in window
+            unique_tools     — number of distinct tools called
+            tool_frequency   — {tool_name: count}
+            calls_last_60s   — calls in last 60 seconds (velocity check)
+        """
+        await self._ensure_init()
+        since = (datetime.utcnow() - timedelta(minutes=window_minutes)).isoformat()
+        since_60s = (datetime.utcnow() - timedelta(seconds=60)).isoformat()
+
+        conditions = ["agent_id = ?", "called_at >= ?"]
+        params: list = [agent_id, since]
+        if session_id:
+            conditions.append("session_id = ?")
+            params.append(session_id)
+        where = " AND ".join(conditions)
+
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute(
+                f"SELECT tool_name FROM session_calls WHERE {where}",
+                params,
+            ) as cur:
+                rows = await cur.fetchall()
+
+            # Velocity: calls in last 60s
+            vel_conditions = ["agent_id = ?", "called_at >= ?"]
+            vel_params: list = [agent_id, since_60s]
+            if session_id:
+                vel_conditions.append("session_id = ?")
+                vel_params.append(session_id)
+            vel_where = " AND ".join(vel_conditions)
+            async with db.execute(
+                f"SELECT COUNT(*) FROM session_calls WHERE {vel_where}",
+                vel_params,
+            ) as cur:
+                calls_60s: int = (await cur.fetchone())[0]  # type: ignore[index]
+
+        tool_names = [r[0] for r in rows]
+        freq: dict[str, int] = {}
+        for t in tool_names:
+            freq[t] = freq.get(t, 0) + 1
+
+        return {
+            "call_count": len(tool_names),
+            "unique_tools": len(freq),
+            "tool_frequency": freq,
+            "calls_last_60s": calls_60s,
+        }
