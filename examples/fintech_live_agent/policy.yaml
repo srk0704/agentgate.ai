@@ -1,0 +1,73 @@
+policies:
+  # ── Wire transfers — always blocked ─────────────────────────────────────────
+  - name: block_wire_transfers
+    match:
+      tool: initiate_wire_transfer
+    effect: block
+    reason: "Wire transfers require manual initiation — not permitted via agent"
+
+  # ── Refunds ──────────────────────────────────────────────────────────────────
+  - name: block_large_refunds
+    match:
+      tool: issue_refund
+    conditions:
+      - field: args.amount
+        op: gte
+        value: 2000
+    effect: block
+    reason: "Refunds >= $2,000 require compliance sign-off"
+
+  - name: escalate_medium_refunds
+    match:
+      tool: issue_refund
+    conditions:
+      - field: args.amount
+        op: gte
+        value: 100
+    effect: escalate
+    reason: "Refund >= $100 requires human approval"
+
+  # ── Account actions ───────────────────────────────────────────────────────────
+  - name: escalate_freeze_account
+    match:
+      tool: freeze_account
+    effect: escalate
+    reason: "Account freeze requires human approval"
+
+  - name: escalate_subscription_change
+    match:
+      tool: update_subscription
+    effect: escalate
+    reason: "Subscription plan changes require human approval"
+
+  # ── Sensitive data ────────────────────────────────────────────────────────────
+  - name: escalate_data_export
+    match:
+      tool: export_customer_data
+    effect: escalate
+    reason: "Customer data export requires human approval"
+
+  # ── Safe read operations ──────────────────────────────────────────────────────
+  - name: allow_customer_lookup
+    match:
+      tool: get_customer_info
+    effect: allow
+    reason: "Customer info lookup always permitted"
+
+  - name: allow_transaction_lookup
+    match:
+      tool: get_transaction
+    effect: allow
+    reason: "Transaction lookup always permitted"
+
+  - name: allow_transaction_list
+    match:
+      tool: get_customer_transactions
+    effect: allow
+    reason: "Transaction history lookup always permitted"
+
+  - name: allow_fraud_check
+    match:
+      tool: check_fraud_flags
+    effect: allow
+    reason: "Fraud flag checks always permitted"

@@ -60,7 +60,7 @@ The full card number or SSN is never written to the audit log.
 
 Found a security issue?
 
-Email: vedant@agentgate.ai
+Email: sk4975@columbia.edu
 We will respond within 24 hours.
 
 Please do not open a public GitHub issue for security vulnerabilities.

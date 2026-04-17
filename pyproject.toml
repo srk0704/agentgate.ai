@@ -2,7 +2,7 @@
 name = "agentgate"
 version = "0.1.0"
 description = "AgentGate: Access control for AI agents"
-authors = ["Your Name <you@example.com>"]
+authors = ["Siddhant Kumar <sk4975@columbia.edu>"]
 package-mode = false
 
 [tool.poetry.dependencies]
