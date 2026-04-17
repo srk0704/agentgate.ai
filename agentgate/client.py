@@ -56,6 +56,8 @@ class GatewayClient:
         self.compliance_mode = compliance_mode
         self._policy_evaluator = PolicyEvaluator(PolicyLoader(policy_path))
         self._audit = AuditLogger(db_path)
+        from agentgate.escalation import EscalationQueue
+        EscalationQueue.configure(db_path)
         self._risk_scorer = risk_scorer or RiskScorer(compliance_mode=compliance_mode)
         self._injection_scorer = InjectionScorer(compliance_mode=compliance_mode)
         self._blast_radius = BlastRadiusEstimator()
@@ -261,14 +263,10 @@ class GatewayClient:
         if needs_escalation:
             from agentgate.escalation import EscalationQueue
             escalation_id = await EscalationQueue.submit(tool_call, risk_score or 0)
-            approved = await EscalationQueue.wait_for_decision(
-                escalation_id, timeout_sec=self.escalation_timeout_sec
-            )
             return Decision(
-                outcome=DecisionOutcome.ESCALATION_APPROVED if approved
-                        else DecisionOutcome.ESCALATION_REJECTED,
+                outcome=DecisionOutcome.ESCALATED,
                 tool_call=tool_call,
-                reason="Human reviewed",
+                reason=policy_result.reason or "Requires human approval",
                 risk_score=risk_score,
                 risk_reason=risk_reason,
                 injection_score=injection_score,

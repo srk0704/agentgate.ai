@@ -324,6 +324,20 @@ class AuditLogger:
                 rows = await cur.fetchall()
         return {row[0]: row[1] for row in rows}
 
+    async def update_escalation_outcome(
+        self, escalation_id: str, outcome: str, human_decision: str, human_reason: str | None
+    ) -> None:
+        """Update audit_log entry outcome when a human approves or rejects an escalation."""
+        await self._ensure_init()
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute(
+                """UPDATE audit_log
+                   SET outcome = ?, human_decision = ?, human_reason = ?
+                   WHERE escalation_id = ?""",
+                (outcome, human_decision, human_reason, escalation_id),
+            )
+            await db.commit()
+
     async def get_by_call_id(self, call_id: str) -> dict | None:
         """Fetch the most recent audit entry for a given call_id."""
         await self._ensure_init()

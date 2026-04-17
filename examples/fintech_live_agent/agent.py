@@ -253,14 +253,11 @@ def _print_decision(ev: dict) -> None:
     elif outcome == DecisionOutcome.FAILED_OPEN:
         print("     ✅ Allowed (gateway failed open)")
 
-    elif outcome in (DecisionOutcome.ESCALATED, DecisionOutcome.ESCALATION_REJECTED):
-        status = "auto-rejected (no reviewer)" if outcome == DecisionOutcome.ESCALATION_REJECTED else "pending"
-        print(f"     ⚠️  Escalated — {status}")
+    elif outcome == DecisionOutcome.ESCALATED:
+        print("     ⚠️  Escalated — pending human approval")
         if decision.reason:
             print(f"        Reason: {decision.reason}")
-
-    elif outcome == DecisionOutcome.ESCALATION_APPROVED:
-        print("     ⚠️  Escalated → approved by reviewer")
+        print("        → Go to dashboard Escalation Inbox to approve/reject")
 
     else:  # BLOCKED
         print(f"     ❌ Blocked: {decision.reason}")
@@ -343,9 +340,16 @@ async def run_agent(user_request: str, session_id: str, guard: OpenAIGuard) -> N
             if decision.is_allowed:
                 tool_result = await execute_tool(ev["name"], ev["args"])
                 print("     ✓ Executed")
+            elif decision.outcome == DecisionOutcome.ESCALATED:
+                tool_result = json.dumps(
+                    {
+                        "error": "escalated",
+                        "reason": decision.reason,
+                        "message": "This action requires human approval and has been sent to the escalation inbox. A human reviewer must approve it before it can proceed.",
+                    }
+                )
             else:
-                # Return blocked/escalated reason as tool result so
-                # OpenAI can formulate an appropriate response to the user
+                # Blocked — return reason so OpenAI can respond to the user
                 tool_result = json.dumps(
                     {
                         "error": decision.outcome.value,
@@ -374,7 +378,6 @@ async def main() -> None:
         db_path=str(DB_PATH),
         fail_open=True,
         timeout_ms=float(os.getenv("AGENTGATE_TIMEOUT_MS", "30000")),
-        escalation_timeout_sec=10,
     )
 
     guard = OpenAIGuard(gateway=gate, agent_id=AGENT_ID, context=AGENT_CONTEXT)

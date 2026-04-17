@@ -41,23 +41,30 @@ CREATE TABLE IF NOT EXISTS escalations (
 
 class EscalationQueue:
     """
-    Manages escalations: stores in DB, notifies humans via Slack/email,
-    auto-blocks after 60s timeout if no decision.
+    Manages escalations: stores in DB, notifies humans via Slack/email.
+    Escalations stay pending until a human approves or rejects via the dashboard.
     """
 
-    _db_path: str = "./agentgate.db"
+    _db_path: str | None = None
     _initialized = False
+
+    @classmethod
+    def _get_db_path(cls) -> str:
+        if cls._db_path:
+            return cls._db_path
+        return os.getenv("AGENTGATE_DB_PATH", "./agentgate.db")
 
     @classmethod
     def configure(cls, db_path: str) -> None:
         """Set the database path before using."""
         cls._db_path = db_path
+        cls._initialized = False  # re-init if path changes
 
     @classmethod
     async def _ensure_init(cls) -> None:
         if cls._initialized:
             return
-        async with aiosqlite.connect(cls._db_path) as db:
+        async with aiosqlite.connect(cls._get_db_path()) as db:
             await db.execute("PRAGMA journal_mode=WAL")
             await db.execute(CREATE_ESCALATION_TABLE)
             await db.commit()
@@ -78,7 +85,7 @@ class EscalationQueue:
         await cls._ensure_init()
         escalation_id = str(uuid4())
 
-        async with aiosqlite.connect(cls._db_path) as db:
+        async with aiosqlite.connect(cls._get_db_path()) as db:
             await db.execute(
                 """INSERT INTO escalations VALUES
                 (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, NULL, NULL)""",
@@ -102,9 +109,6 @@ class EscalationQueue:
         # Register event for wait_for_decision
         _decisions[escalation_id] = asyncio.Event()
         _approved[escalation_id] = False
-
-        # Set auto-reject timeout
-        asyncio.create_task(cls._auto_reject(escalation_id))
 
         logger.info(
             "Escalation submitted: id=%s tool=%s risk=%d",
@@ -158,7 +162,7 @@ class EscalationQueue:
         """Record the decision in the database."""
         await cls._ensure_init()
         status = "approved" if approved else "rejected"
-        async with aiosqlite.connect(cls._db_path) as db:
+        async with aiosqlite.connect(cls._get_db_path()) as db:
             await db.execute(
                 """UPDATE escalations
                    SET status = ?, decided_at = ?, decision = ?
@@ -251,7 +255,7 @@ class EscalationQueue:
     async def recent(cls, limit: int = 100) -> list[dict]:
         """Get recent escalations."""
         await cls._ensure_init()
-        async with aiosqlite.connect(cls._db_path) as db:
+        async with aiosqlite.connect(cls._get_db_path()) as db:
             db.row_factory = aiosqlite.Row
             async with db.execute(
                 "SELECT * FROM escalations ORDER BY created_at DESC LIMIT ?",
@@ -264,7 +268,7 @@ class EscalationQueue:
     async def get_by_id(cls, escalation_id: str) -> dict | None:
         """Get a specific escalation."""
         await cls._ensure_init()
-        async with aiosqlite.connect(cls._db_path) as db:
+        async with aiosqlite.connect(cls._get_db_path()) as db:
             db.row_factory = aiosqlite.Row
             async with db.execute(
                 "SELECT * FROM escalations WHERE id = ?", (escalation_id,)

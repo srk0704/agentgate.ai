@@ -45,6 +45,13 @@ class _ApiKeyMiddleware(BaseHTTPMiddleware):
 app.add_middleware(_ApiKeyMiddleware)
 
 
+@app.on_event("startup")
+async def _startup() -> None:
+    """Configure shared services with the correct DB path on startup."""
+    db_path = os.getenv("AGENTGATE_DB_PATH", "./agentgate.db")
+    EscalationQueue.configure(db_path)
+
+
 def _audit() -> AuditLogger:
     db_path = os.getenv("AGENTGATE_DB_PATH", "./agentgate.db")
     return AuditLogger(db_path)
@@ -177,6 +184,10 @@ async def approve_escalation(escalation_id: str, body: ApprovalRequest) -> dict:
     if escalation["status"] != "pending":
         raise HTTPException(status_code=400, detail=f"Escalation is already {escalation['status']}")
     await EscalationQueue.approve(escalation_id)
+    audit = _audit()
+    await audit.update_escalation_outcome(
+        escalation_id, "escalation_approved", "approved", body.reason
+    )
     return {"escalation_id": escalation_id, "status": "approved", "reason": body.reason}
 
 
@@ -188,6 +199,10 @@ async def reject_escalation(escalation_id: str, body: ApprovalRequest) -> dict:
     if escalation["status"] != "pending":
         raise HTTPException(status_code=400, detail=f"Escalation is already {escalation['status']}")
     await EscalationQueue.reject(escalation_id)
+    audit = _audit()
+    await audit.update_escalation_outcome(
+        escalation_id, "escalation_rejected", "rejected", body.reason
+    )
     return {"escalation_id": escalation_id, "status": "rejected", "reason": body.reason}
 
 
