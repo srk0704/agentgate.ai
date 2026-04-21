@@ -858,6 +858,160 @@
   .system-status-bar .status-icon  { font-size: 13px; }
   .system-status-bar .status-detail{ margin-left: auto; font-size: 11px; opacity: 0.75; }
 
+  /* ── Learning Tab ── */
+  .tab-nav {
+    display: flex;
+    gap: 4px;
+    padding: 0 24px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    overflow-x: auto;
+  }
+  .tab-btn {
+    padding: 10px 16px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--muted);
+    border: none;
+    border-bottom: 2px solid transparent;
+    background: transparent;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .tab-btn:hover { color: var(--text); }
+  .tab-btn.active { color: var(--blue); border-bottom-color: var(--blue); }
+
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  .learning-section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    margin-bottom: 16px;
+    overflow: hidden;
+    box-shadow: var(--shadow);
+  }
+  .learning-section-header {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .learning-section-body { padding: 16px; }
+
+  .pattern-card {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    margin-bottom: 12px;
+  }
+  .pattern-card:last-child { margin-bottom: 0; }
+  .pattern-card-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    flex-wrap: wrap;
+  }
+  .pattern-type-badge {
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+  }
+  .pt-over_escalation    { background: rgba(210,153,34,0.2); color: var(--escalated); }
+  .pt-repeated_block     { background: rgba(248,81,73,0.2);  color: var(--blocked); }
+  .pt-false_positive     { background: rgba(188,140,255,0.2);color: var(--injection); }
+  .pt-threshold_too_low  { background: rgba(88,166,255,0.2); color: var(--blue); }
+  .pt-prompt_improvement { background: rgba(63,185,80,0.2);  color: var(--allowed); }
+
+  .impact-badge {
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .impact-high   { background: rgba(248,81,73,0.15);  color: var(--blocked); }
+  .impact-medium { background: rgba(210,153,34,0.15); color: var(--escalated); }
+  .impact-low    { background: rgba(63,185,80,0.15);  color: var(--allowed); }
+
+  .pattern-tool {
+    font-family: "SFMono-Regular", Consolas, monospace;
+    font-size: 12px;
+    color: var(--blue);
+    background: rgba(88,166,255,0.1);
+    padding: 2px 6px;
+    border-radius: 4px;
+  }
+  .pattern-desc { font-size: 13px; color: var(--text); margin-bottom: 6px; }
+  .pattern-suggestion { font-size: 12px; color: var(--muted); margin-bottom: 10px; }
+
+  .confidence-bar-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+  .confidence-label { font-size: 11px; color: var(--muted); width: 80px; }
+  .confidence-bar {
+    flex: 1;
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .confidence-fill {
+    height: 100%;
+    background: var(--blue);
+    border-radius: 2px;
+    transition: width 0.4s;
+  }
+  .confidence-pct { font-size: 11px; color: var(--muted); width: 34px; text-align: right; }
+
+  .apply-btn {
+    padding: 5px 14px;
+    border-radius: 6px;
+    border: 1px solid rgba(88,166,255,0.4);
+    background: rgba(88,166,255,0.1);
+    color: var(--blue);
+    font-size: 12px;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .apply-btn:hover { background: rgba(88,166,255,0.2); }
+  .apply-btn:disabled { opacity: 0.4; cursor: default; }
+
+  .examples-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+  .examples-table th {
+    text-align: left;
+    padding: 8px 12px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--muted);
+    background: var(--surface2);
+    border-bottom: 1px solid var(--border);
+  }
+  .examples-table td {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  .examples-table tr:last-child td { border-bottom: none; }
+  .examples-table tr:hover td { background: var(--surface2); }
+
   /* ── Toast ── */
   #toast-container {
     position: fixed;
@@ -915,7 +1069,14 @@
   </div>
 </header>
 
-<!-- ── Main ── -->
+<!-- ── Tab Nav ── -->
+<nav class="tab-nav">
+  <button class="tab-btn active" onclick="switchTab('main', this)">Overview</button>
+  <button class="tab-btn" onclick="switchTab('learning', this)">Learning</button>
+</nav>
+
+<!-- ── Main Panel ── -->
+<div id="tab-main" class="tab-panel active">
 <div class="container">
 
   <!-- Metric Cards -->
@@ -1024,6 +1185,41 @@
   </div>
 
 </div>
+</div><!-- /tab-main -->
+
+<!-- ── Learning Panel ── -->
+<div id="tab-learning" class="tab-panel">
+<div class="container">
+
+  <!-- Detected Patterns -->
+  <div class="learning-section">
+    <div class="learning-section-header">
+      Detected Patterns
+      <span class="badge" id="patterns-count">—</span>
+      <button class="apply-btn" style="margin-left:auto" onclick="loadPatterns()">Refresh</button>
+    </div>
+    <div class="learning-section-body" id="patterns-body">
+      <div class="empty-state" style="padding:20px;text-align:center;color:var(--muted)">
+        No patterns detected yet — run the learning demo to populate data.
+      </div>
+    </div>
+  </div>
+
+  <!-- Few-Shot Examples -->
+  <div class="learning-section">
+    <div class="learning-section-header">
+      Few-Shot Examples (Approved Decisions)
+      <span class="badge" id="examples-count">—</span>
+    </div>
+    <div id="examples-body">
+      <div class="empty-state" style="padding:20px;text-align:center;color:var(--muted)">
+        No approved decisions yet.
+      </div>
+    </div>
+  </div>
+
+</div>
+</div><!-- /tab-learning -->
 
 <!-- Toast Container -->
 <div id="toast-container"></div>
@@ -1788,6 +1984,123 @@
       btn.textContent = '✓ Copied';
       setTimeout(() => { btn.textContent = orig; }, 2000);
     }
+  }
+
+  // ── Tab Switching ──────────────────────────────────────────────────────────
+  function switchTab(name, btn) {
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    const panel = document.getElementById('tab-' + name);
+    if (panel) panel.classList.add('active');
+    if (btn) btn.classList.add('active');
+    if (name === 'learning') {
+      loadPatterns();
+      loadExamples();
+    }
+  }
+
+  // ── Learning Tab ───────────────────────────────────────────────────────────
+  async function loadPatterns() {
+    const body = document.getElementById('patterns-body');
+    const countBadge = document.getElementById('patterns-count');
+    body.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted)">Loading...</div>';
+    try {
+      const res = await fetch('/patterns');
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+      countBadge.textContent = data.count;
+      if (!data.patterns || data.patterns.length === 0) {
+        body.innerHTML = '<div class="empty-state" style="padding:20px;text-align:center;color:var(--muted)">No patterns detected yet — run the learning demo to populate data.</div>';
+        return;
+      }
+      body.innerHTML = data.patterns.map(p => renderPatternCard(p)).join('');
+    } catch(e) {
+      body.innerHTML = `<div style="padding:20px;color:var(--blocked)">Error loading patterns: ${e.message}</div>`;
+    }
+  }
+
+  function renderPatternCard(p) {
+    const pct = Math.round(p.confidence * 100);
+    const autoLabel = p.auto_applicable ? 'Auto-applicable' : 'Manual review';
+    return `
+      <div class="pattern-card" id="pattern-${p.id}">
+        <div class="pattern-card-header">
+          <span class="pattern-type-badge pt-${p.pattern_type}">${p.pattern_type.replace(/_/g,' ')}</span>
+          <span class="impact-badge impact-${p.impact}">${p.impact} impact</span>
+          <span class="pattern-tool">${p.tool_name}</span>
+          <span style="font-size:11px;color:var(--muted);margin-left:auto">${autoLabel}</span>
+        </div>
+        <div class="pattern-desc">${escHtml(p.description)}</div>
+        <div class="pattern-suggestion">Suggestion: ${escHtml(p.suggestion)}</div>
+        <div class="confidence-bar-wrap">
+          <span class="confidence-label">Confidence</span>
+          <div class="confidence-bar"><div class="confidence-fill" style="width:${pct}%"></div></div>
+          <span class="confidence-pct">${pct}%</span>
+        </div>
+        ${p.auto_applicable ? `<button class="apply-btn" id="apply-btn-${p.id}" onclick="applyPattern(${JSON.stringify(p).replace(/"/g,'&quot;')})">Apply improvement</button>` : ''}
+      </div>
+    `;
+  }
+
+  async function applyPattern(p) {
+    const btn = document.getElementById('apply-btn-' + p.id);
+    if (btn) { btn.disabled = true; btn.textContent = 'Applying...'; }
+    try {
+      const res = await fetch('/patterns/apply', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(p),
+      });
+      const data = await res.json();
+      showToast(data.success ? 'Pattern applied: ' + data.description : 'Could not apply: ' + data.description, !data.success);
+      if (btn) { btn.textContent = data.success ? 'Applied' : 'Failed'; }
+    } catch(e) {
+      showToast('Error: ' + e.message, true);
+      if (btn) { btn.disabled = false; btn.textContent = 'Apply improvement'; }
+    }
+  }
+
+  async function loadExamples() {
+    const body = document.getElementById('examples-body');
+    const countBadge = document.getElementById('examples-count');
+    try {
+      const res = await fetch('/learning/examples');
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+      countBadge.textContent = data.count;
+      if (!data.examples || data.examples.length === 0) {
+        body.innerHTML = '<div class="empty-state" style="padding:20px;text-align:center;color:var(--muted)">No approved decisions yet.</div>';
+        return;
+      }
+      body.innerHTML = `
+        <table class="examples-table">
+          <thead>
+            <tr>
+              <th>Task</th>
+              <th>Action</th>
+              <th>Outcome</th>
+              <th>Reason</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${data.examples.map(ex => `
+              <tr>
+                <td>${escHtml((ex.task || '').substring(0,80))}${(ex.task||'').length>80?'…':''}</td>
+                <td><code style="font-size:11px;color:var(--blue)">${escHtml(ex.action||'')}</code></td>
+                <td><span class="pill allowed">approved</span></td>
+                <td style="color:var(--muted)">${escHtml((ex.reason||'').substring(0,60))}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+    } catch(e) {
+      body.innerHTML = `<div style="padding:20px;color:var(--blocked)">Error loading examples: ${e.message}</div>`;
+    }
+  }
+
+  function escHtml(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
   // ── Boot ───────────────────────────────────────────────────────────────────

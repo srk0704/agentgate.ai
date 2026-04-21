@@ -34,12 +34,23 @@ class SessionTracker:
         self.db_path = db_path
         self._initialized = False
 
+    _CLEANUP_EVERY = 500  # run cleanup every N inserts
+    _cleanup_counter = 0
+
     async def _ensure_init(self) -> None:
         if self._initialized:
             return
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute("PRAGMA journal_mode=WAL")
             await db.execute(CREATE_SESSION_TABLE)
+            await db.execute(
+                "CREATE INDEX IF NOT EXISTS idx_session_agent_at "
+                "ON session_calls(agent_id, called_at)"
+            )
+            await db.execute(
+                "CREATE INDEX IF NOT EXISTS idx_session_session_id "
+                "ON session_calls(session_id) WHERE session_id IS NOT NULL"
+            )
             await db.commit()
         self._initialized = True
 
@@ -59,6 +70,28 @@ class SessionTracker:
                 ),
             )
             await db.commit()
+        # Periodic cleanup to prevent unbounded table growth
+        SessionTracker._cleanup_counter += 1
+        if SessionTracker._cleanup_counter >= self._CLEANUP_EVERY:
+            SessionTracker._cleanup_counter = 0
+            try:
+                await self.cleanup_old_records()
+            except Exception as e:
+                logger.debug("Session cleanup error (non-fatal): %s", e)
+
+    async def cleanup_old_records(self, days: int = 30) -> int:
+        """Delete session records older than `days`. Returns number of rows deleted."""
+        await self._ensure_init()
+        cutoff = (datetime.utcnow() - timedelta(days=days)).isoformat()
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                "DELETE FROM session_calls WHERE called_at < ?", (cutoff,)
+            )
+            await db.commit()
+            deleted = cursor.rowcount
+        if deleted:
+            logger.info("Session cleanup: removed %d records older than %d days", deleted, days)
+        return deleted
 
     async def get_session_stats(
         self,

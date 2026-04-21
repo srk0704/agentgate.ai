@@ -84,9 +84,11 @@ async def dashboard_stats() -> dict:
     pending = await EscalationQueue.recent(limit=200)
     pending_only = [e for e in pending if e["status"] == "pending"]
 
-    # Enrich pending escalations with audit log data (original_task, scores, blast_radius, etc.)
+    # Enrich pending escalations with audit log data — batch fetch to avoid N+1
+    call_ids = [e["call_id"] for e in pending_only if e.get("call_id")]
+    audit_by_call_id = await audit.get_by_call_ids(call_ids) if call_ids else {}
     for esc in pending_only:
-        audit_entry = await audit.get_by_call_id(esc["call_id"])
+        audit_entry = audit_by_call_id.get(esc.get("call_id", ""))
         if audit_entry:
             for field in (
                 "original_task", "injection_score", "injection_reason",
@@ -215,7 +217,7 @@ async def get_escalation(escalation_id: str) -> dict:
 
 
 @app.get("/escalations")
-async def list_escalations(limit: int = 100) -> dict:
+async def list_escalations(limit: int = Query(default=100, ge=1, le=1000)) -> dict:
     escalations = await EscalationQueue.recent(limit=limit)
     return {"count": len(escalations), "escalations": escalations}
 
@@ -246,10 +248,10 @@ async def list_audit(
 
 
 @app.get("/audit/export")
-async def export_audit() -> Response:
-    """Download full audit log as CSV."""
+async def export_audit(since: Optional[str] = Query(default=None, description="ISO date, e.g. 2024-01-01. Defaults to last 90 days.")) -> Response:
+    """Download audit log as CSV. Optionally scoped to entries after `since`."""
     audit = _audit()
-    csv_data = await audit.export_csv()
+    csv_data = await audit.export_csv(since=since)
     return Response(
         content=csv_data,
         media_type="text/csv",
@@ -399,6 +401,151 @@ async def scan_output(body: ScanOutputRequest) -> dict:
     audit = _audit()
     await audit.log_pii_scan(body.agent_id, body.tool_name, result)
     return result
+
+
+# ---------------------------------------------------------------------------
+# Output log
+# ---------------------------------------------------------------------------
+
+
+@app.get("/output-log")
+async def output_log(agent_id: Optional[str] = Query(default=None), limit: int = Query(default=100, ge=1, le=1000)) -> dict:
+    from agentgate.output_logger import OutputLogger
+    logger_out = OutputLogger(os.getenv("AGENTGATE_DB_PATH", "./agentgate.db"))
+    entries = await logger_out.recent(limit=limit)
+    if agent_id:
+        entries = [e for e in entries if e.get("agent_id") == agent_id]
+    return {"count": len(entries), "entries": entries}
+
+
+# ---------------------------------------------------------------------------
+# Learning / patterns
+# ---------------------------------------------------------------------------
+
+_patterns_cache: dict = {"ts": 0.0, "data": []}
+
+
+@app.get("/patterns")
+async def get_patterns() -> dict:
+    import time
+    from agentgate.pattern_analyzer import PatternAnalyzer
+    from agentgate.policy import PolicyLoader
+    global _patterns_cache
+    if time.time() - _patterns_cache["ts"] < 300:
+        return {"count": len(_patterns_cache["data"]), "patterns": _patterns_cache["data"]}
+    db_path = os.getenv("AGENTGATE_DB_PATH", "./agentgate.db")
+    policy_path = os.getenv("AGENTGATE_POLICY_PATH", "./policies.yaml")
+    # Load current policies so analyzer can derive data-based thresholds
+    try:
+        loader = PolicyLoader(policy_path)
+        policies = loader._policies
+    except Exception:
+        policies = None
+    analyzer = PatternAnalyzer(db_path)
+    patterns = await analyzer.analyze(policies=policies)
+    serialized = [
+        {
+            "id": p.id,
+            "pattern_type": p.pattern_type.value,
+            "tool_name": p.tool_name,
+            "description": p.description,
+            "evidence": p.evidence,
+            "suggestion": p.suggestion,
+            "suggested_action": p.suggested_action,
+            "confidence": round(p.confidence, 3),
+            "impact": p.impact,
+            "auto_applicable": p.auto_applicable,
+            "created_at": p.created_at,
+        }
+        for p in patterns
+    ]
+    _patterns_cache = {"ts": time.time(), "data": serialized}
+    return {"count": len(serialized), "patterns": serialized}
+
+
+@app.post("/patterns/apply")
+async def apply_pattern_endpoint(body: dict) -> dict:
+    from agentgate.pattern_analyzer import Pattern, PatternType
+    from agentgate.learning_engine import LearningEngine
+    from agentgate.client import GatewayClient
+    db_path = os.getenv("AGENTGATE_DB_PATH", "./agentgate.db")
+    policy_path = os.getenv("AGENTGATE_POLICY_PATH", "./policies.yaml")
+    gate = GatewayClient(policy_path=policy_path, db_path=db_path, fail_open=True)
+    engine = LearningEngine(gateway=gate, db_path=db_path)
+
+    try:
+        pattern = Pattern(
+            id=body.get("id", ""),
+            pattern_type=PatternType(body.get("pattern_type", "over_escalation")),
+            tool_name=body.get("tool_name", ""),
+            description=body.get("description", ""),
+            evidence=body.get("evidence", {}),
+            suggestion=body.get("suggestion", ""),
+            suggested_action=body.get("suggested_action", {}),
+            confidence=float(body.get("confidence", 0.5)),
+            impact=body.get("impact", "medium"),
+            auto_applicable=body.get("auto_applicable", False),
+            created_at=body.get("created_at", ""),
+        )
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=f"Invalid pattern body: {e}")
+
+    result = await engine.apply_pattern(pattern)
+    # Bust the patterns cache so next /patterns call re-analyzes
+    _patterns_cache["ts"] = 0.0
+    return {
+        "success": result.success,
+        "description": result.description,
+        "expected_impact": result.expected_impact,
+        "change_id": result.change_id,
+    }
+
+
+@app.get("/learning/examples")
+async def learning_examples() -> dict:
+    from agentgate.learning_engine import LearningEngine
+    from agentgate.client import GatewayClient
+    db_path = os.getenv("AGENTGATE_DB_PATH", "./agentgate.db")
+    policy_path = os.getenv("AGENTGATE_POLICY_PATH", "./policies.yaml")
+    gate = GatewayClient(policy_path=policy_path, db_path=db_path, fail_open=True)
+    engine = LearningEngine(gateway=gate, db_path=db_path)
+    examples = await engine.mine_examples(limit=10)
+    return {"count": len(examples), "examples": examples}
+
+
+@app.get("/learning/prompt-additions")
+async def learning_prompt_additions() -> dict:
+    # Additions are accumulated per-session in LearningEngine instances.
+    # The server-side instance is stateless; agents should call apply_pattern directly.
+    return {"count": 0, "additions": []}
+
+
+@app.get("/learning/changes")
+async def learning_changes(tool_name: Optional[str] = Query(default=None)) -> dict:
+    """Return the policy change history with before/after metrics."""
+    audit = _audit()
+    changes = await audit.get_policy_changes(tool_name=tool_name, limit=50)
+    return {"count": len(changes), "changes": changes}
+
+
+@app.post("/learning/changes/{change_id}/measure")
+async def measure_change_impact(change_id: str) -> dict:
+    """
+    Compute post-change metrics for a specific policy change and store them.
+    Call this after sufficient traffic has flowed through the updated policy.
+    """
+    from agentgate.learning_engine import LearningEngine
+    from agentgate.client import GatewayClient
+    db_path = os.getenv("AGENTGATE_DB_PATH", "./agentgate.db")
+    policy_path = os.getenv("AGENTGATE_POLICY_PATH", "./policies.yaml")
+    gate = GatewayClient(policy_path=policy_path, db_path=db_path, fail_open=True)
+    engine = LearningEngine(gateway=gate, db_path=db_path)
+    results = await engine.measure_impact(change_id=change_id)
+    if not results:
+        raise HTTPException(status_code=404, detail="Change not found or already measured")
+    # Also bust patterns cache — drift detector may now fire
+    _patterns_cache["ts"] = 0.0
+    return results[0]
 
 
 # ---------------------------------------------------------------------------

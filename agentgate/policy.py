@@ -47,17 +47,55 @@ class PolicyLoader:
         instance._observer = None
         return instance
 
+    _VALID_EFFECTS = frozenset({"allow", "block", "escalate"})
+
     def _load(self) -> None:
         if not self.path.exists():
             self._policies = []
             return
         with open(self.path) as f:
             data = yaml.safe_load(f) or {}
-        self._policies = data.get("policies", [])
+        raw = data.get("policies", [])
+        self._policies = self._validate(raw)
+
+    def _validate(self, policies: list) -> list:
+        """Validate policies at load time; warn and skip malformed entries."""
+        valid = []
+        for i, p in enumerate(policies):
+            name = p.get("name", f"policy[{i}]")
+            effect = p.get("effect", "")
+            if effect not in self._VALID_EFFECTS:
+                logger.warning("Policy %r has unknown effect %r — skipping", name, effect)
+                continue
+            if "match" not in p:
+                logger.warning("Policy %r has no 'match' block — will match all calls", name)
+            for j, cond in enumerate(p.get("conditions", [])):
+                if "field" not in cond:
+                    logger.warning("Policy %r condition[%d] missing 'field' — condition ignored", name, j)
+                if "op" not in cond:
+                    logger.warning("Policy %r condition[%d] missing 'op' — condition ignored", name, j)
+                if cond.get("op") not in OPS and "op" in cond:
+                    logger.warning("Policy %r condition[%d] unknown op %r — condition ignored", name, j, cond["op"])
+            valid.append(p)
+        return valid
 
     def reload(self) -> None:
         self._load()
         logger.info("Policies reloaded from %s (%d rules)", self.path, len(self._policies))
+
+    def save(self) -> None:
+        """Atomically write current in-memory policies back to the YAML file. No-op for :memory: loaders."""
+        if str(self.path) == ":memory:":
+            return
+        tmp = self.path.with_suffix(".yaml.tmp")
+        try:
+            with open(tmp, "w") as f:
+                yaml.dump({"policies": self._policies}, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+            tmp.replace(self.path)
+        except Exception:
+            tmp.unlink(missing_ok=True)
+            raise
+        logger.info("Policies saved to %s (%d rules)", self.path, len(self._policies))
 
     def start_watching(self) -> None:
         """

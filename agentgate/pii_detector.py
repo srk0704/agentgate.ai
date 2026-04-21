@@ -111,6 +111,7 @@ Respond with ONLY a JSON array of confirmed PII types (subset of the candidates)
         message = await client.messages.create(
             model=self.model,
             max_tokens=100,
+            timeout=10.0,
             messages=[{"role": "user", "content": prompt}],
         )
 
@@ -118,6 +119,10 @@ Respond with ONLY a JSON array of confirmed PII types (subset of the candidates)
         if raw.startswith("```"):
             raw = raw.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
 
-        confirmed = json.loads(raw)
+        try:
+            confirmed = json.loads(raw)
+        except json.JSONDecodeError:
+            logger.warning("PII LLM returned invalid JSON %r — falling back to regex results", raw[:80])
+            return candidates
         # Only return types that were in the candidate list
         return [t for t in confirmed if t in candidates]

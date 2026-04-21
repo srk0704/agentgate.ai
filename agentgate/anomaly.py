@@ -7,10 +7,13 @@ from agentgate.session import SessionTracker
 
 logger = logging.getLogger(__name__)
 
-# Tools that are always expected to be called in any session — never flagged.
+# Tools that are always expected to be called in any session — never velocity-flagged.
 _BENIGN_TOOLS = frozenset({
     "get_user", "list_users", "read_file", "get_config",
     "list_orders", "get_order", "search",
+    # payment / fintech read-only tools
+    "get_customer_info", "get_customer", "get_transaction",
+    "get_customer_transactions", "check_fraud_flags",
 })
 
 
@@ -30,6 +33,8 @@ class AnomalyScorer:
 
     def __init__(self, session_tracker: SessionTracker):
         self._tracker = session_tracker
+        self._velocity_threshold = int(os.getenv("AGENTGATE_ANOMALY_VELOCITY_THRESHOLD", "5"))
+        self._velocity_window_sec = int(os.getenv("AGENTGATE_ANOMALY_VELOCITY_WINDOW_SEC", "60"))
 
     async def score(self, tool_call: ToolCall) -> tuple[int, str]:
         """
@@ -44,12 +49,9 @@ class AnomalyScorer:
             return 0, "scorer unavailable"
 
     async def _compute(self, tool_call: ToolCall) -> tuple[int, str]:
-        velocity_threshold = int(os.getenv("AGENTGATE_ANOMALY_VELOCITY_THRESHOLD", "5"))
-        velocity_window_sec = int(os.getenv("AGENTGATE_ANOMALY_VELOCITY_WINDOW_SEC", "60"))
-
         stats = await self._tracker.get_session_stats(
             agent_id=tool_call.agent_id,
-            window_minutes=max(velocity_window_sec // 60, 5),
+            window_minutes=max(self._velocity_window_sec // 60, 5),
             session_id=tool_call.session_id,
         )
 
@@ -57,7 +59,7 @@ class AnomalyScorer:
             stats["calls_last_60s"],
             tool_call.tool_name,
             stats["tool_frequency"],
-            velocity_threshold,
+            self._velocity_threshold,
         )
 
         scope_score, scope_reason = self._scope_drift_score(
@@ -78,6 +80,8 @@ class AnomalyScorer:
         threshold: int,
     ) -> tuple[int, str]:
         """Flag if the same tool is called more than threshold times in 60 seconds."""
+        if tool_name in _BENIGN_TOOLS:
+            return 0, "benign read-only tool — velocity not scored"
         same_tool_count = tool_freq.get(tool_name, 0)
 
         if same_tool_count > threshold * 2:

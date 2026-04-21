@@ -75,6 +75,7 @@ Respond with ONLY a JSON object:
         message = await client.messages.create(
             model=self.model,
             max_tokens=150,
+            timeout=10.0,
             messages=[{"role": "user", "content": prompt}],
         )
 
@@ -99,5 +100,5 @@ Respond with ONLY a JSON object:
         return 20, "heuristic: no high-risk keyword matched"
 
     def _cache_key(self, tool_call: ToolCall) -> str:
-        payload = f"{tool_call.tool_name}:{json.dumps(tool_call.args, sort_keys=True, default=str)}"
-        return hashlib.md5(payload.encode()).hexdigest()
+        payload = f"v1:{tool_call.tool_name}:{json.dumps(tool_call.args, sort_keys=True, default=str)}"
+        return hashlib.sha256(payload.encode()).hexdigest()

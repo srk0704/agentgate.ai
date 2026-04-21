@@ -6,6 +6,8 @@ Pure Python, synchronous, no LLM, never raises.
 """
 from __future__ import annotations
 
+import os
+
 from agentgate.models import ToolCall
 
 
@@ -15,8 +17,17 @@ class BlastRadiusEstimator:
     financial impact, reversibility, regulatory exposure, and severity.
 
     Rules are heuristic — based on tool name and numeric args.
+    Financial thresholds are configurable via environment variables.
     Always returns a dict; never raises.
     """
+
+    def __init__(self) -> None:
+        # Configurable per-company risk thresholds
+        self._payment_critical = float(os.getenv("AGENTGATE_BLAST_PAYMENT_CRITICAL", "50000"))
+        self._payment_high = float(os.getenv("AGENTGATE_BLAST_PAYMENT_HIGH", "10000"))
+        self._refund_high = float(os.getenv("AGENTGATE_BLAST_REFUND_HIGH", "500"))
+        self._refund_medium = float(os.getenv("AGENTGATE_BLAST_REFUND_MEDIUM", "100"))
+        self._credit_high = float(os.getenv("AGENTGATE_BLAST_CREDIT_HIGH", "5000"))
 
     def estimate(self, tool_call: ToolCall) -> dict:
         try:
@@ -44,7 +55,7 @@ class BlastRadiusEstimator:
         if name == "process_payment":
             if amount is not None:
                 fin = f"${amount:,.2f}"
-                if amount >= 50000:
+                if amount >= self._payment_critical:
                     return {
                         "financial_impact": fin,
                         "records_affected": "unknown",
@@ -53,7 +64,7 @@ class BlastRadiusEstimator:
                         "severity": "critical",
                         "estimated_affected_users": None,
                     }
-                elif amount >= 10000:
+                elif amount >= self._payment_high:
                     return {
                         "financial_impact": fin,
                         "records_affected": "unknown",
@@ -83,9 +94,9 @@ class BlastRadiusEstimator:
         # ── Refunds ─────────────────────────────────────────────────────────
         if name == "issue_refund":
             if amount is not None:
-                if amount >= 500:
+                if amount >= self._refund_high:
                     sev = "high"
-                elif amount >= 100:
+                elif amount >= self._refund_medium:
                     sev = "medium"
                 else:
                     sev = "low"
@@ -192,7 +203,7 @@ class BlastRadiusEstimator:
             increase = args.get("increase")
             decrease = args.get("decrease")
             if increase is not None:
-                sev = "high" if increase >= 5000 else "medium"
+                sev = "high" if increase >= self._credit_high else "medium"
                 return {
                     "financial_impact": f"+${increase:,.2f} credit",
                     "records_affected": "1 account",

@@ -215,7 +215,7 @@ class EscalationQueue:
             except Exception as e:
                 logger.error("Slack notification failed: %s", e)
 
-        # Try email
+        # Try email — run in thread pool to avoid blocking the async event loop
         smtp_host = os.getenv("SMTP_HOST")
         smtp_port = int(os.getenv("SMTP_PORT", "587"))
         smtp_user = os.getenv("SMTP_USER")
@@ -236,11 +236,14 @@ class EscalationQueue:
                 msg["From"] = smtp_user
                 msg["To"] = escalation_email
 
-                with smtplib.SMTP(smtp_host, smtp_port) as server:
-                    server.starttls()
-                    if smtp_user and smtp_pass:
-                        server.login(smtp_user, smtp_pass)
-                    server.send_message(msg)
+                def _send() -> None:
+                    with smtplib.SMTP(smtp_host, smtp_port) as server:
+                        server.starttls()
+                        if smtp_user and smtp_pass:
+                            server.login(smtp_user, smtp_pass)
+                        server.send_message(msg)
+
+                await asyncio.to_thread(_send)
             except Exception as e:
                 logger.error("Email notification failed: %s", e)
 

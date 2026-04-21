@@ -3,7 +3,7 @@ import csv
 import io
 import json
 import logging
-from datetime import date
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -55,6 +55,22 @@ CREATE TABLE IF NOT EXISTS pii_scan_log (
 );
 """
 
+CREATE_POLICY_CHANGES_TABLE = """
+CREATE TABLE IF NOT EXISTS policy_changes (
+    id             TEXT PRIMARY KEY,
+    pattern_id     TEXT,
+    pattern_type   TEXT NOT NULL,
+    tool_name      TEXT NOT NULL,
+    action         TEXT NOT NULL,
+    before_value   TEXT,
+    after_value    TEXT,
+    metrics_before TEXT,
+    metrics_after  TEXT,
+    applied_at     TEXT NOT NULL,
+    reverted_at    TEXT
+);
+"""
+
 
 class AuditLogger:
     def __init__(self, db_path: str):
@@ -68,6 +84,7 @@ class AuditLogger:
             await db.execute("PRAGMA journal_mode=WAL")
             await db.execute(CREATE_TABLE)
             await db.execute(CREATE_PII_SCAN_TABLE)
+            await db.execute(CREATE_POLICY_CHANGES_TABLE)
             # Migrate existing DBs — ignore error if columns already exist.
             for col in (
                 "original_task TEXT", "session_id TEXT",
@@ -80,6 +97,23 @@ class AuditLogger:
             ):
                 try:
                     await db.execute(f"ALTER TABLE audit_log ADD COLUMN {col}")
+                except Exception:
+                    pass
+            # Indexes for commonly-queried columns — safe to run on existing DBs.
+            for ddl in (
+                "CREATE INDEX IF NOT EXISTS idx_audit_decided_at ON audit_log(decided_at)",
+                "CREATE INDEX IF NOT EXISTS idx_audit_agent_id ON audit_log(agent_id)",
+                "CREATE INDEX IF NOT EXISTS idx_audit_tool_name ON audit_log(tool_name)",
+                "CREATE INDEX IF NOT EXISTS idx_audit_outcome ON audit_log(outcome)",
+                "CREATE INDEX IF NOT EXISTS idx_audit_call_id ON audit_log(call_id)",
+                "CREATE INDEX IF NOT EXISTS idx_audit_escalation_id ON audit_log(escalation_id)",
+                "CREATE INDEX IF NOT EXISTS idx_audit_idempotency ON audit_log(idempotency_key) WHERE idempotency_key IS NOT NULL",
+                "CREATE INDEX IF NOT EXISTS idx_audit_human_decision ON audit_log(human_decision) WHERE human_decision IS NOT NULL",
+                "CREATE INDEX IF NOT EXISTS idx_policy_changes_applied ON policy_changes(applied_at)",
+                "CREATE INDEX IF NOT EXISTS idx_policy_changes_tool ON policy_changes(tool_name)",
+            ):
+                try:
+                    await db.execute(ddl)
                 except Exception:
                     pass
             await db.commit()
@@ -383,13 +417,147 @@ class AuditLogger:
             agent_data["total"] = sum(v for k, v in agent_data.items())
         return result
 
-    async def export_csv(self) -> str:
-        """Return full audit log as a CSV string."""
+    async def get_tool_metrics(
+        self, tool_name: str, since: str, until: str | None = None
+    ) -> dict[str, Any]:
+        """Return outcome distribution for a tool between two ISO timestamps."""
         await self._ensure_init()
+        params: list[Any] = [tool_name, since]
+        until_clause = ""
+        if until:
+            until_clause = "AND decided_at < ?"
+            params.append(until)
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute(
+                f"""SELECT outcome, COUNT(*) FROM audit_log
+                    WHERE tool_name = ? AND decided_at >= ? {until_clause}
+                    GROUP BY outcome""",
+                params,
+            ) as cur:
+                rows = await cur.fetchall()
+        counts: dict[str, int] = {r[0]: r[1] for r in rows}
+        total = sum(counts.values())
+        escalated_total = (
+            counts.get("escalated", 0)
+            + counts.get("escalation_approved", 0)
+            + counts.get("escalation_rejected", 0)
+        )
+        return {
+            "total": total,
+            "allowed": counts.get("allowed", 0),
+            "blocked": counts.get("blocked", 0),
+            "escalated": escalated_total,
+            "escalation_rate": round(escalated_total / total * 100, 1) if total else 0.0,
+            "block_rate": round(counts.get("blocked", 0) / total * 100, 1) if total else 0.0,
+            "allow_rate": round(counts.get("allowed", 0) / total * 100, 1) if total else 0.0,
+        }
+
+    async def log_policy_change(self, data: dict) -> str:
+        """Insert a policy change record. Returns the new change id."""
+        await self._ensure_init()
+        import uuid
+        from datetime import datetime
+        change_id = str(uuid.uuid4())
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute(
+                """INSERT INTO policy_changes
+                   (id, pattern_id, pattern_type, tool_name, action,
+                    before_value, after_value, metrics_before, applied_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    change_id,
+                    data.get("pattern_id"),
+                    data.get("pattern_type", "unknown"),
+                    data.get("tool_name", ""),
+                    data.get("action", ""),
+                    data.get("before_value"),
+                    data.get("after_value"),
+                    data.get("metrics_before"),
+                    datetime.utcnow().isoformat(),
+                ),
+            )
+            await db.commit()
+        return change_id
+
+    async def update_policy_change_metrics(
+        self, change_id: str, metrics_after: str
+    ) -> None:
+        """Store post-change metrics after measuring impact."""
+        await self._ensure_init()
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute(
+                "UPDATE policy_changes SET metrics_after = ? WHERE id = ?",
+                (metrics_after, change_id),
+            )
+            await db.commit()
+
+    async def get_policy_changes(
+        self, tool_name: str | None = None, limit: int = 50
+    ) -> list[dict]:
+        """Return recent policy changes, optionally filtered by tool."""
+        await self._ensure_init()
+        params: list[Any] = []
+        where = ""
+        if tool_name:
+            where = "WHERE tool_name = ?"
+            params.append(tool_name)
+        params.append(limit)
         async with aiosqlite.connect(self.db_path) as db:
             db.row_factory = aiosqlite.Row
             async with db.execute(
-                "SELECT * FROM audit_log ORDER BY decided_at DESC"
+                f"SELECT * FROM policy_changes {where} ORDER BY applied_at DESC LIMIT ?",
+                params,
+            ) as cur:
+                rows = await cur.fetchall()
+        return [dict(r) for r in rows]
+
+    async def get_by_call_ids(self, call_ids: list[str]) -> dict[str, dict]:
+        """Fetch audit entries for multiple call_ids in one query. Returns {call_id: entry}."""
+        if not call_ids:
+            return {}
+        await self._ensure_init()
+        placeholders = ",".join("?" * len(call_ids))
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            async with db.execute(
+                f"SELECT * FROM audit_log WHERE call_id IN ({placeholders}) ORDER BY decided_at DESC",
+                call_ids,
+            ) as cur:
+                rows = await cur.fetchall()
+        result: dict[str, dict] = {}
+        for r in rows:
+            d = dict(r)
+            result.setdefault(d["call_id"], d)
+        return result
+
+    async def get_by_idempotency_key(
+        self, idempotency_key: str, within_minutes: int = 5
+    ) -> dict | None:
+        """Return the most recent ALLOWED decision for this key within the time window."""
+        await self._ensure_init()
+        since = (datetime.utcnow() - timedelta(minutes=within_minutes)).isoformat()
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            async with db.execute(
+                """SELECT * FROM audit_log
+                   WHERE idempotency_key = ? AND outcome = 'allowed' AND decided_at >= ?
+                   ORDER BY decided_at DESC LIMIT 1""",
+                (idempotency_key, since),
+            ) as cur:
+                row = await cur.fetchone()
+        return dict(row) if row else None
+
+    async def export_csv(self, since: str | None = None) -> str:
+        """Return audit log as a CSV string. Defaults to last 90 days to prevent OOM on large DBs."""
+        await self._ensure_init()
+        if since is None:
+            from datetime import timedelta
+            since = (datetime.utcnow() - timedelta(days=90)).isoformat()
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            async with db.execute(
+                "SELECT * FROM audit_log WHERE decided_at >= ? ORDER BY decided_at DESC",
+                (since,),
             ) as cur:
                 rows = await cur.fetchall()
         if not rows:

@@ -54,6 +54,13 @@ class GatewayClient:
         self.timeout_ms = timeout_ms
         self.escalation_timeout_sec = escalation_timeout_sec
         self.compliance_mode = compliance_mode
+        # Cache thresholds at init — reading env vars on every evaluate() call is both
+        # wasteful and risks inconsistent decisions if env changes at runtime.
+        self._block_threshold = int(os.getenv("AGENTGATE_RISK_THRESHOLD_BLOCK", "80"))
+        self._escalate_threshold = int(os.getenv("AGENTGATE_RISK_THRESHOLD_ESCALATE", "60"))
+        self._injection_block_threshold = int(os.getenv("AGENTGATE_INJECTION_THRESHOLD_BLOCK", "70"))
+        self._anomaly_block_threshold = int(os.getenv("AGENTGATE_ANOMALY_SCORE_BLOCK", "80"))
+        self._anomaly_escalate_threshold = int(os.getenv("AGENTGATE_ANOMALY_SCORE_ESCALATE", "50"))
         self._policy_evaluator = PolicyEvaluator(PolicyLoader(policy_path))
         self._audit = AuditLogger(db_path)
         from agentgate.escalation import EscalationQueue
@@ -108,6 +115,11 @@ class GatewayClient:
         instance.timeout_ms = timeout_ms
         instance.escalation_timeout_sec = escalation_timeout_sec
         instance.compliance_mode = compliance_mode
+        instance._block_threshold = int(os.getenv("AGENTGATE_RISK_THRESHOLD_BLOCK", "80"))
+        instance._escalate_threshold = int(os.getenv("AGENTGATE_RISK_THRESHOLD_ESCALATE", "60"))
+        instance._injection_block_threshold = int(os.getenv("AGENTGATE_INJECTION_THRESHOLD_BLOCK", "70"))
+        instance._anomaly_block_threshold = int(os.getenv("AGENTGATE_ANOMALY_SCORE_BLOCK", "80"))
+        instance._anomaly_escalate_threshold = int(os.getenv("AGENTGATE_ANOMALY_SCORE_ESCALATE", "50"))
         loader = PolicyLoader.from_list(policies)
         instance._policy_evaluator = PolicyEvaluator(loader)
         instance._audit = AuditLogger(db_path)
@@ -138,6 +150,23 @@ class GatewayClient:
 
         decision.latency_ms = (time.monotonic() - start) * 1000
         await self._audit.log(decision)
+
+        # Structured logs for SIEM / security monitoring
+        tc = decision.tool_call
+        if decision.outcome == DecisionOutcome.BLOCKED:
+            logger.warning(
+                "BLOCKED agent=%s tool=%s reason=%r risk=%s injection=%s attack=%s latency=%.0fms",
+                tc.agent_id, tc.tool_name, decision.reason,
+                decision.risk_score, decision.injection_score, decision.attack_type,
+                decision.latency_ms,
+            )
+        elif decision.outcome == DecisionOutcome.ESCALATED:
+            logger.info(
+                "ESCALATED agent=%s tool=%s escalation_id=%s risk=%s anomaly=%s latency=%.0fms",
+                tc.agent_id, tc.tool_name, decision.escalation_id,
+                decision.risk_score, decision.anomaly_score, decision.latency_ms,
+            )
+
         return decision
 
     async def _evaluate_internal(self, tool_call: ToolCall) -> Decision:
@@ -190,11 +219,11 @@ class GatewayClient:
 
         attack_type = _parse_attack_type(injection_reason)
 
-        block_threshold = int(os.getenv("AGENTGATE_RISK_THRESHOLD_BLOCK", "80"))
-        escalate_threshold = int(os.getenv("AGENTGATE_RISK_THRESHOLD_ESCALATE", "60"))
-        injection_block_threshold = int(os.getenv("AGENTGATE_INJECTION_THRESHOLD_BLOCK", "70"))
-        anomaly_block_threshold = int(os.getenv("AGENTGATE_ANOMALY_SCORE_BLOCK", "80"))
-        anomaly_escalate_threshold = int(os.getenv("AGENTGATE_ANOMALY_SCORE_ESCALATE", "50"))
+        block_threshold = self._block_threshold
+        escalate_threshold = self._escalate_threshold
+        injection_block_threshold = self._injection_block_threshold
+        anomaly_block_threshold = self._anomaly_block_threshold
+        anomaly_escalate_threshold = self._anomaly_escalate_threshold
 
         # Step 4: Decision routing (injection wins over explicit policy ALLOW).
         if injection_score is not None and injection_score >= injection_block_threshold:
