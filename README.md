@@ -1,6 +1,8 @@
-# AgentGate
+# AgentGate — Agent Reliability Infrastructure
 
-Access control for AI agents — policy enforcement, prompt injection detection, blast radius estimation, PII scanning, human escalation, and a self-improving learning loop in a single Python SDK.
+Catch failures, prevent bad actions, and improve agent behavior automatically — before users notice.
+
+A single Python layer that sits between your agent and its tools: policy enforcement, prompt injection detection, anomaly + drift detection, blast radius estimation, PII scanning, human escalation, and a self-improving learning loop — all behind one unified reliability score.
 
 ---
 
@@ -20,12 +22,21 @@ You need AgentGate if ANY of these are true:
 
 ---
 
-## The Problem
+## The reliability problem with production agents
 
-- AI agents for customer support can issue refunds, export data, and cancel accounts — with no human checkpoint
-- Prompt injection attacks hide instructions inside support tickets and redirect agents to execute actions the user never intended
-- Teams are afraid to give AI agents production access because there is no audit trail and no way to enforce limits
-- Escalation thresholds set at launch day become stale — too conservative or too permissive as usage patterns evolve
+AI agents fail in ways that are hard to predict and expensive to debug:
+
+- **They take actions they were not supposed to** — wrong refund, unauthorized transfer
+- **They get injected by malicious input in data** — a hidden instruction in a customer message
+- **They drift off task mid-session** — started with a refund, ends up exporting data
+- **They get stuck in retry loops** — same failing tool call, burning tokens, no result
+- **They improve slowly or not at all** — no feedback loop from human decisions
+
+AgentGate sits between your agent and its tools. Every tool call is evaluated before execution. Every outcome is logged. Every pattern is learned.
+
+> *"Is this agent still doing the right thing, at the right time, with the right tools?"*
+
+That is the question AgentGate answers on every call — and it summarizes the answer in a single 0–100 reliability score per decision.
 
 ## What AgentGate Does
 

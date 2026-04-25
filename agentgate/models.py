@@ -61,6 +61,10 @@ class Decision:
     attack_type: str | None = None
     # Blast radius estimate from BlastRadiusEstimator (always present, never None after eval)
     blast_radius: dict | None = None
+    # Unified 0-100 reliability score for this call. Higher = healthier.
+    # Inverted from component scores (where higher = worse) and summarized in plain English.
+    reliability_score: int | None = None
+    reliability_summary: str | None = None
     latency_ms: float = 0.0
     decided_at: datetime = field(default_factory=datetime.utcnow)
 
@@ -71,3 +75,48 @@ class Decision:
             DecisionOutcome.ESCALATION_APPROVED,
             DecisionOutcome.FAILED_OPEN,
         )
+
+    @staticmethod
+    def compute_reliability_score(
+        risk_score: int | None,
+        injection_score: int | None,
+        anomaly_score: int | None,
+        drift_score: int | None = None,
+        loop_score: int | None = None,
+    ) -> tuple[int, str]:
+        """
+        Compute unified reliability score 0-100. Higher = healthier.
+
+        Algorithm: collect all non-None component scores (where higher = worse),
+        find the worst, invert it to 100 - worst. Map to a plain-English summary band:
+          90-100 → Healthy
+          70-89  → Caution: elevated <name>
+          40-69  → Degraded: high <name> score
+          0-39   → Critical: <name> detected
+        """
+        scores = {
+            "injection": injection_score,
+            "risk": risk_score,
+            "anomaly": anomaly_score,
+            "drift": drift_score,
+            "loop": loop_score,
+        }
+        active = {k: v for k, v in scores.items() if v is not None and v > 0}
+
+        if not active:
+            return (100, "Healthy")
+
+        worst_name = max(active, key=lambda k: active[k])
+        worst_score = active[worst_name]
+        reliability = max(0, 100 - worst_score)
+
+        if reliability >= 90:
+            summary = "Healthy"
+        elif reliability >= 70:
+            summary = f"Caution: elevated {worst_name}"
+        elif reliability >= 40:
+            summary = f"Degraded: high {worst_name} score"
+        else:
+            summary = f"Critical: {worst_name} detected"
+
+        return (reliability, summary)

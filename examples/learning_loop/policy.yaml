@@ -44,7 +44,7 @@ policies:
   conditions:
   - field: args.amount
     op: gte
-    value: 1500.0
+    value: 100
   effect: escalate
   reason: Refund >= $100 requires human approval
 - name: escalate_freeze_account

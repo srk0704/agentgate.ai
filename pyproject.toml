@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "agentgate"
-version = "0.1.0"
-description = "AgentGate: Access control for AI agents"
+version = "0.5.0"
+description = "AgentGate: Agent reliability infrastructure — monitoring, control, and continuous improvement for production AI agents"
 authors = ["Siddhant Kumar <sk4975@columbia.edu>"]
 package-mode = false
 

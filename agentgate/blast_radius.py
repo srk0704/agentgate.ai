@@ -22,11 +22,31 @@ class BlastRadiusEstimator:
     """
 
     def __init__(self) -> None:
-        # Configurable per-company risk thresholds
+        # Configurable per-company risk thresholds.
+        # WARNING: these defaults are NOT research-derived — they are placeholders.
+        # Override them for your business context before deploying to production.
+        # See docs/THRESHOLD_RESEARCH.md → "Blast radius financial thresholds".
+
+        # process_payment amount that escalates severity to "critical".
+        # Default $50,000: enterprise-scale single transaction. Lower for consumer apps.
         self._payment_critical = float(os.getenv("AGENTGATE_BLAST_PAYMENT_CRITICAL", "50000"))
+
+        # process_payment amount that escalates severity to "high".
+        # Default $10,000: typical mid-market single-transaction risk threshold.
         self._payment_high = float(os.getenv("AGENTGATE_BLAST_PAYMENT_HIGH", "10000"))
+
+        # issue_refund amount that escalates severity to "high".
+        # Default $500: review with finance — a $500 refund is trivial for some
+        # businesses and significant for others.
         self._refund_high = float(os.getenv("AGENTGATE_BLAST_REFUND_HIGH", "500"))
+
+        # issue_refund amount that escalates severity to "medium".
+        # Default $100: paired with the medium-refund escalate policy in the
+        # demo policy file; tune to your average refund size.
         self._refund_medium = float(os.getenv("AGENTGATE_BLAST_REFUND_MEDIUM", "100"))
+
+        # update_credit_limit increase that escalates severity to "high".
+        # Default $5,000: representative consumer credit-line bump. Adjust per product.
         self._credit_high = float(os.getenv("AGENTGATE_BLAST_CREDIT_HIGH", "5000"))
 
     def estimate(self, tool_call: ToolCall) -> dict:

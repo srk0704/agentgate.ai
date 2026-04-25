@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AgentGate Dashboard</title>
+<title>AgentGate — Agent Reliability Layer</title>
 <style>
   :root {
     --bg: #0d1117;
@@ -155,6 +155,10 @@
   .card.blocked .card-value  { color: var(--blocked); }
   .card.escalated .card-value{ color: var(--escalated); }
   .card.injection .card-value{ color: var(--injection); }
+  .card.health .card-value   { color: var(--allowed); }
+  .card.health.health-caution  .card-value { color: var(--escalated); }
+  .card.health.health-degraded .card-value { color: var(--excess-agency); }
+  .card.health.health-critical .card-value { color: var(--blocked); }
 
   /* ── Agent Breakdown ── */
   .breakdown-section {
@@ -436,6 +440,10 @@
   .score-badge.risk    { background: rgba(248,81,73,0.12);  color: #f85149; }
   .score-badge.inj     { background: rgba(188,140,255,0.12); color: #bc8cff; }
   .score-badge.anomaly { background: rgba(255,123,114,0.12); color: #ff7b72; }
+  .score-badge.health-ok       { background: rgba(63,185,80,0.14);  color: #3fb950; }
+  .score-badge.health-caution  { background: rgba(210,153,34,0.14); color: #d29922; }
+  .score-badge.health-degraded { background: rgba(240,136,62,0.14); color: #f0883e; }
+  .score-badge.health-critical { background: rgba(248,81,73,0.14);  color: #f85149; }
 
   .attack-badge {
     display: inline-flex;
@@ -1054,7 +1062,10 @@
 <header>
   <div class="logo">
     <div class="logo-icon">⊕</div>
-    AgentGate
+    <div style="display:flex;flex-direction:column;line-height:1.1">
+      <span>AgentGate — Agent Reliability Layer</span>
+      <span style="font-size:11px;font-weight:400;color:var(--muted);letter-spacing:0">Monitoring, control, and continuous improvement for production AI agents</span>
+    </div>
   </div>
   <div class="header-right">
     <div class="agent-count" id="agent-count">0 active agents</div>
@@ -1087,19 +1098,19 @@
       <div class="card-sub">tool calls evaluated</div>
     </div>
     <div class="card blocked">
-      <div class="card-label">Block Rate</div>
+      <div class="card-label">Intervention Rate</div>
       <div class="card-value" id="card-block">—</div>
-      <div class="card-sub">% of actions blocked</div>
+      <div class="card-sub">% blocked or escalated</div>
     </div>
     <div class="card escalated">
-      <div class="card-label">Escalation Rate</div>
-      <div class="card-value" id="card-escalation">—</div>
-      <div class="card-sub">% sent to human review</div>
-    </div>
-    <div class="card injection">
-      <div class="card-label">Injection Attempts</div>
+      <div class="card-label">Reliability Events Today</div>
       <div class="card-value" id="card-injection">—</div>
-      <div class="card-sub">detected today</div>
+      <div class="card-sub">injection · drift · loops</div>
+    </div>
+    <div class="card health">
+      <div class="card-label">Agent Health Score</div>
+      <div class="card-value" id="card-health">—</div>
+      <div class="card-sub" id="card-health-sub">average reliability today</div>
     </div>
   </div>
 
@@ -1356,7 +1367,17 @@
   }
 
   // ── Score chips ───────────────────────────────────────────────────────────
-  function scoreHtml(risk, inj, anomaly) {
+  function healthBadgeClass(score) {
+    if (score >= 90) return 'health-ok';
+    if (score >= 70) return 'health-caution';
+    if (score >= 40) return 'health-degraded';
+    return 'health-critical';
+  }
+  function scoreHtml(risk, inj, anomaly, reliability) {
+    if (reliability != null) {
+      return `<div class="feed-scores"><span class="score-badge ${healthBadgeClass(reliability)}">Health: ${reliability}%</span></div>`;
+    }
+    // Fallback for older audit rows without reliability_score
     let html = '';
     if (risk != null)               html += `<span class="score-badge risk">R:${risk}</span>`;
     if (inj != null && inj > 0)     html += `<span class="score-badge inj">I:${inj}</span>`;
@@ -1412,7 +1433,7 @@
           <div class="feed-body">
             <div class="feed-tool">${escHtml(d.tool_name || '')}${attackBadgeHtml(d.attack_type)}</div>
             <div class="feed-reason">${escHtml(reasonTrunc)}</div>
-            ${scoreHtml(d.risk_score, d.injection_score, d.anomaly_score)}
+            ${scoreHtml(d.risk_score, d.injection_score, d.anomaly_score, d.reliability_score)}
             ${blastRadiusHtml(d.blast_radius)}
           </div>
           <div class="feed-meta">
@@ -1876,9 +1897,30 @@
       const data = await r.json();
 
       document.getElementById('card-total').textContent     = data.total_actions_today;
-      document.getElementById('card-block').textContent     = `${data.block_rate}%`;
-      document.getElementById('card-escalation').textContent= `${data.escalation_rate}%`;
-      document.getElementById('card-injection').textContent = data.injection_attempts_today;
+      const intervention = (data.block_rate || 0) + (data.escalation_rate || 0);
+      document.getElementById('card-block').textContent     = `${intervention.toFixed(1)}%`;
+      document.getElementById('card-injection').textContent = data.reliability_events_today != null ? data.reliability_events_today : data.injection_attempts_today;
+
+      // Agent Health Score card
+      const healthCard = document.querySelector('.card.health');
+      const healthVal = document.getElementById('card-health');
+      const healthSub = document.getElementById('card-health-sub');
+      const score = data.avg_reliability_score_today;
+      if (score == null) {
+        healthVal.textContent = '—';
+        healthSub.textContent = 'awaiting first decision';
+        healthCard.className = 'card health';
+      } else {
+        healthVal.textContent = `${score}%`;
+        let label, klass;
+        if (score >= 90) { label = 'Healthy'; klass = ''; }
+        else if (score >= 70) { label = 'Caution'; klass = 'health-caution'; }
+        else if (score >= 40) { label = 'Degraded'; klass = 'health-degraded'; }
+        else { label = 'Critical'; klass = 'health-critical'; }
+        healthSub.textContent = label;
+        healthCard.className = `card health ${klass}`.trim();
+      }
+
       document.getElementById('agent-count').textContent    =
         `${data.active_agents} active agent${data.active_agents !== 1 ? 's' : ''}`;
 
@@ -1906,15 +1948,31 @@
     const text   = document.getElementById('system-status-text');
     const detail = document.getElementById('system-status-detail');
     try {
-      const r = await fetch(`${BASE}/health/detailed`);
+      const [r, ra] = await Promise.all([
+        fetch(`${BASE}/health/detailed`),
+        fetch(`${BASE}/health/agents`).catch(() => null),
+      ]);
       if (!r.ok) throw new Error(r.status);
       const h = await r.json();
+      const ah = ra && ra.ok ? await ra.json() : null;
+
+      // If any agent is critical, override and show a red alert.
+      if (ah && ah.summary && ah.summary.critical > 0) {
+        const offender = (ah.agents.find(a => a.health_status === 'Critical') || {}).agent_id || 'unknown';
+        bar.className = 'system-status-bar error';
+        text.textContent = `⚠ Agent health alert: ${offender} critical`;
+        detail.textContent = `${ah.summary.total_agents} agents · ${ah.summary.healthy} healthy · ${ah.summary.degraded} degraded · ${ah.summary.critical} critical`;
+        return;
+      }
 
       bar.className = `system-status-bar ${h.status}`;
+      const agentSummary = ah && ah.summary
+        ? `${ah.summary.total_agents} agents · ${ah.summary.healthy} healthy · ${ah.summary.degraded + ah.summary.caution} degraded`
+        : '';
       if (h.status === 'ok') {
         const note = h.components.compliance_mode ? ' — Compliance mode (no LLM)' : '';
         text.textContent = `All systems operational${note}`;
-        detail.textContent = h.failed_open_today > 0 ? `${h.failed_open_today} fail-open today` : '';
+        detail.textContent = agentSummary || (h.failed_open_today > 0 ? `${h.failed_open_today} fail-open today` : '');
       } else if (h.status === 'degraded') {
         text.textContent = `LLM API ${h.components.llm_api} — using heuristics`;
         detail.textContent = `${h.decisions_today} decisions today`;

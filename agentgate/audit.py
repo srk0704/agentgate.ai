@@ -15,31 +15,33 @@ logger = logging.getLogger(__name__)
 
 CREATE_TABLE = """
 CREATE TABLE IF NOT EXISTS audit_log (
-    id               TEXT PRIMARY KEY,
-    call_id          TEXT NOT NULL,
-    agent_id         TEXT NOT NULL,
-    session_id       TEXT,
-    tool_name        TEXT NOT NULL,
-    args             TEXT NOT NULL,
-    context          TEXT NOT NULL,
-    original_task    TEXT,
-    idempotency_key  TEXT,
-    outcome          TEXT NOT NULL,
-    reason           TEXT NOT NULL,
-    risk_score       INTEGER,
-    risk_reason      TEXT,
-    injection_score  INTEGER,
-    injection_reason TEXT,
-    attack_type      TEXT,
-    anomaly_score    INTEGER,
-    anomaly_reason   TEXT,
-    blast_radius     TEXT,
-    human_decision   TEXT,
-    human_reason     TEXT,
-    policy_matched   TEXT,
-    escalation_id    TEXT,
-    latency_ms       REAL,
-    decided_at       TEXT NOT NULL
+    id                  TEXT PRIMARY KEY,
+    call_id             TEXT NOT NULL,
+    agent_id            TEXT NOT NULL,
+    session_id          TEXT,
+    tool_name           TEXT NOT NULL,
+    args                TEXT NOT NULL,
+    context             TEXT NOT NULL,
+    original_task       TEXT,
+    idempotency_key     TEXT,
+    outcome             TEXT NOT NULL,
+    reason              TEXT NOT NULL,
+    risk_score          INTEGER,
+    risk_reason         TEXT,
+    injection_score     INTEGER,
+    injection_reason    TEXT,
+    attack_type         TEXT,
+    anomaly_score       INTEGER,
+    anomaly_reason      TEXT,
+    blast_radius        TEXT,
+    reliability_score   INTEGER,
+    reliability_summary TEXT,
+    human_decision      TEXT,
+    human_reason        TEXT,
+    policy_matched      TEXT,
+    escalation_id       TEXT,
+    latency_ms          REAL,
+    decided_at          TEXT NOT NULL
 );
 """
 
@@ -93,6 +95,7 @@ class AuditLogger:
                 "attack_type TEXT",
                 "anomaly_score INTEGER", "anomaly_reason TEXT",
                 "blast_radius TEXT",
+                "reliability_score INTEGER", "reliability_summary TEXT",
                 "risk_reason TEXT", "human_decision TEXT", "human_reason TEXT",
             ):
                 try:
@@ -129,9 +132,10 @@ class AuditLogger:
                  idempotency_key, outcome, reason,
                  risk_score, risk_reason, injection_score, injection_reason, attack_type,
                  anomaly_score, anomaly_reason, blast_radius,
+                 reliability_score, reliability_summary,
                  human_decision, human_reason,
                  policy_matched, escalation_id, latency_ms, decided_at)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (
                     f"{tc.call_id}-{decision.decided_at.timestamp()}",
                     tc.call_id,
@@ -152,6 +156,8 @@ class AuditLogger:
                     decision.anomaly_score,
                     decision.anomaly_reason,
                     json.dumps(decision.blast_radius) if decision.blast_radius else None,
+                    decision.reliability_score,
+                    decision.reliability_summary,
                     decision.human_decision,
                     decision.human_reason,
                     decision.policy_matched,
@@ -216,6 +222,25 @@ class AuditLogger:
             ) as cur:
                 injections: int = (await cur.fetchone())[0]  # type: ignore[index]
 
+            # Reliability events: any non-trivial component score elevated today.
+            # Captures injection + anomaly (covers drift) + (future) loop signals.
+            async with db.execute(
+                """SELECT COUNT(*) FROM audit_log
+                   WHERE decided_at >= ?
+                     AND (injection_score >= 50 OR anomaly_score >= 50 OR risk_score >= 70)""",
+                (today,),
+            ) as cur:
+                reliability_events: int = (await cur.fetchone())[0]  # type: ignore[index]
+
+            # Average reliability score today (None if no decisions yet).
+            async with db.execute(
+                """SELECT AVG(reliability_score) FROM audit_log
+                   WHERE decided_at >= ? AND reliability_score IS NOT NULL""",
+                (today,),
+            ) as cur:
+                avg_row = await cur.fetchone()
+            avg_reliability = avg_row[0] if avg_row and avg_row[0] is not None else None  # type: ignore[index]
+
             # Active agents in last 5 min (proxy for "live agent count")
             from datetime import datetime, timedelta
             five_min_ago = (datetime.utcnow() - timedelta(minutes=5)).isoformat()
@@ -230,6 +255,8 @@ class AuditLogger:
             "block_rate": round(blocked / total * 100, 1) if total else 0.0,
             "escalation_rate": round(escalated / total * 100, 1) if total else 0.0,
             "injection_attempts_today": injections,
+            "reliability_events_today": reliability_events,
+            "avg_reliability_score_today": round(avg_reliability) if avg_reliability is not None else None,
             "active_agents": active_agents,
         }
 
@@ -416,6 +443,109 @@ class AuditLogger:
         for agent_data in result.values():
             agent_data["total"] = sum(v for k, v in agent_data.items())
         return result
+
+    async def get_agent_health(
+        self, since: str | None = None
+    ) -> list[dict[str, Any]]:
+        """
+        Per-agent reliability snapshot.
+
+        For each agent_id seen since `since` (default: last 24 h):
+          - decisions count
+          - average reliability score (rounded; None if never scored)
+          - intervention rate (blocked + escalated) / total
+          - last_seen ISO timestamp
+          - active_issues: aggregate score-type signals from the *recent* window only
+            (last hour by default) so old, resolved issues do not stick around
+          - worst component recorded in the window
+        Sorted by health_score ascending (worst first).
+        """
+        await self._ensure_init()
+        if since is None:
+            since = (datetime.utcnow() - timedelta(hours=24)).isoformat()
+        recent_since = (datetime.utcnow() - timedelta(hours=1)).isoformat()
+
+        agents: dict[str, dict[str, Any]] = {}
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            async with db.execute(
+                """SELECT agent_id,
+                          COUNT(*) AS total,
+                          AVG(reliability_score) AS avg_rel,
+                          MAX(decided_at) AS last_seen,
+                          SUM(CASE WHEN outcome = 'blocked' THEN 1 ELSE 0 END) AS blocked,
+                          SUM(CASE WHEN outcome LIKE 'escalat%' THEN 1 ELSE 0 END) AS escalated
+                   FROM audit_log
+                   WHERE decided_at >= ?
+                   GROUP BY agent_id""",
+                (since,),
+            ) as cur:
+                rows = await cur.fetchall()
+            for r in rows:
+                d = dict(r)
+                aid = d["agent_id"]
+                total = d["total"] or 0
+                blocked = d["blocked"] or 0
+                escalated = d["escalated"] or 0
+                avg_rel = d["avg_rel"]
+                health_score = round(avg_rel) if avg_rel is not None else 100
+                if health_score >= 90:
+                    status = "Healthy"
+                elif health_score >= 70:
+                    status = "Caution"
+                elif health_score >= 40:
+                    status = "Degraded"
+                else:
+                    status = "Critical"
+                agents[aid] = {
+                    "agent_id": aid,
+                    "health_score": health_score,
+                    "health_status": status,
+                    "decisions_today": total,
+                    "intervention_rate": round((blocked + escalated) / total, 3) if total else 0.0,
+                    "active_issues": [],
+                    "last_seen": d["last_seen"],
+                }
+
+            # Pull active issues from the last hour: any score type elevated above 50
+            async with db.execute(
+                """SELECT agent_id, decided_at, risk_score, injection_score, anomaly_score, attack_type
+                   FROM audit_log
+                   WHERE decided_at >= ?
+                     AND (risk_score >= 50 OR injection_score >= 50 OR anomaly_score >= 50)""",
+                (recent_since,),
+            ) as cur:
+                event_rows = await cur.fetchall()
+
+        issues_by_agent: dict[str, dict[str, dict[str, Any]]] = {}
+        for er in event_rows:
+            ed = dict(er)
+            aid = ed["agent_id"]
+            ts = ed["decided_at"]
+            buckets = issues_by_agent.setdefault(aid, {})
+            for kind, score, label in (
+                ("injection", ed.get("injection_score"),
+                 f"Prompt injection ({ed['attack_type']})" if ed.get("attack_type") else "Prompt injection"),
+                ("risk", ed.get("risk_score"), "High-risk action"),
+                ("anomaly", ed.get("anomaly_score"), "Anomalous session behavior"),
+            ):
+                if score is None or score < 50:
+                    continue
+                bucket = buckets.setdefault(kind, {
+                    "type": kind,
+                    "description": label,
+                    "first_seen": ts,
+                    "occurrences": 0,
+                })
+                bucket["occurrences"] += 1
+                if ts < bucket["first_seen"]:
+                    bucket["first_seen"] = ts
+
+        for aid, kinds in issues_by_agent.items():
+            if aid in agents:
+                agents[aid]["active_issues"] = list(kinds.values())
+
+        return sorted(agents.values(), key=lambda a: a["health_score"])
 
     async def get_tool_metrics(
         self, tool_name: str, since: str, until: str | None = None

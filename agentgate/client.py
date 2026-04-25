@@ -56,10 +56,39 @@ class GatewayClient:
         self.compliance_mode = compliance_mode
         # Cache thresholds at init — reading env vars on every evaluate() call is both
         # wasteful and risks inconsistent decisions if env changes at runtime.
+        # Full justification for every default: docs/THRESHOLD_RESEARCH.md.
+
+        # Block if risk_score >= this value.
+        # Default 80: calibrated to rarely fire on legitimate high-value actions
+        # while reliably catching genuinely dangerous ones (Pan 2025, "Measuring
+        # Agents in Production").
+        # Raise if seeing too many false positives. Lower if dangerous actions slip through.
         self._block_threshold = int(os.getenv("AGENTGATE_RISK_THRESHOLD_BLOCK", "80"))
+
+        # Escalate to humans if risk_score >= this value.
+        # Default 60: aligns with the 68%-of-agents-require-human-intervention
+        # finding (Pan 2025) — frequent escalation is normal, not a failure mode.
+        # Raise if your agent's legitimate actions cluster above 60.
         self._escalate_threshold = int(os.getenv("AGENTGATE_RISK_THRESHOLD_ESCALATE", "60"))
+
+        # Block if injection_score >= this value.
+        # Default 70: blocks clear injection attempts while leaving ambiguous
+        # cases for human review. Source: OWASP LLM Top 10 2025 (LLM01 — prompt
+        # injection is the highest-priority LLM risk); Agent-SafetyBench
+        # (Zhang et al. 2024, arXiv:2412.14470).
+        # Raise only if you see false positives on benign content with override-like phrasing.
         self._injection_block_threshold = int(os.getenv("AGENTGATE_INJECTION_THRESHOLD_BLOCK", "70"))
+
+        # Block if anomaly_score >= this value (velocity / scope drift).
+        # Default 80: paired with the 5-calls-per-60s velocity threshold
+        # (see anomaly.py), so blocking only triggers on egregiously abnormal
+        # session behavior, not routine bursts.
+        # Lower if a runaway agent is burning tokens before being caught.
         self._anomaly_block_threshold = int(os.getenv("AGENTGATE_ANOMALY_SCORE_BLOCK", "80"))
+
+        # Escalate if anomaly_score >= this value.
+        # Default 50: catches early scope-drift signals (a session reaching for
+        # tools outside its stated purpose) before they become hard-block events.
         self._anomaly_escalate_threshold = int(os.getenv("AGENTGATE_ANOMALY_SCORE_ESCALATE", "50"))
         self._policy_evaluator = PolicyEvaluator(PolicyLoader(policy_path))
         self._audit = AuditLogger(db_path)
@@ -149,6 +178,12 @@ class GatewayClient:
             )
 
         decision.latency_ms = (time.monotonic() - start) * 1000
+        # Compute unified reliability score across all component scores.
+        decision.reliability_score, decision.reliability_summary = Decision.compute_reliability_score(
+            risk_score=decision.risk_score,
+            injection_score=decision.injection_score,
+            anomaly_score=decision.anomaly_score,
+        )
         await self._audit.log(decision)
 
         # Structured logs for SIEM / security monitoring

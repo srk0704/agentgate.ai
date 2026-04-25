@@ -33,7 +33,18 @@ class AnomalyScorer:
 
     def __init__(self, session_tracker: SessionTracker):
         self._tracker = session_tracker
+        # Max same-tool calls allowed per window before velocity score fires.
+        # Default 5: aggressive for most legitimate agent workflows — a payment
+        # agent should not call issue_refund 5 times per minute. Modeled on
+        # Stripe's per-minute rate-limit defaults and standard payment-fraud
+        # velocity rules. See docs/THRESHOLD_RESEARCH.md.
+        # Raise for batch agents that legitimately fan out a single tool.
+        # Lower if you observe runaway retry loops that escape detection.
         self._velocity_threshold = int(os.getenv("AGENTGATE_ANOMALY_VELOCITY_THRESHOLD", "5"))
+
+        # Time window (seconds) over which velocity is measured.
+        # Default 60: matches the canonical "calls per minute" framing used in
+        # payment-fraud and API rate-limit literature.
         self._velocity_window_sec = int(os.getenv("AGENTGATE_ANOMALY_VELOCITY_WINDOW_SEC", "60"))
 
     async def score(self, tool_call: ToolCall) -> tuple[int, str]:

@@ -269,6 +269,24 @@ async def health() -> dict:
     return {"status": "ok"}
 
 
+@app.get("/health/agents")
+async def health_agents() -> dict:
+    """
+    Per-agent reliability snapshot for external monitoring.
+    Use this to alert when any agent's health_score drops below a threshold.
+    """
+    audit = _audit()
+    agents = await audit.get_agent_health()
+    summary = {
+        "total_agents": len(agents),
+        "healthy": sum(1 for a in agents if a["health_status"] == "Healthy"),
+        "caution": sum(1 for a in agents if a["health_status"] == "Caution"),
+        "degraded": sum(1 for a in agents if a["health_status"] == "Degraded"),
+        "critical": sum(1 for a in agents if a["health_status"] == "Critical"),
+    }
+    return {"summary": summary, "agents": agents}
+
+
 @app.get("/health/detailed")
 async def health_detailed() -> dict:
     """
@@ -340,6 +358,18 @@ async def usage() -> dict:
     by_outcome = await audit.get_by_outcome()
     by_agent_outcomes = await audit.get_by_agent_outcomes()
 
+    # Reliability rollup — same window as the dashboard health card
+    stats_today = await audit.get_stats()
+    agent_health = await audit.get_agent_health(since=today)
+    reliability_by_agent = {
+        a["agent_id"]: {
+            "avg_reliability": a["health_score"],
+            "trend": "stable",
+            "worst_event": (a["active_issues"][0]["type"] + "_score_active") if a["active_issues"] else None,
+        }
+        for a in agent_health
+    }
+
     return {
         "total_decisions": total,
         "decisions_today": decisions_today,
@@ -347,6 +377,8 @@ async def usage() -> dict:
         "by_agent": by_agent,
         "by_outcome": by_outcome,
         "by_agent_outcomes": by_agent_outcomes,
+        "avg_reliability_score_today": stats_today.get("avg_reliability_score_today"),
+        "reliability_by_agent": reliability_by_agent,
     }
 
 
