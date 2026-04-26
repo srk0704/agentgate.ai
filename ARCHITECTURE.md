@@ -1,5 +1,24 @@
 # AgentGate Architecture
 
+## Failure Modes Detected
+
+Source: Amazon AWS Blog (2026), Arize AI (2026), OWASP LLM Top 10 (2025).
+See [docs/THRESHOLD_RESEARCH.md](docs/THRESHOLD_RESEARCH.md) for the full
+research basis behind every default threshold.
+
+| Failure Mode | Detector | Method | Source |
+|---|---|---|---|
+| Prompt injection | InjectionScorer | LLM semantic + heuristic | OWASP LLM01 |
+| Excessive agency | InjectionScorer | LLM disproportionate action | Amazon taxonomy |
+| Policy violation | PolicyEngine | YAML rule match | Industry standard |
+| High risk action | RiskScorer | LLM 0-100 score | Pan 2025 |
+| Session anomaly | AnomalyScorer | Velocity + scope drift | Stripe rate limits |
+| Context/goal drift | DriftDetector | Structural + semantic | Amazon taxonomy |
+| Retry storm | LoopDetector | Repeated calls + failures | Nygard / Replit |
+| Sequence loop | LoopDetector | Tool sequence repetition | Circuit breaker |
+| PII in output | PiiDetector | Regex + LLM confirm | OWASP / PCI-DSS |
+| Financial impact | BlastRadiusEstimator | Heuristic pre-execution | Payment industry |
+
 ## What AgentGate Does
 
 - Intercepts every AI agent tool call before execution and evaluates it against policy rules, LLM-based risk scoring, prompt injection detection, and session anomaly detection

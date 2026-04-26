@@ -90,6 +90,18 @@ class GatewayClient:
         # Default 50: catches early scope-drift signals (a session reaching for
         # tools outside its stated purpose) before they become hard-block events.
         self._anomaly_escalate_threshold = int(os.getenv("AGENTGATE_ANOMALY_SCORE_ESCALATE", "50"))
+
+        # Drift thresholds — Amazon failure taxonomy (AWS Blog 2026).
+        # Default 85 block: high bar to avoid false positives on legitimate
+        # surprising tool choices.
+        self._drift_block = int(os.getenv("AGENTGATE_DRIFT_THRESHOLD_BLOCK", "85"))
+        # Default 60 escalate: ambiguous drift goes to humans, not the bin.
+        self._drift_escalate = int(os.getenv("AGENTGATE_DRIFT_THRESHOLD_ESCALATE", "60"))
+
+        # Loop / retry-storm thresholds — Nygard "Release It!" + Replit incident.
+        self._loop_block = int(os.getenv("AGENTGATE_LOOP_THRESHOLD_BLOCK", "85"))
+        self._loop_escalate = int(os.getenv("AGENTGATE_LOOP_THRESHOLD_ESCALATE", "70"))
+
         self._policy_evaluator = PolicyEvaluator(PolicyLoader(policy_path))
         self._audit = AuditLogger(db_path)
         from agentgate.escalation import EscalationQueue
@@ -99,6 +111,10 @@ class GatewayClient:
         self._blast_radius = BlastRadiusEstimator()
         self._session_tracker = SessionTracker(db_path)
         self._anomaly_scorer = AnomalyScorer(self._session_tracker)
+        from agentgate.drift_detector import DriftDetector
+        from agentgate.loop_detector import LoopDetector
+        self._drift_detector = DriftDetector(db_path=db_path, compliance_mode=compliance_mode)
+        self._loop_detector = LoopDetector(db_path=db_path)
         from agentgate.pii_detector import PiiDetector
         self._pii_detector = PiiDetector()
 
@@ -149,6 +165,10 @@ class GatewayClient:
         instance._injection_block_threshold = int(os.getenv("AGENTGATE_INJECTION_THRESHOLD_BLOCK", "70"))
         instance._anomaly_block_threshold = int(os.getenv("AGENTGATE_ANOMALY_SCORE_BLOCK", "80"))
         instance._anomaly_escalate_threshold = int(os.getenv("AGENTGATE_ANOMALY_SCORE_ESCALATE", "50"))
+        instance._drift_block = int(os.getenv("AGENTGATE_DRIFT_THRESHOLD_BLOCK", "85"))
+        instance._drift_escalate = int(os.getenv("AGENTGATE_DRIFT_THRESHOLD_ESCALATE", "60"))
+        instance._loop_block = int(os.getenv("AGENTGATE_LOOP_THRESHOLD_BLOCK", "85"))
+        instance._loop_escalate = int(os.getenv("AGENTGATE_LOOP_THRESHOLD_ESCALATE", "70"))
         loader = PolicyLoader.from_list(policies)
         instance._policy_evaluator = PolicyEvaluator(loader)
         instance._audit = AuditLogger(db_path)
@@ -157,6 +177,10 @@ class GatewayClient:
         instance._blast_radius = BlastRadiusEstimator()
         instance._session_tracker = SessionTracker(db_path)
         instance._anomaly_scorer = AnomalyScorer(instance._session_tracker)
+        from agentgate.drift_detector import DriftDetector
+        from agentgate.loop_detector import LoopDetector
+        instance._drift_detector = DriftDetector(db_path=db_path, compliance_mode=compliance_mode)
+        instance._loop_detector = LoopDetector(db_path=db_path)
         from agentgate.pii_detector import PiiDetector
         instance._pii_detector = PiiDetector()
         return instance
@@ -183,6 +207,8 @@ class GatewayClient:
             risk_score=decision.risk_score,
             injection_score=decision.injection_score,
             anomaly_score=decision.anomaly_score,
+            drift_score=decision.drift_score,
+            loop_score=decision.loop_score,
         )
         await self._audit.log(decision)
 
@@ -226,14 +252,22 @@ class GatewayClient:
                 policy_matched=policy_result.policy_name,
             )
 
-        # Step 3: Parallel scoring (risk + injection + anomaly).
+        # Step 3: Parallel scoring (risk + injection + anomaly + drift + loop).
         # Note: explicit ALLOW policies do NOT skip scoring — injection can still override.
         try:
-            (risk_score, risk_reason), (injection_score, injection_reason), (anomaly_score, anomaly_reason) = await asyncio.wait_for(
+            (
+                (risk_score, risk_reason),
+                (injection_score, injection_reason),
+                (anomaly_score, anomaly_reason),
+                (drift_score, drift_reason),
+                (loop_score, loop_reason),
+            ) = await asyncio.wait_for(
                 asyncio.gather(
                     self._risk_scorer.score(tool_call),
                     self._injection_scorer.score(tool_call),
                     self._anomaly_scorer.score(tool_call),
+                    self._drift_detector.score(tool_call),
+                    self._loop_detector.score(tool_call),
                 ),
                 timeout=self.timeout_ms / 1000,
             )
@@ -260,6 +294,19 @@ class GatewayClient:
         anomaly_block_threshold = self._anomaly_block_threshold
         anomaly_escalate_threshold = self._anomaly_escalate_threshold
 
+        # Common kwargs shared by every Decision return below — keeps the new
+        # drift / loop fields from getting forgotten on any path.
+        common = dict(
+            risk_score=risk_score, risk_reason=risk_reason,
+            injection_score=injection_score, injection_reason=injection_reason,
+            attack_type=attack_type,
+            anomaly_score=anomaly_score, anomaly_reason=anomaly_reason,
+            drift_score=drift_score, drift_reason=drift_reason,
+            loop_score=loop_score, loop_reason=loop_reason,
+            blast_radius=blast_radius,
+            policy_matched=policy_result.policy_name,
+        )
+
         # Step 4: Decision routing (injection wins over explicit policy ALLOW).
         if injection_score is not None and injection_score >= injection_block_threshold:
             logger.warning(
@@ -270,15 +317,7 @@ class GatewayClient:
                 outcome=DecisionOutcome.BLOCKED,
                 tool_call=tool_call,
                 reason=f"Injection/excessive agency detected: {injection_reason}",
-                risk_score=risk_score,
-                risk_reason=risk_reason,
-                injection_score=injection_score,
-                injection_reason=injection_reason,
-                attack_type=attack_type,
-                anomaly_score=anomaly_score,
-                anomaly_reason=anomaly_reason,
-                blast_radius=blast_radius,
-                policy_matched=policy_result.policy_name,
+                **common,
             )
 
         if risk_score is not None and risk_score >= block_threshold:
@@ -286,15 +325,7 @@ class GatewayClient:
                 outcome=DecisionOutcome.BLOCKED,
                 tool_call=tool_call,
                 reason=f"Risk score {risk_score} exceeds block threshold",
-                risk_score=risk_score,
-                risk_reason=risk_reason,
-                injection_score=injection_score,
-                injection_reason=injection_reason,
-                attack_type=attack_type,
-                anomaly_score=anomaly_score,
-                anomaly_reason=anomaly_reason,
-                blast_radius=blast_radius,
-                policy_matched=policy_result.policy_name,
+                **common,
             )
 
         if anomaly_score is not None and anomaly_score >= anomaly_block_threshold:
@@ -306,15 +337,33 @@ class GatewayClient:
                 outcome=DecisionOutcome.BLOCKED,
                 tool_call=tool_call,
                 reason=f"Anomaly detected: {anomaly_reason}",
-                risk_score=risk_score,
-                risk_reason=risk_reason,
-                injection_score=injection_score,
-                injection_reason=injection_reason,
-                attack_type=attack_type,
-                anomaly_score=anomaly_score,
-                anomaly_reason=anomaly_reason,
-                blast_radius=blast_radius,
-                policy_matched=policy_result.policy_name,
+                **common,
+            )
+
+        # Drift block — agent is acting off-task in a clear, structural way.
+        if drift_score is not None and drift_score >= self._drift_block:
+            logger.warning(
+                "Drift blocked: tool=%s score=%d reason=%s",
+                tool_call.tool_name, drift_score, drift_reason,
+            )
+            return Decision(
+                outcome=DecisionOutcome.BLOCKED,
+                tool_call=tool_call,
+                reason=f"Off-task action detected: {drift_reason}",
+                **common,
+            )
+
+        # Loop / retry-storm block — agent is burning tokens or about to do worse.
+        if loop_score is not None and loop_score >= self._loop_block:
+            logger.warning(
+                "Loop blocked: tool=%s score=%d reason=%s",
+                tool_call.tool_name, loop_score, loop_reason,
+            )
+            return Decision(
+                outcome=DecisionOutcome.BLOCKED,
+                tool_call=tool_call,
+                reason=f"Loop detected: {loop_reason}",
+                **common,
             )
 
         # Escalation check — blast_radius critical forces escalation.
@@ -323,6 +372,8 @@ class GatewayClient:
             or (risk_score is not None and risk_score >= escalate_threshold)
             or blast_radius.get("severity") == "critical"
             or (anomaly_score is not None and anomaly_score >= anomaly_escalate_threshold)
+            or (drift_score is not None and drift_score >= self._drift_escalate)
+            or (loop_score is not None and loop_score >= self._loop_escalate)
         )
         if needs_escalation:
             from agentgate.escalation import EscalationQueue
@@ -331,31 +382,15 @@ class GatewayClient:
                 outcome=DecisionOutcome.ESCALATED,
                 tool_call=tool_call,
                 reason=policy_result.reason or "Requires human approval",
-                risk_score=risk_score,
-                risk_reason=risk_reason,
-                injection_score=injection_score,
-                injection_reason=injection_reason,
-                attack_type=attack_type,
-                anomaly_score=anomaly_score,
-                anomaly_reason=anomaly_reason,
-                blast_radius=blast_radius,
-                policy_matched=policy_result.policy_name,
                 escalation_id=escalation_id,
+                **common,
             )
 
         return Decision(
             outcome=DecisionOutcome.ALLOWED,
             tool_call=tool_call,
             reason="Passed policy and risk checks",
-            risk_score=risk_score,
-            risk_reason=risk_reason,
-            injection_score=injection_score,
-            injection_reason=injection_reason,
-            attack_type=attack_type,
-            anomaly_score=anomaly_score,
-            anomaly_reason=anomaly_reason,
-            blast_radius=blast_radius,
-            policy_matched=policy_result.policy_name,
+            **common,
         )
 
     async def _run_injection_only(

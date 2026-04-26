@@ -462,6 +462,10 @@
   .attack-badge.privilege_escalation{ background: rgba(248,81,73,0.18); color: #f85149; }
   .attack-badge.excessive_agency    { background: rgba(240,136,62,0.18); color: #f0883e; }
   .attack-badge.other               { background: rgba(188,140,255,0.15); color: #bc8cff; }
+  .attack-badge.drift     { background: rgba(240,136,62,0.18); color: #f0883e; }
+  .attack-badge.off-task  { background: rgba(248,81,73,0.18);  color: #f85149; }
+  .attack-badge.loop      { background: rgba(240,136,62,0.18); color: #f0883e; }
+  .attack-badge.storm     { background: rgba(248,81,73,0.18);  color: #f85149; }
 
   .blast-row {
     display: flex;
@@ -1309,6 +1313,17 @@
     return `<span class="attack-badge ${escHtml(attackType)}">${escHtml(label)}</span>`;
   }
 
+  function failureModeBadgeHtml(d) {
+    const tags = [];
+    const drift = d.drift_score || 0;
+    const loop = d.loop_score || 0;
+    if (drift > 85) tags.push(`<span class="attack-badge off-task">OFF-TASK ${drift}</span>`);
+    else if (drift > 60) tags.push(`<span class="attack-badge drift">DRIFT ${drift}</span>`);
+    if (loop > 85) tags.push(`<span class="attack-badge storm">STORM ${loop}</span>`);
+    else if (loop > 70) tags.push(`<span class="attack-badge loop">LOOP ${loop}</span>`);
+    return tags.join('');
+  }
+
   // ── Blast radius chips (collapsed) ───────────────────────────────────────
   function blastRadiusHtml(blastRadius) {
     if (!blastRadius) return '';
@@ -1431,7 +1446,7 @@
         <div class="feed-row-main" onclick="toggleFeedRow('${cidEsc}')">
           <span class="pill ${pClass}">${outcomeLabel(outcome)}</span>
           <div class="feed-body">
-            <div class="feed-tool">${escHtml(d.tool_name || '')}${attackBadgeHtml(d.attack_type)}</div>
+            <div class="feed-tool">${escHtml(d.tool_name || '')}${attackBadgeHtml(d.attack_type)}${failureModeBadgeHtml(d)}</div>
             <div class="feed-reason">${escHtml(reasonTrunc)}</div>
             ${scoreHtml(d.risk_score, d.injection_score, d.anomaly_score, d.reliability_score)}
             ${blastRadiusHtml(d.blast_radius)}

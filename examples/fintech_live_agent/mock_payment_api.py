@@ -188,6 +188,10 @@ class MockPaymentAPI:
             "estimated_arrival": "1-3 business days",
         }
 
+    def get_account_status(self, account_id: str) -> dict:
+        """Simulates an unreliable external service — used in the loop-detection demo."""
+        raise ConnectionError("Account status service temporarily unavailable")
+
     def export_customer_data(self, customer_id: str, format: str = "json") -> dict:
         customer = self.CUSTOMERS.get(customer_id)
         if not customer:

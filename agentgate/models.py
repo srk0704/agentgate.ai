@@ -61,6 +61,12 @@ class Decision:
     attack_type: str | None = None
     # Blast radius estimate from BlastRadiusEstimator (always present, never None after eval)
     blast_radius: dict | None = None
+    # Context drift: did the agent move away from the user's original task?
+    drift_score: int | None = None
+    drift_reason: str | None = None
+    # Retry storms / sequence loops detected from session_calls + output_log.
+    loop_score: int | None = None
+    loop_reason: str | None = None
     # Unified 0-100 reliability score for this call. Higher = healthier.
     # Inverted from component scores (where higher = worse) and summarized in plain English.
     reliability_score: int | None = None

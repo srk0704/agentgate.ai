@@ -160,4 +160,21 @@ PAYMENT_TOOLS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_account_status",
+            "description": "Get real-time live account status from external monitoring service",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "account_id": {
+                        "type": "string",
+                        "description": "Account ID",
+                    }
+                },
+                "required": ["account_id"],
+            },
+        },
+    },
 ]

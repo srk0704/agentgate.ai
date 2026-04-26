@@ -317,6 +317,13 @@ class PaymentSupportAgent:
             return self._api.export_customer_data(
                 args["customer_id"], args.get("format", "json")
             )
+        elif name == "get_account_status":
+            try:
+                return self._api.get_account_status(args["account_id"])
+            except ConnectionError as e:
+                # Surface as a tool failure — output_log captures success=False, which
+                # feeds the LoopDetector retry-storm signal in the next call.
+                return {"error": str(e), "success": False}
         return {"error": f"Unknown tool: {name}"}
 
     async def run(self, user_input: str) -> AgentResult:

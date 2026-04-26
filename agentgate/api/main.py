@@ -269,6 +269,37 @@ async def health() -> dict:
     return {"status": "ok"}
 
 
+@app.get("/health/agent-loops")
+async def health_agent_loops() -> dict:
+    """Recent agent sessions stuck in retry storms or sequence loops."""
+    import aiosqlite
+    from datetime import datetime
+    db_path = os.getenv("AGENTGATE_DB_PATH", "./agentgate.db")
+    rows: list[dict] = []
+    try:
+        async with aiosqlite.connect(db_path) as db:
+            db.row_factory = aiosqlite.Row
+            async with db.execute(
+                """SELECT agent_id, session_id,
+                          MAX(loop_score) AS loop_score,
+                          MAX(loop_reason) AS reason,
+                          MIN(decided_at) AS first_detected
+                   FROM audit_log
+                   WHERE loop_score > 50
+                     AND decided_at > datetime('now', '-1 hour')
+                   GROUP BY agent_id, session_id
+                   ORDER BY loop_score DESC""",
+            ) as cur:
+                rows = [dict(r) for r in await cur.fetchall()]
+    except Exception as e:
+        logger.debug("health/agent-loops query failed: %s", e)
+    return {
+        "agents_in_loops": rows,
+        "total": len(rows),
+        "checked_at": datetime.utcnow().isoformat() + "Z",
+    }
+
+
 @app.get("/health/agents")
 async def health_agents() -> dict:
     """

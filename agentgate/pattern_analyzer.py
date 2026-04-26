@@ -77,6 +77,8 @@ class PatternAnalyzer:
             self._detect_false_positives(lookback_hours),
             self._detect_prompt_improvements(lookback_hours),
             self._detect_policy_drift(lookback_hours),
+            self._detect_drift_patterns(lookback_hours),
+            self._detect_loop_patterns(lookback_hours),
         ]
 
         for coro in detectors:
@@ -565,4 +567,110 @@ class PatternAnalyzer:
                     created_at=datetime.utcnow().isoformat(),
                 ))
 
+        return patterns
+
+    # ── New: Drift / Loop pattern detection ────────────────────────────────
+
+    async def _detect_drift_patterns(self, lookback_hours: int) -> list[Pattern]:
+        """Find agents with consistent goal drift — system-prompt fix is suggested."""
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            async with db.execute(
+                """SELECT agent_id,
+                          COUNT(*) AS count,
+                          AVG(drift_score) AS avg_drift,
+                          MAX(drift_reason) AS common_reason
+                   FROM audit_log
+                   WHERE drift_score > 50
+                     AND decided_at > datetime('now', ?)
+                   GROUP BY agent_id
+                   HAVING count >= 3""",
+                (f"-{lookback_hours} hours",),
+            ) as cur:
+                rows = await cur.fetchall()
+
+        patterns: list[Pattern] = []
+        for row in rows:
+            count = row["count"]
+            agent_id = row["agent_id"]
+            avg_drift = round(row["avg_drift"] or 0, 1)
+            common = row["common_reason"] or "unknown drift"
+            patterns.append(Pattern(
+                id=str(uuid4()),
+                pattern_type=PatternType.PROMPT_IMPROVEMENT,
+                tool_name=agent_id,
+                description=(
+                    f"Agent {agent_id} shows consistent goal drift: "
+                    f"drift_score > 50 in {count} recent calls (avg {avg_drift}). "
+                    f"Most common: {common}. Adding explicit task boundaries to the "
+                    f"system prompt will reduce drift."
+                ),
+                evidence={
+                    "agent_id": agent_id,
+                    "count": count,
+                    "avg_drift": avg_drift,
+                    "common_reason": common,
+                },
+                suggestion="Add explicit task boundary instruction to agent system prompt.",
+                suggested_action={
+                    "action": "add_prompt_instruction",
+                    "instruction": (
+                        "Only use tools directly relevant to the user's stated request. "
+                        "Do not expand scope beyond what was explicitly asked. "
+                        "If asked to look up an account, do not export data."
+                    ),
+                },
+                confidence=_confidence_from_n(count),
+                impact="high",
+                auto_applicable=True,
+                created_at=datetime.utcnow().isoformat(),
+            ))
+        return patterns
+
+    async def _detect_loop_patterns(self, lookback_hours: int) -> list[Pattern]:
+        """Find tools that frequently cause retry storms — likely unreliable."""
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            async with db.execute(
+                """SELECT tool_name, COUNT(*) AS count
+                   FROM audit_log
+                   WHERE loop_score > 70
+                     AND decided_at > datetime('now', ?)
+                   GROUP BY tool_name
+                   HAVING count >= 3""",
+                (f"-{lookback_hours} hours",),
+            ) as cur:
+                rows = await cur.fetchall()
+
+        patterns: list[Pattern] = []
+        days = max(lookback_hours // 24, 1)
+        for row in rows:
+            count = row["count"]
+            tool = row["tool_name"]
+            patterns.append(Pattern(
+                id=str(uuid4()),
+                pattern_type=PatternType.REPEATED_BLOCK,
+                tool_name=tool,
+                description=(
+                    f"{tool} triggered retry storm detection {count} times in the "
+                    f"last {days} day(s). The tool may be unreliable or the agent "
+                    f"needs explicit error handling guidance."
+                ),
+                evidence={"tool_name": tool, "count": count},
+                suggestion=(
+                    f"Review {tool} reliability and add error handling instructions "
+                    f"to agent prompt."
+                ),
+                suggested_action={
+                    "action": "add_prompt_instruction",
+                    "instruction": (
+                        f"If {tool} fails or returns an error, do not retry more than once. "
+                        f"Inform the user that the service is temporarily unavailable and stop."
+                    ),
+                },
+                confidence=_confidence_from_n(count),
+                impact="medium",
+                auto_applicable=False,
+                created_at=datetime.utcnow().isoformat(),
+            ))
         return patterns
