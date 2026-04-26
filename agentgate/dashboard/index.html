@@ -1068,11 +1068,11 @@
     <div class="logo-icon">⊕</div>
     <div style="display:flex;flex-direction:column;line-height:1.1">
       <span>AgentGate — Agent Reliability Layer</span>
-      <span style="font-size:11px;font-weight:400;color:var(--muted);letter-spacing:0">Monitoring, control, and continuous improvement for production AI agents</span>
+      <span style="font-size:11px;font-weight:400;color:var(--muted);letter-spacing:0">10 failure modes detected before execution</span>
     </div>
   </div>
   <div class="header-right">
-    <div class="agent-count" id="agent-count">0 active agents</div>
+    <div class="agent-count" id="agent-count">0 agents monitored</div>
     <div class="status-badge">
       <div class="dot green pulse" id="status-dot"></div>
       <span id="status-text">Connecting…</span>
@@ -1937,7 +1937,7 @@
       }
 
       document.getElementById('agent-count').textContent    =
-        `${data.active_agents} active agent${data.active_agents !== 1 ? 's' : ''}`;
+        `${data.active_agents} agent${data.active_agents !== 1 ? 's' : ''} monitored`;
 
       renderInbox(data.pending_escalations || []);
       renderFlaggedSessions(data.recent_decisions || []);

@@ -1,69 +1,68 @@
-# AgentGate — Agent Reliability Infrastructure
+# AgentGate
+### Agent reliability infrastructure — 10 failure modes detected before they reach production
 
-Catch failures, prevent bad actions, and improve agent behavior automatically — before users notice.
+> "88% of AI agent projects never reach production. The failures are not random. They are predictable."
+> — Gartner / Digital Applied 2025
 
-A single Python layer that sits between your agent and its tools: policy enforcement, prompt injection detection, anomaly + drift detection, blast radius estimation, PII scanning, human escalation, and a self-improving learning loop — all behind one unified reliability score.
+AgentGate sits between your AI agent and its tools.
+Every action is evaluated before execution.
+Every failure mode is detected in real time.
+Every pattern is learned and fixed automatically.
 
----
+## Why agents fail in production
 
-## When do you need this
+| Failure mode | Example | AgentGate response |
+|---|---|---|
+| Prompt injection | Hidden instruction in user data | Blocked in <10ms |
+| Excessive agency | Agent freezes account for 1 failed login | Blocked: disproportionate |
+| Policy violation | Wire transfer via agent | Blocked: policy |
+| Goal drift | Started a refund, ends up exporting all data | Blocked: off-task |
+| Retry storm | Same failing tool called 5 times | Blocked: loop detected |
+| Sequence loop | Agent repeating same 3-step failure | Blocked: pattern |
+| High risk action | $50k payment without context | Escalated to human |
+| Session anomaly | 20 tool calls in 60 seconds | Escalated: velocity |
+| PII in output | Card number in agent response | Redacted |
+| Blast radius | Irreversible action on wrong account | Escalated: critical |
 
-You need AgentGate if ANY of these are true:
+## Who this is for
 
-⚡ You are about to deploy an AI agent that can trigger payments, refunds, or transfers
+Any team shipping an agent that can take consequential actions:
 
-⚡ Your compliance team has asked "what stops the agent from doing something it should not?"
+- **Code agents** — deploy, rollback, database changes
+- **Payment agents** — refunds, transfers, subscriptions
+- **Support agents** — account updates, data access
+- **HR agents** — salary changes, offer letters
+- **DevOps agents** — infra changes, config updates
 
-⚡ You have had an agent do something unexpected in staging and you are not sure why
+If your agent can do something that costs money or time to undo — AgentGate is for it.
 
-⚡ You need an audit trail of agent decisions for SOC2, PCI-DSS, or internal review
-
-⚡ You want your agent to get measurably better over time from human feedback — without retraining
-
----
-
-## The reliability problem with production agents
-
-AI agents fail in ways that are hard to predict and expensive to debug:
-
-- **They take actions they were not supposed to** — wrong refund, unauthorized transfer
-- **They get injected by malicious input in data** — a hidden instruction in a customer message
-- **They drift off task mid-session** — started with a refund, ends up exporting data
-- **They get stuck in retry loops** — same failing tool call, burning tokens, no result
-- **They improve slowly or not at all** — no feedback loop from human decisions
-
-AgentGate sits between your agent and its tools. Every tool call is evaluated before execution. Every outcome is logged. Every pattern is learned.
-
-> *"Is this agent still doing the right thing, at the right time, with the right tools?"*
-
-That is the question AgentGate answers on every call — and it summarizes the answer in a single 0–100 reliability score per decision.
-
-## What AgentGate Does
-
-- **Enforces policies before every tool call** — YAML rules block, allow, or escalate based on tool name, args, and agent context
-- **Detects prompt injection with an LLM** — compares the proposed action against the original user task; flags when the agent is about to do something the user never asked for
-- **Estimates blast radius** — financial impact, reversibility, regulatory flags (PCI-DSS, AML, SOX, GDPR) for every call
-- **Scans output for PII** — two-stage regex + LLM detection before data reaches the user
-- **Escalates to humans and logs everything** — uncertain decisions queue for human review; every decision is logged with full reasoning to SQLite
-- **Learns from human decisions** — pattern analyzer mines the audit log for over-escalation, false positives, and scope drift; applies threshold changes and injects few-shot examples into the agent prompt
-
----
-
-## Quickstart
+## Quickstart (3 minutes)
 
 ```bash
-pip install anthropic pyyaml aiosqlite fastapi uvicorn python-dotenv httpx watchdog
+pip install agentgate
 export ANTHROPIC_API_KEY=sk-ant-...
-python examples/quickstart.py
+python -c "from agentgate import quickcheck; quickcheck()"
 ```
 
-Expected output:
+## See it in action
 
+The demo uses a payment agent — the most consequential agent type we could find. If it works here, it works for your agent.
+
+```bash
+poetry run python examples/before_after_demo.py
 ```
-✅ ALLOWED   — get_customer_info
-❌ BLOCKED   — bulk_delete_users      (policy: never permitted via agent)
-❌ BLOCKED   — issue_refund           (injection: goal_hijacking score 84)
+
+## Integration (3 lines)
+
+```python
+gate = GatewayClient.from_env()
+decision = await gate.evaluate(tool_call)
+if decision.is_allowed: result = await my_tool(**args)
 ```
+
+Works with: LangGraph · LangChain · OpenAI · any Python agent
+
+---
 
 ## Full Installation
 
