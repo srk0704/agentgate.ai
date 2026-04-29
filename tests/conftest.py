@@ -8,7 +8,6 @@ test to use heuristic-only scoring regardless of whatever is in the shell
 environment or `.env`.
 """
 from __future__ import annotations
-import os
 
 import pytest
 

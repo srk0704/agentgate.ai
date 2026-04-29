@@ -4,10 +4,8 @@ import json
 import logging
 import os
 import smtplib
-from datetime import datetime, timedelta
+from datetime import datetime
 from email.mime.text import MIMEText
-from pathlib import Path
-from typing import Any
 from uuid import uuid4
 
 import aiosqlite

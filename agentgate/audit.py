@@ -4,7 +4,6 @@ import io
 import json
 import logging
 from datetime import date, datetime, timedelta
-from pathlib import Path
 from typing import Any
 
 import aiosqlite

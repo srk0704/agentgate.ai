@@ -2,10 +2,8 @@
 AgentGate Learning Loop — LangGraph Payment Agent
 """
 from __future__ import annotations
-import asyncio
 import json
 import logging
-import os
 import sys
 import time
 import uuid
@@ -22,12 +20,12 @@ from dotenv import load_dotenv
 load_dotenv(override=True)
 
 from langchain_openai import ChatOpenAI
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
+from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 from langgraph.graph import END, StateGraph
 
 from agentgate.client import GatewayClient
 from agentgate.learning_engine import LearningEngine
-from agentgate.models import DecisionOutcome, ToolCall
+from agentgate.models import ToolCall
 from agentgate.output_logger import OutputLogger
 from mock_payment_api import MockPaymentAPI
 from tools import PAYMENT_TOOLS

@@ -1,8 +1,8 @@
 import asyncio
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import patch
 
-from agentgate.models import ToolCall, DecisionOutcome
+from agentgate.models import ToolCall
 from agentgate.client import GatewayClient
 from agentgate.escalation import EscalationQueue
 from agentgate.integrations.langchain import guarded_tool, ToolException

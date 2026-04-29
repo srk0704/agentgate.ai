@@ -1,6 +1,5 @@
 """Unit tests for the unified reliability score."""
 from __future__ import annotations
-import pytest
 
 from agentgate.models import Decision
 

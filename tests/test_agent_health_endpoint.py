@@ -1,7 +1,6 @@
 """Tests for GET /health/agents and the per-agent health computation."""
 from __future__ import annotations
 from datetime import datetime, timedelta
-import os
 
 import pytest
 from fastapi.testclient import TestClient

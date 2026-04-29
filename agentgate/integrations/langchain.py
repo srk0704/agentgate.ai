@@ -2,7 +2,7 @@ from __future__ import annotations
 import asyncio
 import functools
 import logging
-from typing import Any, Callable, TypeVar, Union, overload
+from typing import Any, Callable, TypeVar
 
 from agentgate.client import GatewayClient
 from agentgate.models import ToolCall

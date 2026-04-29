@@ -5,11 +5,8 @@ Shows a LangGraph payment agent getting measurably better over 3 simulated weeks
 """
 from __future__ import annotations
 import asyncio
-import json
 import logging
-import os
 import sys
-import time
 import uuid as _uuid
 from pathlib import Path
 
@@ -30,7 +27,7 @@ from agentgate.audit import AuditLogger
 from agentgate.escalation import EscalationQueue
 from agentgate.output_logger import OutputLogger
 from agentgate.pattern_analyzer import PatternAnalyzer
-from agentgate.learning_engine import LearningEngine, ApplyResult
+from agentgate.learning_engine import LearningEngine
 
 from examples.learning_loop.payment_agent import PaymentSupportAgent
 

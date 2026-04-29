@@ -6,7 +6,7 @@ import pytest
 from unittest.mock import AsyncMock, patch
 
 from agentgate.injection import InjectionScorer
-from agentgate.models import Decision, DecisionOutcome, ToolCall
+from agentgate.models import DecisionOutcome, ToolCall
 
 
 @pytest.fixture

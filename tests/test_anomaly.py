@@ -1,5 +1,4 @@
 from __future__ import annotations
-import asyncio
 import pytest
 from agentgate.anomaly import AnomalyScorer
 from agentgate.session import SessionTracker
