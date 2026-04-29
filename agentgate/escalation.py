@@ -17,6 +17,11 @@ from agentgate.models import ToolCall
 
 logger = logging.getLogger(__name__)
 
+# How long an escalation stays pending before auto-reject.
+# Default 300 s (5 min) gives a human realistic time to review during a demo
+# or off-hours review queue. Override with AGENTGATE_ESCALATION_TIMEOUT_SEC.
+DEFAULT_ESCALATION_TIMEOUT = int(os.getenv("AGENTGATE_ESCALATION_TIMEOUT_SEC", "300"))
+
 # In-process store: {escalation_id: asyncio.Event}
 _decisions: dict[str, asyncio.Event] = {}
 _approved: dict[str, bool] = {}
@@ -120,11 +125,14 @@ class EscalationQueue:
         return escalation_id
 
     @classmethod
-    async def wait_for_decision(cls, escalation_id: str, timeout_sec: float = 60) -> bool:
+    async def wait_for_decision(cls, escalation_id: str, timeout_sec: float | None = None) -> bool:
         """
         Wait for a human decision on an escalation.
         Returns True if approved, False if rejected/timeout.
+        Default timeout is AGENTGATE_ESCALATION_TIMEOUT_SEC (300 s).
         """
+        if timeout_sec is None:
+            timeout_sec = DEFAULT_ESCALATION_TIMEOUT
         if escalation_id not in _decisions:
             _decisions[escalation_id] = asyncio.Event()
 
@@ -248,8 +256,10 @@ class EscalationQueue:
                 logger.error("Email notification failed: %s", e)
 
     @classmethod
-    async def _auto_reject(cls, escalation_id: str, timeout_sec: float = 60) -> None:
-        """Auto-reject after timeout."""
+    async def _auto_reject(cls, escalation_id: str, timeout_sec: float | None = None) -> None:
+        """Auto-reject after timeout. Default AGENTGATE_ESCALATION_TIMEOUT_SEC."""
+        if timeout_sec is None:
+            timeout_sec = DEFAULT_ESCALATION_TIMEOUT
         await asyncio.sleep(timeout_sec)
         if escalation_id in _decisions and not _decisions[escalation_id].is_set():
             await cls.reject(escalation_id)

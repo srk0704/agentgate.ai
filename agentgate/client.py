@@ -47,7 +47,7 @@ class GatewayClient:
         risk_scorer: RiskScorer | None = None,
         fail_open: bool = True,
         timeout_ms: float = 5000.0,
-        escalation_timeout_sec: float = 60.0,
+        escalation_timeout_sec: float = 300.0,
         compliance_mode: bool = False,
     ):
         self.fail_open = fail_open
@@ -126,6 +126,7 @@ class GatewayClient:
             db_path=os.getenv("AGENTGATE_DB_PATH", "./agentgate.db"),
             fail_open=os.getenv("AGENTGATE_FAIL_OPEN", "true").lower() == "true",
             timeout_ms=float(os.getenv("AGENTGATE_TIMEOUT_MS", "5000")),
+            escalation_timeout_sec=float(os.getenv("AGENTGATE_ESCALATION_TIMEOUT_SEC", "300")),
             compliance_mode=os.getenv("AGENTGATE_COMPLIANCE_MODE", "false").lower() == "true",
         )
 
@@ -136,7 +137,7 @@ class GatewayClient:
         db_path: str = ":memory:",
         fail_open: bool = True,
         timeout_ms: float = 5000.0,
-        escalation_timeout_sec: float = 60.0,
+        escalation_timeout_sec: float = 300.0,
         compliance_mode: bool = False,
     ) -> "GatewayClient":
         """

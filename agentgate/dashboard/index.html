@@ -1,2194 +1,1628 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AgentGate — Agent Reliability Layer</title>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AgentGate · Agent reliability infrastructure</title>
 <style>
-  :root {
-    --bg: #0d1117;
-    --surface: #161b22;
-    --surface2: #21262d;
-    --border: #30363d;
-    --text: #e6edf3;
-    --muted: #8b949e;
-    --allowed: #3fb950;
-    --blocked: #f85149;
-    --escalated: #d29922;
-    --injection: #bc8cff;
-    --anomaly: #ff7b72;
-    --excess-agency: #f0883e;
-    --blue: #58a6ff;
-    --radius: 8px;
-    --shadow: 0 1px 3px rgba(0,0,0,0.4);
-  }
-
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
-    font-size: 14px;
-    line-height: 1.5;
-    min-height: 100vh;
-  }
-
-  /* ── Header ── */
-  header {
-    background: var(--surface);
-    border-bottom: 1px solid var(--border);
-    padding: 0 24px;
-    height: 52px;
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    position: sticky;
-    top: 0;
-    z-index: 100;
-  }
-
-  .logo {
-    font-size: 16px;
-    font-weight: 600;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    color: var(--text);
-    letter-spacing: -0.3px;
-  }
-
-  .logo-icon {
-    width: 28px;
-    height: 28px;
-    background: linear-gradient(135deg, #238636, #1f6feb);
-    border-radius: 6px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 15px;
-  }
-
-  .header-right {
-    margin-left: auto;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
-
-  .status-badge {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 12px;
-    color: var(--muted);
-  }
-
-  .dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--muted);
-    flex-shrink: 0;
-  }
-  .dot.green { background: var(--allowed); box-shadow: 0 0 6px var(--allowed); }
-  .dot.red   { background: var(--blocked); }
-  .dot.pulse { animation: pulse 2s infinite; }
-  @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.4; }
-  }
-
-  .agent-count {
-    font-size: 12px;
-    color: var(--muted);
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 2px 10px;
-  }
-
-  /* ── Layout ── */
-  .container {
-    max-width: 1400px;
-    margin: 0 auto;
-    padding: 24px;
-  }
-
-  /* ── Metric Cards ── */
-  .cards {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 16px;
-    margin-bottom: 16px;
-  }
-
-  @media (max-width: 900px) {
-    .cards { grid-template-columns: repeat(2, 1fr); }
-  }
-
-  .card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 20px;
-    box-shadow: var(--shadow);
-  }
-
-  .card-label {
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.8px;
-    color: var(--muted);
-    margin-bottom: 8px;
-  }
-
-  .card-value {
-    font-size: 32px;
-    font-weight: 700;
-    line-height: 1;
-    margin-bottom: 4px;
-  }
-
-  .card-sub { font-size: 12px; color: var(--muted); }
-  .card.allowed .card-value  { color: var(--allowed); }
-  .card.blocked .card-value  { color: var(--blocked); }
-  .card.escalated .card-value{ color: var(--escalated); }
-  .card.injection .card-value{ color: var(--injection); }
-  .card.health .card-value   { color: var(--allowed); }
-  .card.health.health-caution  .card-value { color: var(--escalated); }
-  .card.health.health-degraded .card-value { color: var(--excess-agency); }
-  .card.health.health-critical .card-value { color: var(--blocked); }
-
-  /* ── Agent Breakdown ── */
-  .breakdown-section {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    margin-bottom: 16px;
-    overflow: hidden;
-    box-shadow: var(--shadow);
-  }
-
-  .breakdown-header {
-    padding: 12px 16px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    cursor: pointer;
-    user-select: none;
-  }
-  .breakdown-header:hover { background: var(--surface2); }
-
-  .breakdown-title {
-    font-size: 13px;
-    font-weight: 600;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .breakdown-toggle {
-    font-size: 11px;
-    color: var(--muted);
-    transition: transform 0.2s;
-  }
-  .breakdown-section.open .breakdown-toggle { transform: rotate(180deg); }
-
-  .breakdown-content {
-    max-height: 0;
-    overflow: hidden;
-    transition: max-height 0.3s ease;
-  }
-  .breakdown-section.open .breakdown-content { max-height: 600px; }
-
-  .agent-table {
-    width: 100%;
-    border-collapse: collapse;
-  }
-
-  .at-header, .at-row {
-    display: grid;
-    grid-template-columns: 1fr 80px 80px 80px 80px 90px;
-    gap: 0;
-  }
-
-  .at-cell {
-    padding: 8px 16px;
-    font-size: 12px;
-    border-bottom: 1px solid var(--border);
-  }
-  .at-cell:not(:first-child) { text-align: right; }
-
-  .at-header .at-cell {
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.6px;
-    color: var(--muted);
-    background: var(--surface2);
-  }
-
-  .at-row:last-child .at-cell { border-bottom: none; }
-  .at-row:hover .at-cell { background: var(--surface2); }
-
-  .at-cell.agent-id {
-    font-family: "SFMono-Regular", Consolas, monospace;
-    font-size: 12px;
-    color: var(--blue);
-  }
-
-  .at-rate { color: var(--blocked); font-weight: 600; }
-  .at-allowed { color: var(--allowed); }
-  .at-blocked  { color: var(--blocked); }
-  .at-esc      { color: var(--escalated); }
-
-  /* ── Filter Bar ── */
-  .filter-bar {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 10px 16px;
-    border-bottom: 1px solid var(--border);
-    background: var(--surface2);
-    flex-wrap: wrap;
-  }
-
-  .filter-select, .filter-input {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    color: var(--text);
-    font-size: 12px;
-    padding: 4px 8px;
-    outline: none;
-    cursor: pointer;
-  }
-  .filter-select:focus, .filter-input:focus {
-    border-color: var(--blue);
-  }
-  .filter-input { width: 180px; cursor: text; }
-  .filter-input::placeholder { color: var(--muted); }
-
-  .filter-clear {
-    padding: 4px 10px;
-    border-radius: 6px;
-    border: 1px solid rgba(248,81,73,0.3);
-    background: rgba(248,81,73,0.08);
-    color: var(--blocked);
-    font-size: 12px;
-    cursor: pointer;
-    display: none;
-  }
-  .filter-clear:hover { background: rgba(248,81,73,0.15); }
-
-  .filter-count {
-    font-size: 11px;
-    color: var(--muted);
-    padding: 4px 8px;
-    margin-left: auto;
-    white-space: nowrap;
-  }
-
-  /* ── Main Grid ── */
-  .main-grid {
-    display: grid;
-    grid-template-columns: 1fr 380px;
-    gap: 16px;
-    margin-bottom: 16px;
-  }
-
-  @media (max-width: 1100px) {
-    .main-grid { grid-template-columns: 1fr; }
-  }
-
-  /* ── Panel ── */
-  .panel {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    box-shadow: var(--shadow);
-    overflow: hidden;
-  }
-
-  .panel-header {
-    padding: 14px 16px;
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-
-  .panel-title {
-    font-size: 13px;
-    font-weight: 600;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .badge {
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 1px 8px;
-    font-size: 11px;
-    color: var(--muted);
-  }
-
-  /* ── Feed ── */
-  .feed-list {
-    max-height: 600px;
-    overflow-y: auto;
-  }
-
-  .feed-list::-webkit-scrollbar { width: 4px; }
-  .feed-list::-webkit-scrollbar-track { background: transparent; }
-  .feed-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
-
-  .feed-item {
-    border-bottom: 1px solid var(--border);
-  }
-  .feed-item:last-child { border-bottom: none; }
-
-  .feed-item.new .feed-row-main {
-    animation: fadeIn 0.4s ease;
-  }
-  @keyframes fadeIn {
-    from { background: rgba(56, 139, 253, 0.1); }
-    to   { background: transparent; }
-  }
-
-  .feed-row-main {
-    display: grid;
-    grid-template-columns: auto 1fr auto auto;
-    gap: 10px;
-    align-items: start;
-    padding: 10px 14px 10px 16px;
-    cursor: pointer;
-    transition: background 0.15s;
-  }
-  .feed-row-main:hover { background: var(--surface2); }
-
-  .expand-toggle {
-    font-size: 10px;
-    color: var(--muted);
-    padding: 2px 4px;
-    transition: transform 0.2s;
-    flex-shrink: 0;
-    align-self: center;
-    user-select: none;
-  }
-  .feed-item.expanded .expand-toggle { transform: rotate(180deg); }
-
-  /* ── Pills ── */
-  .pill {
-    display: inline-flex;
-    align-items: center;
-    padding: 2px 8px;
-    border-radius: 12px;
-    font-size: 11px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.4px;
-    white-space: nowrap;
-    flex-shrink: 0;
-    align-self: start;
-    margin-top: 1px;
-  }
-
-  .pill.allowed    { background: rgba(63,185,80,0.15);  color: var(--allowed); }
-  .pill.blocked    { background: rgba(248,81,73,0.15);  color: var(--blocked); }
-  .pill.escalated,
-  .pill.escalation_approved,
-  .pill.escalation_rejected { background: rgba(210,153,34,0.15); color: var(--escalated); }
-  .pill.injection  { background: rgba(188,140,255,0.15); color: var(--injection); }
-  .pill.failed_open{ background: rgba(139,148,158,0.15); color: var(--muted); }
-
-  .feed-body { min-width: 0; }
-
-  .feed-tool {
-    font-size: 13px;
-    font-weight: 500;
-    font-family: "SFMono-Regular", Consolas, monospace;
-    color: var(--blue);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .feed-reason {
-    font-size: 12px;
-    color: var(--muted);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .feed-scores {
-    display: flex;
-    gap: 6px;
-    font-size: 11px;
-    margin-top: 3px;
-    flex-wrap: wrap;
-  }
-
-  .score-badge {
-    padding: 1px 6px;
-    border-radius: 4px;
-    font-weight: 600;
-  }
-  .score-badge.risk    { background: rgba(248,81,73,0.12);  color: #f85149; }
-  .score-badge.inj     { background: rgba(188,140,255,0.12); color: #bc8cff; }
-  .score-badge.anomaly { background: rgba(255,123,114,0.12); color: #ff7b72; }
-  .score-badge.health-ok       { background: rgba(63,185,80,0.14);  color: #3fb950; }
-  .score-badge.health-caution  { background: rgba(210,153,34,0.14); color: #d29922; }
-  .score-badge.health-degraded { background: rgba(240,136,62,0.14); color: #f0883e; }
-  .score-badge.health-critical { background: rgba(248,81,73,0.14);  color: #f85149; }
-
-  .attack-badge {
-    display: inline-flex;
-    align-items: center;
-    padding: 1px 6px;
-    border-radius: 4px;
-    font-size: 10px;
-    font-weight: 700;
-    letter-spacing: 0.5px;
-    text-transform: uppercase;
-    margin-left: 4px;
-    flex-shrink: 0;
-  }
-  .attack-badge.goal_hijacking      { background: rgba(248,81,73,0.18); color: #f85149; }
-  .attack-badge.data_exfiltration   { background: rgba(248,81,73,0.18); color: #f85149; }
-  .attack-badge.privilege_escalation{ background: rgba(248,81,73,0.18); color: #f85149; }
-  .attack-badge.excessive_agency    { background: rgba(240,136,62,0.18); color: #f0883e; }
-  .attack-badge.other               { background: rgba(188,140,255,0.15); color: #bc8cff; }
-  .attack-badge.drift     { background: rgba(240,136,62,0.18); color: #f0883e; }
-  .attack-badge.off-task  { background: rgba(248,81,73,0.18);  color: #f85149; }
-  .attack-badge.loop      { background: rgba(240,136,62,0.18); color: #f0883e; }
-  .attack-badge.storm     { background: rgba(248,81,73,0.18);  color: #f85149; }
-
-  .blast-row {
-    display: flex;
-    gap: 4px;
-    margin-top: 3px;
-    flex-wrap: wrap;
-    align-items: center;
-  }
-  .blast-chip {
-    font-size: 10px;
-    padding: 1px 5px;
-    border-radius: 3px;
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    color: var(--muted);
-    white-space: nowrap;
-  }
-  .blast-chip.irreversible { color: #f85149; border-color: rgba(248,81,73,0.3); background: rgba(248,81,73,0.08); }
-  .blast-chip.critical     { color: #f85149; }
-  .blast-chip.high         { color: var(--escalated); }
-  .blast-chip.reg          { color: #79c0ff; border-color: rgba(121,192,255,0.3); background: rgba(121,192,255,0.08); }
-
-  .feed-meta {
-    text-align: right;
-    flex-shrink: 0;
-    min-width: 70px;
-  }
-
-  .feed-time  { font-size: 11px; color: var(--muted); white-space: nowrap; }
-  .feed-agent { font-size: 11px; color: var(--muted); }
-
-  /* ── Expanded Feed Row ── */
-  .feed-expanded {
-    max-height: 0;
-    overflow: hidden;
-    transition: max-height 0.25s ease;
-    border-top: 0px solid var(--border);
-  }
-  .feed-expanded.open {
-    max-height: 700px;
-    border-top-width: 1px;
-  }
-
-  .detail-grid {
-    padding: 12px 16px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    background: rgba(13,17,23,0.5);
-  }
-
-  .detail-section { }
-
-  .detail-label {
-    font-size: 10px;
-    text-transform: uppercase;
-    letter-spacing: 0.7px;
-    color: var(--muted);
-    margin-bottom: 4px;
-  }
-
-  .detail-value {
-    font-size: 12px;
-    color: var(--text);
-    line-height: 1.5;
-  }
-
-  .detail-muted { color: var(--muted); font-style: italic; }
-
-  .detail-footer {
-    border-top: 1px solid var(--border);
-    padding-top: 8px;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 12px;
-  }
-
-  .detail-meta-item {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 11px;
-    color: var(--muted);
-  }
-  .detail-meta-item code { font-family: "SFMono-Regular", Consolas, monospace; color: var(--text); font-size: 11px; }
-
-  .copy-btn {
-    background: none;
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    color: var(--muted);
-    font-size: 11px;
-    padding: 1px 5px;
-    cursor: pointer;
-    transition: background 0.15s;
-  }
-  .copy-btn:hover { background: var(--surface2); color: var(--text); }
-
-  .score-detail {
-    display: flex;
-    align-items: baseline;
-    gap: 6px;
-    font-size: 12px;
-    color: var(--muted);
-    margin-bottom: 3px;
-  }
-
-  .arg-row {
-    display: flex;
-    gap: 6px;
-    font-size: 12px;
-    margin-bottom: 2px;
-  }
-  .arg-key {
-    color: var(--muted);
-    font-family: "SFMono-Regular", Consolas, monospace;
-    font-size: 11px;
-    flex-shrink: 0;
-  }
-  .arg-val {
-    color: var(--text);
-    font-family: "SFMono-Regular", Consolas, monospace;
-    font-size: 11px;
-    word-break: break-all;
-  }
-
-  .blast-detail-row {
-    display: flex;
-    gap: 8px;
-    font-size: 12px;
-    margin-bottom: 2px;
-  }
-  .blast-detail-key { color: var(--muted); flex-shrink: 0; min-width: 100px; }
-
-  /* ── Empty States ── */
-  .empty-state {
-    padding: 36px 24px;
-    text-align: center;
-    color: var(--muted);
-    font-size: 13px;
-    line-height: 1.8;
-  }
-
-  .empty-state .empty-sub {
-    font-size: 12px;
-    margin-top: 4px;
-  }
-
-
-  .empty-clear-link {
-    background: none;
-    border: none;
-    color: var(--blue);
-    font-size: 12px;
-    cursor: pointer;
-    text-decoration: underline;
-    padding: 0;
-    display: inline;
-  }
-
-  .empty-state-esc {
-    padding: 28px 16px;
-    text-align: center;
-    font-size: 13px;
-    color: #3d9450;
-  }
-  .empty-check { margin-right: 4px; }
-
-  /* ── Escalation Inbox ── */
-  .inbox-list {
-    max-height: 600px;
-    overflow-y: auto;
-  }
-
-  .inbox-item {
-    border-bottom: 1px solid var(--border);
-  }
-  .inbox-item:last-child { border-bottom: none; }
-
-  .inbox-header-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 10px 16px 6px;
-    cursor: pointer;
-    user-select: none;
-  }
-  .inbox-header-row:hover { background: var(--surface2); }
-
-  .inbox-header-left {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    min-width: 0;
-  }
-
-  .inbox-tool {
-    font-family: "SFMono-Regular", Consolas, monospace;
-    font-size: 13px;
-    color: var(--blue);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .inbox-header-right {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-shrink: 0;
-  }
-
-  .inbox-risk-badge {
-    font-size: 12px;
-    color: var(--escalated);
-    font-weight: 600;
-  }
-
-  .esc-toggle {
-    font-size: 10px;
-    color: var(--muted);
-    transition: transform 0.2s;
-    padding: 2px 4px;
-  }
-
-  .inbox-meta {
-    font-size: 11px;
-    color: var(--muted);
-    padding: 0 16px 4px;
-  }
-
-  .inbox-blast {
-    font-size: 11px;
-    color: var(--muted);
-    padding: 0 16px 4px;
-  }
-
-  .inbox-inj-warn {
-    font-size: 11px;
-    color: var(--blocked);
-    padding: 0 16px 4px;
-  }
-
-  /* ── Escalation Expanded ── */
-  .inbox-expanded {
-    max-height: 0;
-    overflow: hidden;
-    transition: max-height 0.25s ease;
-  }
-  .inbox-expanded.open { max-height: 800px; }
-
-  .esc-detail-grid {
-    padding: 10px 16px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    background: rgba(13,17,23,0.5);
-    border-top: 1px solid var(--border);
-    border-bottom: 1px solid var(--border);
-  }
-
-  .esc-section { }
-
-  /* ── Inbox Actions ── */
-  .inbox-actions {
-    display: flex;
-    gap: 8px;
-    padding: 8px 16px 12px;
-  }
-
-  .btn {
-    padding: 5px 14px;
-    border-radius: 6px;
-    border: none;
-    font-size: 12px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: opacity 0.15s;
-  }
-  .btn:hover { opacity: 0.85; }
-  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
-
-  .btn-approve {
-    background: rgba(63,185,80,0.2);
-    color: var(--allowed);
-    border: 1px solid rgba(63,185,80,0.3);
-  }
-  .btn-reject {
-    background: rgba(248,81,73,0.15);
-    color: var(--blocked);
-    border: 1px solid rgba(248,81,73,0.25);
-  }
-
-  /* ── Confirm Panel ── */
-  .confirm-wrap { padding: 0 16px 12px; }
-  .confirm-panel {
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 10px 12px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-  .confirm-label { font-size: 12px; color: var(--muted); }
-  .confirm-input {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    color: var(--text);
-    font-size: 12px;
-    padding: 5px 8px;
-    outline: none;
-    width: 100%;
-  }
-  .confirm-input:focus { border-color: var(--blue); }
-  .confirm-btns { display: flex; gap: 8px; }
-  .btn-confirm {
-    padding: 4px 12px;
-    border-radius: 4px;
-    border: 1px solid rgba(63,185,80,0.3);
-    background: rgba(63,185,80,0.15);
-    color: var(--allowed);
-    font-size: 12px;
-    cursor: pointer;
-  }
-  .btn-confirm:hover { background: rgba(63,185,80,0.25); }
-  .btn-cancel {
-    padding: 4px 12px;
-    border-radius: 4px;
-    border: 1px solid var(--border);
-    background: transparent;
-    color: var(--muted);
-    font-size: 12px;
-    cursor: pointer;
-  }
-  .btn-cancel:hover { background: var(--surface2); }
-
-  /* ── Flagged Sessions ── */
-  .sessions-panel { margin-top: 16px; }
-
-  .session-item {
-    padding: 10px 16px;
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
-  .session-item:last-child { border-bottom: none; }
-
-  .session-score {
-    font-size: 22px;
-    font-weight: 700;
-    color: var(--anomaly);
-    width: 44px;
-    text-align: center;
-    flex-shrink: 0;
-  }
-
-  .session-body { flex: 1; min-width: 0; }
-
-  .session-agent {
-    font-family: "SFMono-Regular", Consolas, monospace;
-    font-size: 12px;
-    color: var(--blue);
-  }
-
-  .session-reason {
-    font-size: 12px;
-    color: var(--muted);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .session-time { font-size: 11px; color: var(--muted); flex-shrink: 0; }
-
-  /* ── WS status ── */
-  .ws-status {
-    font-size: 11px;
-    color: var(--muted);
-    display: flex;
-    align-items: center;
-    gap: 4px;
-  }
-
-  /* ── System Status Bar ── */
-  .system-status-bar {
-    width: 100%;
-    padding: 6px 24px;
-    font-size: 12px;
-    font-weight: 500;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    border-bottom: 1px solid var(--border);
-    transition: background 0.3s;
-  }
-  .system-status-bar.ok      { background: rgba(63, 185, 80, 0.08);  color: var(--allowed); }
-  .system-status-bar.degraded{ background: rgba(210, 153, 34, 0.12); color: var(--escalated); }
-  .system-status-bar.error   { background: rgba(248, 81, 73, 0.12);  color: var(--blocked); }
-  .system-status-bar .status-icon  { font-size: 13px; }
-  .system-status-bar .status-detail{ margin-left: auto; font-size: 11px; opacity: 0.75; }
-
-  /* ── Learning Tab ── */
-  .tab-nav {
-    display: flex;
-    gap: 4px;
-    padding: 0 24px;
-    background: var(--surface);
-    border-bottom: 1px solid var(--border);
-    overflow-x: auto;
-  }
-  .tab-btn {
-    padding: 10px 16px;
-    font-size: 13px;
-    font-weight: 500;
-    color: var(--muted);
-    border: none;
-    border-bottom: 2px solid transparent;
-    background: transparent;
-    cursor: pointer;
-    white-space: nowrap;
-    transition: color 0.15s, border-color 0.15s;
-  }
-  .tab-btn:hover { color: var(--text); }
-  .tab-btn.active { color: var(--blue); border-bottom-color: var(--blue); }
-
-  .tab-panel { display: none; }
-  .tab-panel.active { display: block; }
-
-  .learning-section {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    margin-bottom: 16px;
-    overflow: hidden;
-    box-shadow: var(--shadow);
-  }
-  .learning-section-header {
-    padding: 14px 16px;
-    border-bottom: 1px solid var(--border);
-    font-size: 13px;
-    font-weight: 600;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-  .learning-section-body { padding: 16px; }
-
-  .pattern-card {
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 14px 16px;
-    margin-bottom: 12px;
-  }
-  .pattern-card:last-child { margin-bottom: 0; }
-  .pattern-card-header {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 8px;
-    flex-wrap: wrap;
-  }
-  .pattern-type-badge {
-    padding: 2px 8px;
-    border-radius: 10px;
-    font-size: 11px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.4px;
-  }
-  .pt-over_escalation    { background: rgba(210,153,34,0.2); color: var(--escalated); }
-  .pt-repeated_block     { background: rgba(248,81,73,0.2);  color: var(--blocked); }
-  .pt-false_positive     { background: rgba(188,140,255,0.2);color: var(--injection); }
-  .pt-threshold_too_low  { background: rgba(88,166,255,0.2); color: var(--blue); }
-  .pt-prompt_improvement { background: rgba(63,185,80,0.2);  color: var(--allowed); }
-
-  .impact-badge {
-    padding: 2px 8px;
-    border-radius: 10px;
-    font-size: 11px;
-    font-weight: 600;
-  }
-  .impact-high   { background: rgba(248,81,73,0.15);  color: var(--blocked); }
-  .impact-medium { background: rgba(210,153,34,0.15); color: var(--escalated); }
-  .impact-low    { background: rgba(63,185,80,0.15);  color: var(--allowed); }
-
-  .pattern-tool {
-    font-family: "SFMono-Regular", Consolas, monospace;
-    font-size: 12px;
-    color: var(--blue);
-    background: rgba(88,166,255,0.1);
-    padding: 2px 6px;
-    border-radius: 4px;
-  }
-  .pattern-desc { font-size: 13px; color: var(--text); margin-bottom: 6px; }
-  .pattern-suggestion { font-size: 12px; color: var(--muted); margin-bottom: 10px; }
-
-  .confidence-bar-wrap {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 10px;
-  }
-  .confidence-label { font-size: 11px; color: var(--muted); width: 80px; }
-  .confidence-bar {
-    flex: 1;
-    height: 4px;
-    background: var(--border);
-    border-radius: 2px;
-    overflow: hidden;
-  }
-  .confidence-fill {
-    height: 100%;
-    background: var(--blue);
-    border-radius: 2px;
-    transition: width 0.4s;
-  }
-  .confidence-pct { font-size: 11px; color: var(--muted); width: 34px; text-align: right; }
-
-  .apply-btn {
-    padding: 5px 14px;
-    border-radius: 6px;
-    border: 1px solid rgba(88,166,255,0.4);
-    background: rgba(88,166,255,0.1);
-    color: var(--blue);
-    font-size: 12px;
-    cursor: pointer;
-    transition: background 0.15s;
-  }
-  .apply-btn:hover { background: rgba(88,166,255,0.2); }
-  .apply-btn:disabled { opacity: 0.4; cursor: default; }
-
-  .examples-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 12px;
-  }
-  .examples-table th {
-    text-align: left;
-    padding: 8px 12px;
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.6px;
-    color: var(--muted);
-    background: var(--surface2);
-    border-bottom: 1px solid var(--border);
-  }
-  .examples-table td {
-    padding: 8px 12px;
-    border-bottom: 1px solid var(--border);
-    vertical-align: top;
-  }
-  .examples-table tr:last-child td { border-bottom: none; }
-  .examples-table tr:hover td { background: var(--surface2); }
-
-  /* ── Toast ── */
-  #toast-container {
-    position: fixed;
-    bottom: 24px;
-    right: 24px;
-    z-index: 9999;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    pointer-events: none;
-  }
-
-  .toast {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 10px 16px;
-    font-size: 13px;
-    color: var(--text);
-    opacity: 0;
-    transform: translateY(8px);
-    transition: opacity 0.2s, transform 0.2s;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.5);
-    max-width: 320px;
-  }
-  .toast.toast-visible { opacity: 1; transform: translateY(0); }
-  .toast.toast-error { border-color: rgba(248,81,73,0.4); color: var(--blocked); }
+:root {
+  /* surfaces */
+  --color-bg: #FAFAF9;
+  --color-surface: #FFFFFF;
+  --color-surface-secondary: #F7F7F5;
+  --color-surface-tertiary: #F0F0EE;
+
+  /* text */
+  --color-text-primary: #1F1F1F;
+  --color-text-secondary: #5C5C5A;
+  --color-text-tertiary: #8A8A88;
+  --color-text-muted: #B5B5B3;
+
+  /* semantic — text */
+  --color-text-success: #1F7A37;
+  --color-text-warning: #92580A;
+  --color-text-danger: #B42318;
+  --color-text-info: #1E5BA8;
+
+  /* semantic — backgrounds */
+  --color-background-success: #ECF7EF;
+  --color-background-warning: #FBF1E1;
+  --color-background-danger: #FBEAE8;
+  --color-background-info: #E7EFFA;
+  --color-background-secondary: #F0F0EE;
+
+  /* borders */
+  --color-border-primary: #D7D7D5;
+  --color-border-tertiary: rgba(15, 15, 15, 0.08);
+
+  /* accent (calm/serif-feel rather than tech-bro) */
+  --color-accent: #1F1F1F;
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md: 0 1px 3px rgba(0,0,0,0.06);
+
+  /* failure mode palettes */
+  --fm-injection-text: var(--color-text-danger);
+  --fm-injection-bg:   var(--color-background-danger);
+  --fm-policy-text:    var(--color-text-info);
+  --fm-policy-bg:      var(--color-background-info);
+  --fm-drift-text:     var(--color-text-warning);
+  --fm-drift-bg:       var(--color-background-warning);
+  --fm-loop-text:      #6D28D9;
+  --fm-loop-bg:        #EDE9FE;
+  --fm-excess-text:    #B25E08;
+  --fm-excess-bg:      #FBF1E1;
+  --fm-blast-text:     var(--color-text-danger);
+  --fm-blast-bg:       var(--color-background-danger);
+  --fm-anomaly-text:   var(--color-text-secondary);
+  --fm-anomaly-bg:     var(--color-background-secondary);
+  --fm-data-text:      #5B21B6;
+  --fm-data-bg:        #EDE9FE;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body {
+  background: var(--color-bg);
+  color: var(--color-text-primary);
+  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI",
+               Helvetica, Arial, sans-serif;
+  font-size: 13px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+a { color: inherit; text-decoration: none; }
+button { font-family: inherit; cursor: pointer; }
+
+/* ── Header ────────────────────────────────────────────────────────────── */
+.header {
+  position: sticky; top: 0; z-index: 100;
+  height: 52px;
+  display: flex; align-items: center;
+  padding: 0 24px;
+  background: var(--color-surface);
+  border-bottom: 0.5px solid var(--color-border-tertiary);
+}
+.logo {
+  display: flex; align-items: baseline; gap: 12px;
+}
+.logo-mark {
+  font-size: 18px; font-weight: 500; letter-spacing: -0.01em;
+}
+.logo-tag {
+  font-size: 12px; color: var(--color-text-secondary);
+}
+.header-right {
+  margin-left: auto;
+  display: flex; align-items: center; gap: 16px;
+}
+.ws-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; color: var(--color-text-secondary);
+}
+.ws-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--color-text-muted);
+}
+.ws-dot.live { background: var(--color-text-success); }
+.ws-dot.dead { background: var(--color-text-danger); }
+
+/* ── System status bar ─────────────────────────────────────────────────── */
+.status-bar {
+  height: 32px;
+  display: flex; align-items: center;
+  padding: 0 24px;
+  font-size: 12px;
+  border-bottom: 0.5px solid var(--color-border-tertiary);
+  background: var(--color-background-success);
+  color: var(--color-text-success);
+}
+.status-bar.warn   { background: var(--color-background-warning); color: var(--color-text-warning); }
+.status-bar.error  { background: var(--color-background-danger);  color: var(--color-text-danger); }
+.status-bar .dot   { margin-right: 8px; font-size: 10px; line-height: 1; }
+
+/* ── Tabs ──────────────────────────────────────────────────────────────── */
+.tabs {
+  display: flex; align-items: center;
+  padding: 0 24px;
+  background: var(--color-surface);
+  border-bottom: 0.5px solid var(--color-border-tertiary);
+}
+.tab {
+  background: transparent; border: none;
+  padding: 12px 14px;
+  font-size: 13px; font-weight: 400;
+  color: var(--color-text-secondary);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+.tab:hover { color: var(--color-text-primary); }
+.tab.active {
+  color: var(--color-text-primary);
+  border-bottom-color: var(--color-accent);
+  font-weight: 500;
+}
+
+/* ── Content shell ─────────────────────────────────────────────────────── */
+.shell { padding: 24px; max-width: 1480px; margin: 0 auto; }
+.section-header {
+  font-size: 11px; font-weight: 500;
+  text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--color-text-secondary);
+  margin: 24px 0 10px;
+}
+.section-header:first-child { margin-top: 0; }
+.muted { color: var(--color-text-secondary); }
+.tiny  { font-size: 11px; }
+
+/* ── Cards ─────────────────────────────────────────────────────────────── */
+.card {
+  background: var(--color-surface);
+  border: 0.5px solid var(--color-border-tertiary);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+.metric-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+@media (max-width: 1024px) { .metric-row { grid-template-columns: repeat(2,1fr); } }
+.metric {
+  padding: 18px 20px;
+}
+.metric-label {
+  font-size: 11px; color: var(--color-text-secondary);
+  text-transform: uppercase; letter-spacing: 0.05em;
+  font-weight: 500;
+}
+.metric-value {
+  font-size: 24px; font-weight: 500; line-height: 1.1;
+  margin-top: 6px;
+}
+.metric-sub { font-size: 11px; color: var(--color-text-secondary); margin-top: 4px; }
+
+/* metric color states */
+.metric.is-good  .metric-value { color: var(--color-text-success); }
+.metric.is-warn  .metric-value { color: var(--color-text-warning); }
+.metric.is-bad   .metric-value { color: var(--color-text-danger);  }
+
+/* ── Two-column layout ─────────────────────────────────────────────────── */
+.two-col {
+  display: grid;
+  grid-template-columns: 1.55fr 1fr;
+  gap: 16px;
+  margin-top: 16px;
+}
+@media (max-width: 1100px) { .two-col { grid-template-columns: 1fr; } }
+.right-stack { display: flex; flex-direction: column; gap: 16px; }
+
+/* ── Generic table ─────────────────────────────────────────────────────── */
+.tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
+.tbl th {
+  text-align: left;
+  font-size: 11px; font-weight: 500;
+  text-transform: uppercase; letter-spacing: 0.04em;
+  color: var(--color-text-secondary);
+  padding: 10px 14px;
+  border-bottom: 0.5px solid var(--color-border-tertiary);
+  background: var(--color-surface-secondary);
+}
+.tbl td {
+  padding: 12px 14px;
+  border-bottom: 0.5px solid var(--color-border-tertiary);
+  vertical-align: top;
+}
+.tbl tr:last-child td { border-bottom: 0; }
+.tbl td.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* ── Pills / chips ─────────────────────────────────────────────────────── */
+.pill {
+  display: inline-flex; align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px; font-weight: 500;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+.pill.allowed   { background: var(--color-background-success); color: var(--color-text-success); }
+.pill.blocked   { background: var(--color-background-danger);  color: var(--color-text-danger); }
+.pill.escalated,
+.pill.escalation_approved,
+.pill.escalation_rejected {
+  background: var(--color-background-warning); color: var(--color-text-warning);
+}
+.pill.failed_open { background: var(--color-background-secondary); color: var(--color-text-secondary); }
+
+.pill.health-good { background: var(--color-background-success); color: var(--color-text-success); }
+.pill.health-warn { background: var(--color-background-warning); color: var(--color-text-warning); }
+.pill.health-bad  { background: var(--color-background-danger);  color: var(--color-text-danger); }
+
+/* failure mode badges */
+.fm-badge {
+  display: inline-flex; align-items: center;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 10px; font-weight: 600; letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-top: 4px;
+}
+.fm-injection { background: var(--fm-injection-bg); color: var(--fm-injection-text); }
+.fm-policy    { background: var(--fm-policy-bg);    color: var(--fm-policy-text); }
+.fm-drift     { background: var(--fm-drift-bg);     color: var(--fm-drift-text); }
+.fm-loop      { background: var(--fm-loop-bg);      color: var(--fm-loop-text); }
+.fm-storm     { background: var(--fm-loop-bg);      color: var(--fm-loop-text); }
+.fm-excess    { background: var(--fm-excess-bg);    color: var(--fm-excess-text); }
+.fm-data      { background: var(--fm-data-bg);      color: var(--fm-data-text); }
+.fm-blast     { background: var(--fm-blast-bg);     color: var(--fm-blast-text); }
+
+/* ── Filter bar ────────────────────────────────────────────────────────── */
+.filterbar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  padding: 12px 16px;
+  border-bottom: 0.5px solid var(--color-border-tertiary);
+  background: var(--color-surface-secondary);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+.filterbar select, .filterbar input {
+  font-family: inherit; font-size: 12px;
+  padding: 5px 9px;
+  background: var(--color-surface);
+  border: 0.5px solid var(--color-border-primary);
+  border-radius: var(--radius-md);
+  color: var(--color-text-primary);
+}
+.filterbar input { min-width: 180px; }
+.filterbar .clear-link {
+  font-size: 12px; color: var(--color-text-info);
+  background: none; border: none; padding: 4px 0;
+}
+.filterbar .filter-count {
+  margin-left: auto; font-size: 11px; color: var(--color-text-secondary);
+}
+
+/* ── Decision feed ─────────────────────────────────────────────────────── */
+.feed-card { padding: 0; }
+.feed-list { padding: 4px 0; }
+.feed-item { border-bottom: 0.5px solid var(--color-border-tertiary); }
+.feed-item:last-child { border-bottom: 0; }
+.feed-row {
+  display: grid;
+  grid-template-columns: 92px 1fr 80px;
+  gap: 12px;
+  padding: 12px 16px;
+  cursor: pointer;
+  align-items: start;
+}
+.feed-row:hover { background: var(--color-surface-secondary); }
+.feed-left { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.feed-mid {
+  display: flex; flex-direction: column; gap: 2px;
+  min-width: 0;
+}
+.feed-tool-line {
+  display: flex; align-items: baseline; gap: 8px;
+  font-size: 13px; font-weight: 500;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.feed-agent { font-size: 11px; color: var(--color-text-secondary); font-weight: 400; }
+.feed-explain {
+  font-size: 12px; color: var(--color-text-primary);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.feed-scores {
+  font-size: 11px; color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.feed-right {
+  text-align: right;
+  font-size: 11px; color: var(--color-text-secondary);
+  display: flex; flex-direction: column; align-items: flex-end; gap: 4px;
+}
+.expand-toggle {
+  font-size: 10px; color: var(--color-text-tertiary);
+  user-select: none;
+}
+.feed-detail {
+  display: none;
+  padding: 14px 16px 18px;
+  background: var(--color-surface-secondary);
+  border-top: 0.5px dashed var(--color-border-tertiary);
+}
+.feed-item.open .feed-detail { display: block; }
+.feed-item.open .expand-toggle { transform: rotate(180deg); }
+.detail-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 14px 24px;
+}
+.detail-kv-label {
+  font-size: 11px; font-weight: 500;
+  text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--color-text-secondary);
+  margin-bottom: 4px;
+}
+.detail-kv-value {
+  font-size: 12px; color: var(--color-text-primary);
+  white-space: pre-wrap; word-break: break-word;
+}
+.kv-list { font-size: 12px; line-height: 1.7; }
+.kv-list .k { color: var(--color-text-secondary); margin-right: 8px; }
+.kv-list .v { color: var(--color-text-primary); font-variant-numeric: tabular-nums; }
+.detail-foot {
+  margin-top: 12px;
+  display: flex; gap: 24px; align-items: center;
+  font-size: 11px; color: var(--color-text-secondary);
+}
+.copy-btn {
+  background: transparent; border: 0.5px solid var(--color-border-primary);
+  border-radius: 4px; padding: 1px 6px; font-size: 10px;
+  color: var(--color-text-secondary);
+}
+
+/* ── Failure modes panel ───────────────────────────────────────────────── */
+.fm-panel { padding: 16px 18px; }
+.fm-panel h3 {
+  font-size: 11px; font-weight: 500;
+  text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--color-text-secondary);
+  margin-bottom: 12px;
+}
+.fm-row {
+  display: grid;
+  grid-template-columns: 130px 1fr 28px;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  font-size: 12px;
+}
+.fm-row.muted { color: var(--color-text-tertiary); }
+.fm-row .name { color: var(--color-text-primary); }
+.fm-row.muted .name { color: var(--color-text-tertiary); }
+.fm-bar-wrap {
+  background: var(--color-surface-tertiary);
+  border-radius: 4px;
+  height: 6px;
+  overflow: hidden;
+}
+.fm-bar { height: 100%; border-radius: 4px; }
+.fm-row .count {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-secondary);
+}
+
+/* ── Escalation cards ──────────────────────────────────────────────────── */
+.esc-list { padding: 8px 0; }
+.esc-card {
+  padding: 12px 16px;
+  border-bottom: 0.5px solid var(--color-border-tertiary);
+}
+.esc-card:last-child { border-bottom: 0; }
+.esc-head {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 12px;
+  cursor: pointer;
+}
+.esc-tool { font-size: 13px; font-weight: 500; }
+.esc-meta { font-size: 11px; color: var(--color-text-secondary); }
+.esc-task {
+  margin-top: 6px;
+  font-size: 12px; color: var(--color-text-primary);
+  background: var(--color-surface-secondary);
+  border-left: 2px solid var(--color-border-primary);
+  padding: 8px 10px;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+.esc-actions {
+  margin-top: 12px;
+  display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+}
+.btn {
+  font-family: inherit; font-size: 12px; font-weight: 500;
+  padding: 5px 12px;
+  border-radius: var(--radius-md);
+  border: 0.5px solid var(--color-border-primary);
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+}
+.btn:hover { background: var(--color-surface-secondary); }
+.btn.primary {
+  background: var(--color-text-success); color: #fff; border-color: var(--color-text-success);
+}
+.btn.primary:hover { opacity: 0.92; background: var(--color-text-success); }
+.btn.danger {
+  background: var(--color-text-danger); color: #fff; border-color: var(--color-text-danger);
+}
+.btn.danger:hover { opacity: 0.92; background: var(--color-text-danger); }
+.note-input {
+  flex: 1; min-width: 180px;
+  padding: 6px 8px;
+  font-size: 12px;
+  border: 0.5px solid var(--color-border-primary);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+}
+.empty {
+  padding: 28px 16px;
+  text-align: center; color: var(--color-text-secondary);
+  font-size: 12px;
+}
+
+/* ── Toast ─────────────────────────────────────────────────────────────── */
+.toast {
+  position: fixed; bottom: 20px; right: 20px;
+  background: #1F1F1F; color: #fff;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  font-size: 12px;
+  opacity: 0; transform: translateY(8px);
+  transition: opacity 0.2s, transform 0.2s;
+  z-index: 1000;
+}
+.toast.show { opacity: 1; transform: translateY(0); }
+
+/* ── Agents tab ────────────────────────────────────────────────────────── */
+.agent-card { padding: 18px 20px; margin-bottom: 14px; }
+.agent-head {
+  display: flex; justify-content: space-between; align-items: flex-start; gap: 16px;
+  margin-bottom: 14px;
+}
+.agent-name { font-size: 16px; font-weight: 500; }
+.agent-desc { font-size: 12px; color: var(--color-text-secondary); margin-top: 2px; }
+.agent-score {
+  font-size: 32px; font-weight: 500; line-height: 1;
+}
+.agent-grid {
+  display: grid; grid-template-columns: 1.1fr 1fr; gap: 24px;
+}
+.agent-metric { font-size: 12px; }
+.agent-metric .lbl { color: var(--color-text-secondary); }
+.agent-metric .val { font-weight: 500; }
+.issue-row {
+  padding: 8px 10px;
+  background: var(--color-surface-secondary);
+  border-left: 2px solid var(--color-text-warning);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  margin-bottom: 6px;
+}
+.issue-row.bad   { border-left-color: var(--color-text-danger); }
+.issue-row.good  { border-left-color: var(--color-text-success); }
+.issue-row .desc { font-size: 12px; }
+.issue-row .when { font-size: 11px; color: var(--color-text-secondary); margin-top: 2px; }
+
+/* ── Learning tab ──────────────────────────────────────────────────────── */
+.pattern-card { padding: 16px 18px; margin-bottom: 12px; }
+.pattern-head {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 12px;
+  margin-bottom: 6px;
+}
+.pattern-type { font-size: 13px; font-weight: 500; }
+.pattern-confidence-good { color: var(--color-text-success); }
+.pattern-confidence-mid  { color: var(--color-text-info); }
+.pattern-confidence-low  { color: var(--color-text-warning); }
+.pattern-desc { font-size: 12px; color: var(--color-text-primary); margin: 6px 0 8px; }
+.pattern-suggestion {
+  font-size: 12px; color: var(--color-text-secondary);
+  background: var(--color-surface-secondary);
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  margin-top: 8px;
+}
+
+/* hidden tab */
+.tab-pane { display: none; }
+.tab-pane.active { display: block; }
+
+/* utilities */
+.flex-row { display: flex; align-items: center; gap: 12px; }
+.gap-12 { gap: 12px; }
+.mb-0 { margin-bottom: 0; }
+.mt-12 { margin-top: 12px; }
 </style>
 </head>
 <body>
 
-<!-- ── System Status Bar ── -->
-<div class="system-status-bar ok" id="system-status-bar">
-  <span class="status-icon">●</span>
-  <span id="system-status-text">All systems operational</span>
-  <span class="status-detail" id="system-status-detail"></span>
-</div>
-
-<!-- ── Header ── -->
-<header>
+<header class="header">
   <div class="logo">
-    <div class="logo-icon">⊕</div>
-    <div style="display:flex;flex-direction:column;line-height:1.1">
-      <span>AgentGate — Agent Reliability Layer</span>
-      <span style="font-size:11px;font-weight:400;color:var(--muted);letter-spacing:0">10 failure modes detected before execution</span>
-    </div>
+    <div class="logo-mark">AgentGate</div>
+    <div class="logo-tag">Agent reliability infrastructure</div>
   </div>
   <div class="header-right">
-    <div class="agent-count" id="agent-count">0 agents monitored</div>
-    <div class="status-badge">
-      <div class="dot green pulse" id="status-dot"></div>
-      <span id="status-text">Connecting…</span>
-    </div>
-    <div class="ws-status">
-      <div class="dot" id="ws-dot"></div>
-      <span id="ws-label">—</span>
+    <div class="ws-pill">
+      <span class="ws-dot" id="ws-dot"></span>
+      <span id="ws-text">Connecting…</span>
     </div>
   </div>
 </header>
 
-<!-- ── Tab Nav ── -->
-<nav class="tab-nav">
-  <button class="tab-btn active" onclick="switchTab('main', this)">Overview</button>
-  <button class="tab-btn" onclick="switchTab('learning', this)">Learning</button>
+<div class="status-bar" id="status-bar">
+  <span class="dot">●</span>
+  <span id="status-text">Loading status…</span>
+</div>
+
+<nav class="tabs">
+  <button class="tab active" data-tab="overview"   onclick="switchTab('overview', this)">Overview</button>
+  <button class="tab"        data-tab="agents"     onclick="switchTab('agents', this)">Agents</button>
+  <button class="tab"        data-tab="escalations" onclick="switchTab('escalations', this)">Escalations</button>
+  <button class="tab"        data-tab="learning"    onclick="switchTab('learning', this)">Learning</button>
+  <button class="tab"        data-tab="audit"       onclick="switchTab('audit', this)">Audit log</button>
 </nav>
 
-<!-- ── Main Panel ── -->
-<div id="tab-main" class="tab-panel active">
-<div class="container">
+<div class="shell">
 
-  <!-- Metric Cards -->
-  <div class="cards">
-    <div class="card allowed">
-      <div class="card-label">Total Actions Today</div>
-      <div class="card-value" id="card-total">—</div>
-      <div class="card-sub">tool calls evaluated</div>
+<!-- ── Overview tab ───────────────────────────────────────────────────── -->
+<div class="tab-pane active" id="tab-overview">
+
+  <div class="metric-row">
+    <div class="metric card" id="metric-total">
+      <div class="metric-label">Total actions today</div>
+      <div class="metric-value" id="m-total">—</div>
+      <div class="metric-sub" id="m-total-sub">across — agents</div>
     </div>
-    <div class="card blocked">
-      <div class="card-label">Intervention Rate</div>
-      <div class="card-value" id="card-block">—</div>
-      <div class="card-sub">% blocked or escalated</div>
+    <div class="metric card" id="metric-intervention">
+      <div class="metric-label">Intervention rate</div>
+      <div class="metric-value" id="m-intervention">—</div>
+      <div class="metric-sub" id="m-intervention-sub">— blocked · — escalated</div>
     </div>
-    <div class="card escalated">
-      <div class="card-label">Reliability Events Today</div>
-      <div class="card-value" id="card-injection">—</div>
-      <div class="card-sub">injection · drift · loops</div>
+    <div class="metric card" id="metric-events">
+      <div class="metric-label">Reliability events</div>
+      <div class="metric-value" id="m-events">—</div>
+      <div class="metric-sub" id="m-events-sub">failure modes detected today</div>
     </div>
-    <div class="card health">
-      <div class="card-label">Agent Health Score</div>
-      <div class="card-value" id="card-health">—</div>
-      <div class="card-sub" id="card-health-sub">average reliability today</div>
+    <div class="metric card" id="metric-health">
+      <div class="metric-label">Agent health score</div>
+      <div class="metric-value" id="m-health">—</div>
+      <div class="metric-sub" id="m-health-sub">average across agents</div>
     </div>
   </div>
 
-  <!-- Agent Breakdown -->
-  <div class="breakdown-section" id="breakdown-section">
-    <div class="breakdown-header" onclick="toggleBreakdown()">
-      <div class="breakdown-title">
-        Agent breakdown
-        <span class="badge" id="breakdown-count">—</span>
-      </div>
-      <span class="breakdown-toggle">▼</span>
-    </div>
-    <div class="breakdown-content">
-      <div id="breakdown-body">
-        <div class="empty-state" style="padding:20px">No agent data yet — run the demo to populate</div>
-      </div>
-    </div>
+  <div class="section-header">Agents</div>
+  <div class="card">
+    <table class="tbl">
+      <thead>
+        <tr>
+          <th>Agent · what it does</th>
+          <th class="num">Actions</th>
+          <th class="num">Allowed</th>
+          <th class="num">Blocked</th>
+          <th class="num">Escalated</th>
+          <th>Health</th>
+          <th>Latest issue</th>
+        </tr>
+      </thead>
+      <tbody id="agent-table-body">
+        <tr><td colspan="7" class="empty">Run the demo to see agent activity</td></tr>
+      </tbody>
+    </table>
   </div>
 
-  <!-- Live Feed + Escalation Inbox -->
-  <div class="main-grid">
-
-    <!-- Live Feed -->
-    <div class="panel">
-      <div class="panel-header">
-        <div class="panel-title">
-          Live Decision Feed
-          <span class="badge" id="feed-count">0</span>
-        </div>
-      </div>
-      <!-- Filter Bar -->
-      <div class="filter-bar" id="filter-bar">
-        <select class="filter-select" id="filter-outcome" onchange="onOutcomeFilter()">
+  <div class="two-col">
+    <!-- Live decision feed -->
+    <div class="card feed-card">
+      <div class="filterbar">
+        <select id="f-outcome" onchange="renderFeed()">
           <option value="">All outcomes</option>
           <option value="allowed">Allowed</option>
           <option value="blocked">Blocked</option>
           <option value="escalated">Escalated</option>
         </select>
-        <select class="filter-select" id="filter-attack" onchange="onAttackFilter()">
-          <option value="">All types</option>
-          <option value="goal_hijacking">Goal hijacking</option>
-          <option value="data_exfiltration">Data exfiltration</option>
-          <option value="privilege_escalation">Privilege escalation</option>
-          <option value="excessive_agency">Excessive agency</option>
+        <select id="f-failure" onchange="renderFeed()">
+          <option value="">All failure modes</option>
+          <option value="injection">Injection</option>
+          <option value="excess">Excessive agency</option>
+          <option value="drift">Drift</option>
+          <option value="loop">Loop</option>
+          <option value="policy">Policy</option>
         </select>
-        <input class="filter-input" id="filter-tool" type="text"
-               placeholder="Filter by tool name…" oninput="onToolFilter()">
-        <button class="filter-clear" id="filter-clear" onclick="clearFilters()">✕ Clear</button>
-        <span class="filter-count" id="filter-count"></span>
+        <input id="f-tool" type="text" placeholder="Filter by tool name…" oninput="renderFeed()" />
+        <button class="clear-link" id="f-clear" onclick="clearFilters()" style="display:none">Clear</button>
+        <span class="filter-count" id="f-count">—</span>
       </div>
       <div class="feed-list" id="feed-list">
-        <div class="empty-state">
-          <div>No decisions yet</div>
-          <div class="empty-sub">Run the agent and type a scenario to see decisions appear here</div>
+        <div class="empty">No decisions yet — run the demo or your agent.</div>
+      </div>
+    </div>
+
+    <div class="right-stack">
+      <!-- Failure modes panel -->
+      <div class="card fm-panel">
+        <h3>Failure modes detected today</h3>
+        <div id="fm-list"><div class="muted tiny">No data yet.</div></div>
+      </div>
+
+      <!-- Pending escalations compact -->
+      <div class="card">
+        <div class="filterbar mb-0" style="border-bottom: 0.5px solid var(--color-border-tertiary)">
+          <span style="font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:0.05em;color:var(--color-text-secondary)">Pending escalations</span>
+          <span class="filter-count" id="esc-count">— awaiting review</span>
+        </div>
+        <div class="esc-list" id="esc-compact">
+          <div class="empty">✓ No pending escalations</div>
         </div>
       </div>
     </div>
-
-    <!-- Escalation Inbox -->
-    <div class="panel">
-      <div class="panel-header">
-        <div class="panel-title">
-          Escalation Inbox
-          <span class="badge" id="inbox-count">0</span>
-        </div>
-      </div>
-      <div class="inbox-list" id="inbox-list">
-        <div class="empty-state-esc"><span class="empty-check">✓</span> No pending escalations</div>
-      </div>
-    </div>
-
   </div>
-
-  <!-- Flagged Sessions (hidden when empty) -->
-  <div class="panel sessions-panel" id="sessions-panel" style="display:none">
-    <div class="panel-header">
-      <div class="panel-title">
-        Flagged Sessions
-        <span class="badge" id="sessions-count">0</span>
-      </div>
-    </div>
-    <div id="sessions-list"></div>
-  </div>
-
 </div>
-</div><!-- /tab-main -->
 
-<!-- ── Learning Panel ── -->
-<div id="tab-learning" class="tab-panel">
-<div class="container">
-
-  <!-- Detected Patterns -->
-  <div class="learning-section">
-    <div class="learning-section-header">
-      Detected Patterns
-      <span class="badge" id="patterns-count">—</span>
-      <button class="apply-btn" style="margin-left:auto" onclick="loadPatterns()">Refresh</button>
-    </div>
-    <div class="learning-section-body" id="patterns-body">
-      <div class="empty-state" style="padding:20px;text-align:center;color:var(--muted)">
-        No patterns detected yet — run the learning demo to populate data.
-      </div>
-    </div>
-  </div>
-
-  <!-- Few-Shot Examples -->
-  <div class="learning-section">
-    <div class="learning-section-header">
-      Few-Shot Examples (Approved Decisions)
-      <span class="badge" id="examples-count">—</span>
-    </div>
-    <div id="examples-body">
-      <div class="empty-state" style="padding:20px;text-align:center;color:var(--muted)">
-        No approved decisions yet.
-      </div>
-    </div>
-  </div>
-
+<!-- ── Agents tab ─────────────────────────────────────────────────────── -->
+<div class="tab-pane" id="tab-agents">
+  <div class="section-header">All agents</div>
+  <div id="agent-cards"><div class="empty card">No agent data yet.</div></div>
 </div>
-</div><!-- /tab-learning -->
 
-<!-- Toast Container -->
-<div id="toast-container"></div>
+<!-- ── Escalations tab ────────────────────────────────────────────────── -->
+<div class="tab-pane" id="tab-escalations">
+  <div class="section-header">Pending escalations</div>
+  <div class="card">
+    <div class="esc-list" id="esc-full"><div class="empty">✓ No pending escalations</div></div>
+  </div>
+
+  <div class="section-header">Recently resolved</div>
+  <div class="card">
+    <div class="esc-list" id="esc-resolved"><div class="empty">No resolved escalations yet.</div></div>
+  </div>
+</div>
+
+<!-- ── Learning tab ───────────────────────────────────────────────────── -->
+<div class="tab-pane" id="tab-learning">
+  <div class="section-header">Detected patterns</div>
+  <div id="patterns-list"><div class="empty card">Loading patterns…</div></div>
+
+  <div class="section-header">Policy change history</div>
+  <div class="card">
+    <table class="tbl">
+      <thead>
+        <tr><th>When</th><th>Tool</th><th>Action</th><th>Before → After</th></tr>
+      </thead>
+      <tbody id="changes-body">
+        <tr><td colspan="4" class="empty">No policy changes yet.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ── Audit log tab ──────────────────────────────────────────────────── -->
+<div class="tab-pane" id="tab-audit">
+  <div class="card">
+    <div class="filterbar">
+      <select id="a-agent" onchange="loadAudit()"><option value="">All agents</option></select>
+      <select id="a-outcome" onchange="loadAudit()">
+        <option value="">All outcomes</option>
+        <option value="allowed">Allowed</option>
+        <option value="blocked">Blocked</option>
+        <option value="escalated">Escalated</option>
+      </select>
+      <select id="a-failure" onchange="loadAudit()">
+        <option value="">All failure modes</option>
+        <option value="injection">Injection</option>
+        <option value="drift">Drift</option>
+        <option value="loop">Loop</option>
+        <option value="policy">Policy</option>
+        <option value="excess">Excessive agency</option>
+      </select>
+      <span class="filter-count">
+        <a class="clear-link" href="#" onclick="exportCsv();return false;">Export CSV</a>
+      </span>
+    </div>
+    <table class="tbl">
+      <thead>
+        <tr>
+          <th>Time</th><th>Agent</th><th>Tool</th>
+          <th>Outcome</th><th>Failure mode</th>
+          <th class="num">Health</th><th>Impact</th><th></th>
+        </tr>
+      </thead>
+      <tbody id="audit-body">
+        <tr><td colspan="8" class="empty">Loading audit log…</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+</div><!-- /shell -->
+
+<div class="toast" id="toast"></div>
 
 <script>
-  const BASE    = `${window.location.protocol}//${window.location.host}`;
-  const WS_BASE = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}`;
+"use strict";
 
-  const MAX_FEED = 50;
+/* ─────────────────────────────────────────────────────────────────────────
+   Constants & state
+   ───────────────────────────────────────────────────────────────────────── */
+const BASE      = window.location.origin;
+const WS_BASE   = BASE.replace(/^http/, "ws");
+const HEADERS   = {};
 
-  // ── State ──────────────────────────────────────────────────────────────────
-  let feedDecisions  = [];
-  let expandedRows   = new Set();
-  let expandedEscalations = new Set();
-  let activeConfirms = new Set();
-  let filterOutcome  = '';
-  let filterAttack   = '';
-  let filterTool     = '';
-  let ws             = null;
+const AGENT_DESCRIPTIONS = {
+  "payment-bot-prod":         "Processes refunds, payments, wire transfers",
+  "payment-support-agent-live": "Live fintech payment support",
+  "support-agent-v2":         "Customer support · account lookups · data access",
+  "ops-bot":                  "Operations monitoring · account status checks",
+  "demo-payment-agent":       "Demo agent · fintech payment scenarios",
+  "default":                  "AI agent",
+};
 
-  let _lastNewCallId = null;
+let allDecisions  = [];     // most-recent first
+let agentHealth   = {};     // {agent_id: {health_score, health_status, active_issues}}
+let pendingEscs   = [];     // pending escalations (compact + full views)
+let resolvedEscs  = [];     // resolved (last N)
+let patterns      = [];
+let policyChanges = [];
+let activeTab     = "overview";
 
-  // ── Escape helper ─────────────────────────────────────────────────────────
-  function escHtml(s) {
-    return String(s == null ? '' : s)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
+/* ─────────────────────────────────────────────────────────────────────────
+   Utility
+   ───────────────────────────────────────────────────────────────────────── */
+function $(id) { return document.getElementById(id); }
+function escHtml(s) {
+  if (s === null || s === undefined) return "";
+  return String(s)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+function relTime(iso) {
+  if (!iso) return "—";
+  const t = new Date(iso).getTime();
+  if (isNaN(t)) return iso;
+  const s = (Date.now() - t) / 1000;
+  if (s < 5)    return "just now";
+  if (s < 60)   return `${Math.floor(s)}s ago`;
+  if (s < 3600) return `${Math.floor(s/60)}m ago`;
+  if (s < 86400) return `${Math.floor(s/3600)}h ago`;
+  return `${Math.floor(s/86400)}d ago`;
+}
+function describeAgent(id) {
+  return AGENT_DESCRIPTIONS[id] || AGENT_DESCRIPTIONS["default"];
+}
+function fmt$(n) {
+  if (n === null || n === undefined || isNaN(n)) return "—";
+  return "$" + Number(n).toLocaleString("en-US", {minimumFractionDigits: 2, maximumFractionDigits: 2});
+}
+function blastObj(b) {
+  if (!b) return null;
+  if (typeof b === "string") {
+    try { return JSON.parse(b); } catch { return null; }
   }
+  return b;
+}
+function toast(msg, isErr) {
+  const t = $("toast");
+  t.textContent = msg;
+  t.style.background = isErr ? "var(--color-text-danger)" : "#1F1F1F";
+  t.classList.add("show");
+  setTimeout(() => t.classList.remove("show"), 2400);
+}
+async function safeJson(url, opts) {
+  try {
+    const r = await fetch(url, opts);
+    if (!r.ok) return null;
+    return await r.json();
+  } catch { return null; }
+}
 
-  // ── Time ──────────────────────────────────────────────────────────────────
-  function relativeTime(iso) {
-    if (!iso) return '';
-    const diff = Date.now() - new Date(iso + (iso.endsWith('Z') ? '' : 'Z')).getTime();
-    const s = Math.floor(diff / 1000);
-    if (s < 5)  return 'just now';
-    if (s < 60) return `${s}s ago`;
-    const m = Math.floor(s / 60);
-    if (m < 60) return `${m}m ago`;
-    return `${Math.floor(m / 60)}h ago`;
+/* ─────────────────────────────────────────────────────────────────────────
+   Plain English explanations
+   ───────────────────────────────────────────────────────────────────────── */
+function getLatestIssue(decisions) {
+  const latest = decisions[0];
+  if (!latest) return "No activity";
+  if (latest.attack_type === "goal_hijacking")    return "Injection: hidden instruction detected";
+  if (latest.attack_type === "excessive_agency")  return "Excessive agency: disproportionate action";
+  if (latest.attack_type === "data_exfiltration") return "Data leak attempt detected";
+  if (latest.attack_type === "privilege_escalation") return "Privilege escalation attempt";
+  if (latest.drift_score > 50)                    return "Goal drift: agent went off-task";
+  if (latest.loop_score > 70)                     return "Retry storm: agent stuck in loop";
+  if (latest.outcome === "blocked" && latest.policy_matched)
+    return "Policy: " + latest.policy_matched.replace(/_/g, " ");
+  if (latest.outcome === "escalated")             return "Escalated: awaiting human review";
+  return "Operating normally";
+}
+
+function explainDecision(d) {
+  const taskLabel = d.original_task
+    ? `"${d.original_task.length > 50 ? d.original_task.substring(0,50) + "…" : d.original_task}"`
+    : "an unspecified task";
+  if (d.attack_type === "goal_hijacking")
+    return `Hidden instruction tried to redirect agent away from ${taskLabel}`;
+  if (d.attack_type === "excessive_agency")
+    return `Agent took a disproportionate action for ${taskLabel}`;
+  if (d.attack_type === "data_exfiltration")
+    return "Agent attempted to send data to an external destination";
+  if (d.attack_type === "privilege_escalation")
+    return "Agent attempted an action beyond its authorization level";
+  if (d.drift_score > 50)
+    return `Agent drifted off task — ${d.drift_reason || "tool did not match stated goal"}`;
+  if (d.loop_score > 70)
+    return `Retry storm — ${d.loop_reason || "same failing tool called repeatedly"}`;
+  if (d.policy_matched && d.outcome === "blocked")
+    return `Blocked by rule: ${d.policy_matched.replace(/_/g, " ")}`;
+  if (d.outcome === "escalated")
+    return `Escalated for human review — ${d.reason || "requires approval"}`;
+  if (d.outcome === "allowed")
+    return `Passed all checks — ${d.reason || "action permitted"}`;
+  return d.reason || "Decision recorded";
+}
+
+function failureModeForDecision(d) {
+  // returns {key, label, badgeClass} or null
+  // Drift checked before excessive_agency: structural drift (export tool on a
+  // read task) is the more specific signal even when the LLM also tags it
+  // excess-agency.
+  if (d.attack_type === "goal_hijacking")     return {key:"injection", label:"INJECTION", cls:"fm-injection"};
+  if (d.attack_type === "data_exfiltration")  return {key:"data",      label:"DATA LEAK", cls:"fm-data"};
+  if (d.drift_score > 50)                     return {key:"drift",     label:"DRIFT", cls:"fm-drift"};
+  if (d.attack_type === "excessive_agency")   return {key:"excess",    label:"EXCESS AGENCY", cls:"fm-excess"};
+  if (d.attack_type === "privilege_escalation") return {key:"injection",label:"PRIV ESC", cls:"fm-injection"};
+  if (d.loop_score > 85)                      return {key:"loop",      label:"STORM", cls:"fm-storm"};
+  if (d.loop_score > 70)                      return {key:"loop",      label:"LOOP", cls:"fm-loop"};
+  if (d.outcome === "blocked" && d.policy_matched) return {key:"policy", label:"POLICY", cls:"fm-policy"};
+  return null;
+}
+
+function scoreDisplay(d) {
+  const parts = [];
+  if (d.reliability_score !== null && d.reliability_score !== undefined)
+    parts.push(`Health: ${d.reliability_score}%`);
+  if (d.risk_score && d.risk_score > 0)
+    parts.push(`Risk: ${d.risk_score}%`);
+  if (d.injection_score && d.injection_score > 0)
+    parts.push(`Injection: ${d.injection_score}% confident`);
+  if (d.drift_score && d.drift_score > 0)
+    parts.push(`Drift: ${d.drift_score}%`);
+  if (d.loop_score && d.loop_score > 0)
+    parts.push(`Loop: ${d.loop_score}%`);
+  if (d.anomaly_score && d.anomaly_score > 0)
+    parts.push(`Anomaly: ${d.anomaly_score}%`);
+  const br = blastObj(d.blast_radius);
+  if (br) {
+    if (br.financial_impact && br.financial_impact !== "$0" && br.financial_impact !== "$0.00" && br.financial_impact !== "unknown")
+      parts.push(`Impact: ${br.financial_impact} · ${br.reversibility || "?"}`);
+    if (br.regulatory_flags && br.regulatory_flags.length)
+      parts.push(br.regulatory_flags.join(" · "));
   }
+  return parts.join("  ·  ");
+}
 
-  function refreshTimestamps() {
-    document.querySelectorAll('[data-ts]').forEach(el => {
-      el.textContent = relativeTime(el.getAttribute('data-ts'));
-    });
+function formatArgsList(argsRaw) {
+  let args = argsRaw;
+  if (typeof args === "string") {
+    try { args = JSON.parse(args); } catch { return escHtml(args); }
   }
+  if (!args || typeof args !== "object") return "<span class='muted tiny'>No arguments</span>";
+  const currencyKeys = new Set(["amount","total","price","cost","balance","limit","fee","value"]);
+  return Object.entries(args).map(([k, v]) => {
+    let display;
+    if (typeof v === "boolean") display = v ? "Yes" : "No";
+    else if (currencyKeys.has(k.toLowerCase()) && typeof v === "number")
+      display = fmt$(v);
+    else if (typeof v === "object")
+      display = JSON.stringify(v);
+    else
+      display = String(v);
+    if (display.length > 100) display = display.substring(0,100) + "…";
+    return `<div><span class="k">${escHtml(k)}:</span><span class="v">${escHtml(display)}</span></div>`;
+  }).join("");
+}
 
-  // ── Labels / pills ────────────────────────────────────────────────────────
-  function outcomeLabel(outcome) {
-    const map = {
-      allowed: 'allowed', blocked: 'blocked',
-      escalated: 'escalated', escalation_approved: 'approved',
-      escalation_rejected: 'rejected', failed_open: 'fail-open',
-    };
-    return map[outcome] || outcome;
+/* ─────────────────────────────────────────────────────────────────────────
+   Health header / status bar
+   ───────────────────────────────────────────────────────────────────────── */
+async function loadStatusBar() {
+  const bar = $("status-bar"), text = $("status-text");
+  const h = await safeJson(`${BASE}/health/detailed`);
+  const ah = await safeJson(`${BASE}/health/agents`);
+  if (!h) {
+    bar.className = "status-bar error";
+    text.textContent = "Database unreachable · decisions may not be logged";
+    return;
   }
+  const compliance = h.components && h.components.compliance_mode;
+  const llmStatus  = h.components && h.components.llm_api;
+  const monitored  = ah && ah.summary ? ah.summary.total_agents : 0;
+  const critical   = ah && ah.summary ? ah.summary.critical : 0;
 
-  function pillClass(outcome, injScore) {
-    if (injScore >= 70) return 'injection';
-    return outcome || 'allowed';
+  if (critical > 0 && ah.agents.length) {
+    const offender = ah.agents.find(a => a.health_status === "Critical") || {};
+    bar.className = "status-bar error";
+    text.textContent = `⚠ Agent health alert: ${offender.agent_id || "unknown"} critical · ${monitored} agents monitored`;
+    return;
   }
-
-  const ATTACK_LABELS = {
-    goal_hijacking:       'INJECTION',
-    data_exfiltration:    'DATA LEAK',
-    privilege_escalation: 'PRIV ESC',
-    excessive_agency:     'EXCESS AGENCY',
-    other:                'SUSPICIOUS',
-  };
-
-  function attackBadgeHtml(attackType) {
-    if (!attackType || attackType === 'none') return '';
-    const label = ATTACK_LABELS[attackType] || attackType.toUpperCase();
-    return `<span class="attack-badge ${escHtml(attackType)}">${escHtml(label)}</span>`;
+  if (h.status !== "ok" || (typeof llmStatus === "string" && llmStatus.startsWith("unavailable"))) {
+    bar.className = "status-bar warn";
+    text.textContent = `LLM scoring degraded · using heuristic detection · ${monitored} agents monitored`;
+    return;
   }
+  bar.className = "status-bar";
+  const llmLine = compliance ? "compliance mode (no LLM)" : "LLM scoring active";
+  text.innerHTML = `<span class="dot">●</span> All systems operational · ${monitored} agent${monitored===1?"":"s"} monitored · ${llmLine}`;
+}
 
-  function failureModeBadgeHtml(d) {
-    const tags = [];
-    const drift = d.drift_score || 0;
-    const loop = d.loop_score || 0;
-    if (drift > 85) tags.push(`<span class="attack-badge off-task">OFF-TASK ${drift}</span>`);
-    else if (drift > 60) tags.push(`<span class="attack-badge drift">DRIFT ${drift}</span>`);
-    if (loop > 85) tags.push(`<span class="attack-badge storm">STORM ${loop}</span>`);
-    else if (loop > 70) tags.push(`<span class="attack-badge loop">LOOP ${loop}</span>`);
-    return tags.join('');
+/* ─────────────────────────────────────────────────────────────────────────
+   Agent health (poll /health/agents)
+   ───────────────────────────────────────────────────────────────────────── */
+async function loadAgentHealth() {
+  const ah = await safeJson(`${BASE}/health/agents`);
+  if (!ah) return;
+  const map = {};
+  for (const a of ah.agents || []) map[a.agent_id] = a;
+  agentHealth = map;
+  renderAgentTable();
+  if (activeTab === "agents") renderAgentCards();
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Stats / metric cards
+   ───────────────────────────────────────────────────────────────────────── */
+async function loadStats() {
+  const s = await safeJson(`${BASE}/dashboard/stats`);
+  if (!s) return;
+
+  // Total
+  $("m-total").textContent = s.total_actions_today ?? 0;
+  $("m-total-sub").textContent = `across ${s.active_agents ?? 0} active agent${s.active_agents===1?"":"s"}`;
+
+  // Intervention rate
+  const block = s.block_rate ?? 0;
+  const esc   = s.escalation_rate ?? 0;
+  const interv = +(block + esc).toFixed(1);
+  $("m-intervention").textContent = `${interv}%`;
+  $("m-intervention-sub").textContent = `${block}% blocked · ${esc}% escalated`;
+  const interMetric = $("metric-intervention");
+  interMetric.classList.remove("is-good","is-warn","is-bad");
+  if (interv < 20)      interMetric.classList.add("is-good");
+  else if (interv <= 40) interMetric.classList.add("is-warn");
+  else                   interMetric.classList.add("is-bad");
+
+  // Reliability events — compute from feed (no separate fetch)
+  const events = allDecisions.filter(d =>
+    (d.attack_type && d.attack_type !== "none")
+    || (d.drift_score && d.drift_score > 50)
+    || (d.loop_score && d.loop_score > 50)
+    || (d.injection_score && d.injection_score > 50)
+    || (d.anomaly_score && d.anomaly_score > 50)
+    || (d.risk_score && d.risk_score > 70)
+  ).length;
+  $("m-events").textContent = events;
+  $("m-events-sub").textContent = "failure modes detected today";
+  const eventsMetric = $("metric-events");
+  eventsMetric.classList.remove("is-good","is-warn","is-bad");
+  if (events === 0)        eventsMetric.classList.add("is-good");
+  else if (events <= 3)    eventsMetric.classList.add("is-warn");
+  else                     eventsMetric.classList.add("is-bad");
+
+  // Health
+  const score = s.avg_reliability_score_today;
+  if (score == null) {
+    $("m-health").textContent = "—";
+    $("m-health-sub").textContent = "awaiting first decision";
+  } else {
+    $("m-health").textContent = `${score}%`;
+    let label;
+    if (score >= 90) label = "Healthy";
+    else if (score >= 60) label = "Caution";
+    else label = "Critical";
+    $("m-health-sub").textContent = label;
   }
+  const healthMetric = $("metric-health");
+  healthMetric.classList.remove("is-good","is-warn","is-bad");
+  if (score == null)        { /* neutral */ }
+  else if (score >= 90)     healthMetric.classList.add("is-good");
+  else if (score >= 60)     healthMetric.classList.add("is-warn");
+  else                       healthMetric.classList.add("is-bad");
+}
 
-  // ── Blast radius chips (collapsed) ───────────────────────────────────────
-  function blastRadiusHtml(blastRadius) {
-    if (!blastRadius) return '';
-    let br;
-    try { br = typeof blastRadius === 'string' ? JSON.parse(blastRadius) : blastRadius; }
-    catch { return ''; }
-    const chips = [];
-    if (br.financial_impact && br.financial_impact !== 'unknown')
-      chips.push(`<span class="blast-chip">${escHtml(br.financial_impact)}</span>`);
-    if (br.reversibility === 'irreversible')
-      chips.push(`<span class="blast-chip irreversible">irreversible 🔴</span>`);
-    else if (br.reversibility === 'partially_reversible')
-      chips.push(`<span class="blast-chip">partial</span>`);
-    if (br.severity && br.severity !== 'low')
-      chips.push(`<span class="blast-chip ${br.severity}">${escHtml(br.severity.toUpperCase())}</span>`);
-    (br.regulatory_flags || []).forEach(f =>
-      chips.push(`<span class="blast-chip reg">${escHtml(f)}</span>`)
-    );
-    return chips.length ? `<div class="blast-row">${chips.join('')}</div>` : '';
+/* ─────────────────────────────────────────────────────────────────────────
+   Agent overview table (Overview tab)
+   ───────────────────────────────────────────────────────────────────────── */
+function renderAgentTable() {
+  const body = $("agent-table-body");
+  const byAgent = {};
+  for (const d of allDecisions) {
+    const id = d.agent_id || "unknown";
+    if (!byAgent[id]) byAgent[id] = [];
+    byAgent[id].push(d);
   }
-
-  // ── Blast radius one-liner (escalation collapsed) ─────────────────────────
-  function blastOneliner(br) {
-    if (!br) return '';
-    let parsed;
-    try { parsed = typeof br === 'string' ? JSON.parse(br) : br; }
-    catch { return ''; }
-    const parts = [];
-    if (parsed.financial_impact && parsed.financial_impact !== 'unknown')
-      parts.push(parsed.financial_impact);
-    if (parsed.reversibility)
-      parts.push(parsed.reversibility.replace(/_/g, ' '));
-    if (parsed.severity)
-      parts.push(parsed.severity.toUpperCase());
-    return parts.join(' | ');
+  const ids = Object.keys(byAgent);
+  if (ids.length === 0) {
+    body.innerHTML = '<tr><td colspan="7" class="empty">Run the demo to see agent activity</td></tr>';
+    return;
   }
+  // Sort: worst health first
+  ids.sort((a,b) => {
+    const ha = (agentHealth[a] && agentHealth[a].health_score) ?? 100;
+    const hb = (agentHealth[b] && agentHealth[b].health_score) ?? 100;
+    return ha - hb;
+  });
 
-  // ── Blast radius full detail (expanded) ───────────────────────────────────
-  function blastFullHtml(br) {
-    if (!br) return '<span class="detail-muted">Not available</span>';
-    let parsed;
-    try { parsed = typeof br === 'string' ? JSON.parse(br) : br; }
-    catch { return '<span class="detail-muted">Not available</span>'; }
-    const rows = [
-      ['Financial', parsed.financial_impact || 'unknown'],
-      ['Reversibility', (parsed.reversibility || 'unknown').replace(/_/g, ' ')],
-      ['Severity', (parsed.severity || 'unknown').toUpperCase()],
-    ];
-    if (parsed.regulatory_flags && parsed.regulatory_flags.length)
-      rows.push(['Regulatory', parsed.regulatory_flags.join(', ')]);
-    if (parsed.estimated_affected_users)
-      rows.push(['Affected users', `~${parsed.estimated_affected_users}`]);
-    return rows.map(([k, v]) =>
-      `<div class="blast-detail-row"><span class="blast-detail-key">${escHtml(k)}:</span><span>${escHtml(String(v))}</span></div>`
-    ).join('');
-  }
-
-  // ── Score chips ───────────────────────────────────────────────────────────
-  function healthBadgeClass(score) {
-    if (score >= 90) return 'health-ok';
-    if (score >= 70) return 'health-caution';
-    if (score >= 40) return 'health-degraded';
-    return 'health-critical';
-  }
-  function scoreHtml(risk, inj, anomaly, reliability) {
-    if (reliability != null) {
-      return `<div class="feed-scores"><span class="score-badge ${healthBadgeClass(reliability)}">Health: ${reliability}%</span></div>`;
-    }
-    // Fallback for older audit rows without reliability_score
-    let html = '';
-    if (risk != null)               html += `<span class="score-badge risk">R:${risk}</span>`;
-    if (inj != null && inj > 0)     html += `<span class="score-badge inj">I:${inj}</span>`;
-    if (anomaly != null && anomaly > 0) html += `<span class="score-badge anomaly">A:${anomaly}</span>`;
-    return html ? `<div class="feed-scores">${html}</div>` : '';
-  }
-
-  // ── Formatted args ────────────────────────────────────────────────────────
-  function formatArgsHtml(argsJson) {
-    if (!argsJson) return '<span class="detail-muted">No arguments</span>';
-    let args;
-    try { args = typeof argsJson === 'string' ? JSON.parse(argsJson) : argsJson; }
-    catch { return `<span class="detail-muted">${escHtml(String(argsJson))}</span>`; }
-    if (!args || typeof args !== 'object' || Array.isArray(args))
-      return `<span class="detail-muted">${escHtml(JSON.stringify(args))}</span>`;
-    const entries = Object.entries(args);
-    if (!entries.length) return '<span class="detail-muted">No arguments</span>';
-    const currencyKeys = new Set(['amount','price','total','balance','value','fee']);
-    return entries.map(([k, v]) => {
-      let display;
-      if (currencyKeys.has(k.toLowerCase()) && typeof v === 'number')
-        display = `$${v.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
-      else
-        display = typeof v === 'object' ? JSON.stringify(v) : String(v);
-      return `<div class="arg-row"><span class="arg-key">${escHtml(k)}:</span><span class="arg-val">${escHtml(display)}</span></div>`;
-    }).join('');
-  }
-
-  // ── Feed row HTML ─────────────────────────────────────────────────────────
-  function feedRowHtml(d) {
-    const cid      = d.call_id || '';
-    const cidEsc   = escHtml(cid);
-    const outcome  = d.outcome || 'allowed';
-    const injScore = d.injection_score || 0;
-    const pClass   = pillClass(outcome, injScore);
-    const isNew    = _lastNewCallId === cid;
-    const reason   = (d.reason || '');
-    const reasonTrunc = reason.length > 80 ? reason.slice(0, 80) + '…' : reason;
-
-    const scores = `
-      ${d.risk_score    != null ? `<div class="score-detail"><span class="score-badge risk">Risk ${d.risk_score}/100</span>${d.risk_reason ? ` — ${escHtml(d.risk_reason)}` : ''}</div>` : ''}
-      ${d.injection_score != null ? `<div class="score-detail"><span class="score-badge inj">Injection ${d.injection_score}/100</span>${d.injection_reason ? ` — ${escHtml(d.injection_reason)}` : ''}</div>` : ''}
-      ${d.anomaly_score   != null ? `<div class="score-detail"><span class="score-badge anomaly">Anomaly ${d.anomaly_score}/100</span>${d.anomaly_reason ? ` — ${escHtml(d.anomaly_reason)}` : ' — Normal behavior'}</div>` : ''}
-      ${d.risk_score == null && d.injection_score == null && d.anomaly_score == null ? '<span class="detail-muted">No scores</span>' : ''}
-    `;
-
-    const cpBtnId = `cpbtn-${cidEsc}`;
-
+  body.innerHTML = ids.map(id => {
+    const decs = byAgent[id];
+    const total = decs.length;
+    const allowed = decs.filter(d => d.outcome === "allowed").length;
+    const blocked = decs.filter(d => d.outcome === "blocked").length;
+    const escalated = decs.filter(d => d.outcome && d.outcome.startsWith("escalat")).length;
+    const h = agentHealth[id];
+    const score = h ? h.health_score : null;
+    let cls = "health-good", label = "Healthy";
+    if (score !== null && score !== undefined) {
+      if (score < 40)      { cls = "health-bad";  label = "Critical"; }
+      else if (score < 70) { cls = "health-bad";  label = "Degraded"; }
+      else if (score < 90) { cls = "health-warn"; label = "Caution"; }
+    } else { cls = "health-good"; label = "—"; }
+    const issue = getLatestIssue(decs);
     return `
-      <div class="feed-item${isNew ? ' new' : ''}" id="row-${cidEsc}">
-        <div class="feed-row-main" onclick="toggleFeedRow('${cidEsc}')">
-          <span class="pill ${pClass}">${outcomeLabel(outcome)}</span>
-          <div class="feed-body">
-            <div class="feed-tool">${escHtml(d.tool_name || '')}${attackBadgeHtml(d.attack_type)}${failureModeBadgeHtml(d)}</div>
-            <div class="feed-reason">${escHtml(reasonTrunc)}</div>
-            ${scoreHtml(d.risk_score, d.injection_score, d.anomaly_score, d.reliability_score)}
-            ${blastRadiusHtml(d.blast_radius)}
+      <tr>
+        <td>
+          <div style="font-weight:500">${escHtml(id)}</div>
+          <div class="tiny muted">${escHtml(describeAgent(id))}</div>
+        </td>
+        <td class="num">${total}</td>
+        <td class="num">${allowed}</td>
+        <td class="num">${blocked}</td>
+        <td class="num">${escalated}</td>
+        <td><span class="pill ${cls}">${score!==null&&score!==undefined?score+"% · "+label:label}</span></td>
+        <td class="tiny">${escHtml(issue)}</td>
+      </tr>
+    `;
+  }).join("");
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Live decision feed
+   ───────────────────────────────────────────────────────────────────────── */
+function getFilteredDecisions() {
+  const fOut  = $("f-outcome").value;
+  const fFail = $("f-failure").value;
+  const fTool = ($("f-tool").value || "").toLowerCase().trim();
+  const out = allDecisions.filter(d => {
+    if (fOut && !(d.outcome === fOut || (fOut === "escalated" && (d.outcome||"").startsWith("escalat")))) return false;
+    if (fFail) {
+      const fm = failureModeForDecision(d);
+      if (!fm || fm.key !== fFail) return false;
+    }
+    if (fTool && !(d.tool_name || "").toLowerCase().includes(fTool)) return false;
+    return true;
+  });
+  return out;
+}
+function clearFilters() {
+  $("f-outcome").value = "";
+  $("f-failure").value = "";
+  $("f-tool").value = "";
+  renderFeed();
+}
+function renderFeed() {
+  const filtered = getFilteredDecisions().slice(0, 40);
+  const total = allDecisions.length;
+  $("f-count").textContent = `Showing ${filtered.length} of ${total} decision${total===1?"":"s"}`;
+  const anyFilter = $("f-outcome").value || $("f-failure").value || $("f-tool").value;
+  $("f-clear").style.display = anyFilter ? "inline-block" : "none";
+
+  const feed = $("feed-list");
+  if (filtered.length === 0) {
+    feed.innerHTML = `<div class="empty">${total === 0 ? "No decisions yet — run the demo or your agent." : "No decisions match these filters."}</div>`;
+    return;
+  }
+  feed.innerHTML = filtered.map(d => {
+    const fm = failureModeForDecision(d);
+    const outcome = d.outcome || "allowed";
+    const outcomeLabel = outcome === "escalation_approved" ? "Approved"
+                       : outcome === "escalation_rejected" ? "Rejected"
+                       : outcome.charAt(0).toUpperCase() + outcome.slice(1);
+    const cid = d.call_id || "";
+    const br = blastObj(d.blast_radius);
+    return `
+      <div class="feed-item" data-cid="${escHtml(cid)}">
+        <div class="feed-row" onclick="toggleFeedItem(this)">
+          <div class="feed-left">
+            <span class="pill ${escHtml(outcome)}">${escHtml(outcomeLabel)}</span>
+            ${fm ? `<span class="fm-badge ${fm.cls}">${fm.label}</span>` : ""}
           </div>
-          <div class="feed-meta">
-            <div class="feed-time" data-ts="${escHtml(d.decided_at || '')}">${relativeTime(d.decided_at)}</div>
-            <div class="feed-agent">${escHtml(d.agent_id || '')}</div>
+          <div class="feed-mid">
+            <div class="feed-tool-line">
+              <span>${escHtml(d.tool_name || "")}</span>
+              <span class="feed-agent">· ${escHtml(d.agent_id || "")} · <span class="muted">${escHtml(describeAgent(d.agent_id))}</span></span>
+            </div>
+            <div class="feed-explain">${escHtml(explainDecision(d))}</div>
+            <div class="feed-scores">${escHtml(scoreDisplay(d))}</div>
           </div>
-          <div class="expand-toggle">▼</div>
+          <div class="feed-right">
+            <div>${escHtml(relTime(d.decided_at))}</div>
+            <div class="expand-toggle">▼</div>
+          </div>
         </div>
-        <div class="feed-expanded" id="exp-${cidEsc}">
+        <div class="feed-detail">
           <div class="detail-grid">
-            <div class="detail-section">
-              <div class="detail-label">Customer request</div>
-              <div class="detail-value">${d.original_task ? escHtml(d.original_task) : '<span class="detail-muted">No task context provided</span>'}</div>
+            <div>
+              <div class="detail-kv-label">Customer request</div>
+              <div class="detail-kv-value">${d.original_task ? escHtml(d.original_task) : '<span class="muted">No task context provided</span>'}</div>
             </div>
-            <div class="detail-section">
-              <div class="detail-label">Agent was about to</div>
-              <div class="detail-value">${formatArgsHtml(d.args)}</div>
+            <div>
+              <div class="detail-kv-label">Agent was about to do</div>
+              <div class="kv-list">${formatArgsList(d.args)}</div>
             </div>
-            <div class="detail-section">
-              <div class="detail-label">Scores</div>
-              <div class="detail-value">${scores}</div>
+            <div>
+              <div class="detail-kv-label">All scores</div>
+              <div class="detail-kv-value">${escHtml(scoreDisplay(d)) || "<span class='muted'>No scores</span>"}</div>
+              ${d.risk_reason ? `<div class="tiny muted mt-12">Risk: ${escHtml(d.risk_reason)}</div>` : ""}
+              ${d.injection_reason ? `<div class="tiny muted">Injection: ${escHtml(d.injection_reason)}</div>` : ""}
+              ${d.drift_reason ? `<div class="tiny muted">Drift: ${escHtml(d.drift_reason)}</div>` : ""}
+              ${d.loop_reason ? `<div class="tiny muted">Loop: ${escHtml(d.loop_reason)}</div>` : ""}
+              ${d.anomaly_reason ? `<div class="tiny muted">Anomaly: ${escHtml(d.anomaly_reason)}</div>` : ""}
             </div>
-            <div class="detail-section">
-              <div class="detail-label">Blast radius</div>
-              <div class="detail-value">${blastFullHtml(d.blast_radius)}</div>
-            </div>
-            <div class="detail-section detail-footer">
-              <div class="detail-meta-item">
-                <span>Policy:</span>
-                ${d.policy_matched ? `<code>${escHtml(d.policy_matched)}</code>` : '<span class="detail-muted">None matched</span>'}
-              </div>
-              <div class="detail-meta-item">
-                <span>Decision in:</span>
-                <code>${d.latency_ms ? Math.round(d.latency_ms) + 'ms' : '—'}</code>
-              </div>
-              <div class="detail-meta-item">
-                <span>ID:</span>
-                <code>${cidEsc}</code>
-                <button class="copy-btn" id="${cpBtnId}"
-                  onclick="copyToClipboard('${cidEsc}','${cpBtnId}');event.stopPropagation()">📋</button>
-              </div>
+            <div>
+              <div class="detail-kv-label">Blast radius</div>
+              <div class="kv-list">${br ? `
+                <div><span class="k">Amount:</span><span class="v">${escHtml(br.financial_impact || "—")}</span></div>
+                <div><span class="k">Reversible:</span><span class="v">${escHtml(br.reversibility || "—")}</span></div>
+                <div><span class="k">Severity:</span><span class="v">${escHtml(br.severity || "—")}</span></div>
+                ${br.regulatory_flags && br.regulatory_flags.length ? `<div><span class="k">Regulations:</span><span class="v">${escHtml(br.regulatory_flags.join(" · "))}</span></div>` : ""}
+              ` : '<span class="muted">No blast radius computed</span>'}</div>
             </div>
           </div>
-        </div>
-      </div>`;
-  }
-
-  // ── Escalation inbox item HTML ────────────────────────────────────────────
-  function inboxItemHtml(e) {
-    const id      = e.id || '';
-    const idEsc   = escHtml(id);
-    const callId  = e.call_id || '';
-    const blast   = blastOneliner(e.blast_radius);
-    const injScore = e.injection_score || 0;
-
-    const cpBtnId = `esc-cp-${idEsc}`;
-
-    const detailScores = `
-      ${e.risk_score    != null ? `<div class="score-detail"><span class="score-badge risk">Risk ${e.risk_score}/100</span>${e.risk_reason ? ` — ${escHtml(e.risk_reason)}` : ''}</div>` : ''}
-      ${injScore > 0 ? `<div class="score-detail"><span class="score-badge inj">Injection ${injScore}/100</span>${e.injection_reason ? ` — ${escHtml(e.injection_reason)}` : ''}</div>` : ''}
-      ${e.anomaly_score != null && e.anomaly_score > 0 ? `<div class="score-detail"><span class="score-badge anomaly">Anomaly ${e.anomaly_score}/100</span>${e.anomaly_reason ? ` — ${escHtml(e.anomaly_reason)}` : ''}</div>` : ''}
-      ${e.risk_score == null && injScore === 0 ? '<span class="detail-muted">No scores available</span>' : ''}
-    `;
-
-    return `
-      <div class="inbox-item" id="esc-${idEsc}">
-        <div class="inbox-header-row" onclick="toggleEscalation('${idEsc}')">
-          <div class="inbox-header-left">
-            <span class="pill escalated">escalated</span>
-            <span class="inbox-tool">${escHtml(e.tool_name || '')}</span>
-          </div>
-          <div class="inbox-header-right">
-            <span class="inbox-risk-badge">Risk ${e.risk_score != null ? e.risk_score : '—'}/100</span>
-            <span class="esc-toggle" id="esc-toggle-${idEsc}">▼</span>
+          <div class="detail-foot">
+            <div>Policy: <code>${d.policy_matched ? escHtml(d.policy_matched) : "—"}</code></div>
+            <div>Decision in: <code>${d.latency_ms ? Math.round(d.latency_ms) + "ms" : "—"}</code></div>
+            <div>ID: <code>${escHtml(cid)}</code> <button class="copy-btn" onclick="copyId('${escHtml(cid)}', event)">Copy</button></div>
           </div>
         </div>
-        <div class="inbox-meta">
-          ${escHtml(e.agent_id || '')} · <span data-ts="${escHtml(e.created_at || '')}">${relativeTime(e.created_at)}</span>
-        </div>
-        ${blast ? `<div class="inbox-blast">${escHtml(blast)}</div>` : ''}
-        ${injScore > 0 ? `<div class="inbox-inj-warn">⚠ Injection: ${injScore}/100${e.attack_type ? ` [${escHtml(e.attack_type)}]` : ''}</div>` : ''}
-
-        <div class="inbox-expanded" id="esc-exp-${idEsc}">
-          <div class="esc-detail-grid">
-            <div class="esc-section">
-              <div class="detail-label">Customer request</div>
-              <div class="detail-value">${e.original_task ? escHtml(e.original_task) : '<span class="detail-muted">No task context provided</span>'}</div>
-            </div>
-            <div class="esc-section">
-              <div class="detail-label">Agent was about to</div>
-              <div class="detail-value">${formatArgsHtml(e.args)}</div>
-            </div>
-            <div class="esc-section">
-              <div class="detail-label">Scores</div>
-              <div class="detail-value">${detailScores}</div>
-            </div>
-            <div class="esc-section">
-              <div class="detail-label">Blast radius</div>
-              <div class="detail-value">${blastFullHtml(e.blast_radius)}</div>
-            </div>
-            <div class="esc-section">
-              <div class="detail-label">Policy</div>
-              <div class="detail-value">${e.policy_matched ? escHtml(e.policy_matched) : '<span class="detail-muted">No policy matched</span>'}</div>
-            </div>
-            <div class="detail-section detail-footer" style="border-top:1px solid var(--border);padding-top:8px">
-              <div class="detail-meta-item">
-                <span>Decision ID:</span>
-                <code>${escHtml(callId)}</code>
-                <button class="copy-btn" id="${cpBtnId}"
-                  onclick="copyToClipboard('${escHtml(callId)}','${cpBtnId}')">📋</button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="inbox-actions" id="actions-${idEsc}">
-          <button class="btn btn-approve" onclick="startConfirm('${idEsc}','approve')">Approve</button>
-          <button class="btn btn-reject"  onclick="startConfirm('${idEsc}','reject')">Reject</button>
-        </div>
-        <div id="confirm-${idEsc}"></div>
-      </div>`;
-  }
-
-  // ── Toggle feed row ───────────────────────────────────────────────────────
-  function toggleFeedRow(callId) {
-    const rowEl = document.getElementById(`row-${callId}`);
-    const expEl = document.getElementById(`exp-${callId}`);
-    if (!expEl) return;
-    if (expandedRows.has(callId)) {
-      expandedRows.delete(callId);
-      expEl.classList.remove('open');
-      if (rowEl) rowEl.classList.remove('expanded');
-    } else {
-      expandedRows.add(callId);
-      expEl.classList.add('open');
-      if (rowEl) rowEl.classList.add('expanded');
-    }
-  }
-
-  // ── Toggle escalation ─────────────────────────────────────────────────────
-  function toggleEscalation(id) {
-    const expEl    = document.getElementById(`esc-exp-${id}`);
-    const toggleEl = document.getElementById(`esc-toggle-${id}`);
-    if (!expEl) return;
-    if (expandedEscalations.has(id)) {
-      expandedEscalations.delete(id);
-      expEl.classList.remove('open');
-      if (toggleEl) toggleEl.style.transform = '';
-    } else {
-      expandedEscalations.add(id);
-      expEl.classList.add('open');
-      if (toggleEl) toggleEl.style.transform = 'rotate(180deg)';
-    }
-  }
-
-  // ── Confirm flow ──────────────────────────────────────────────────────────
-  function startConfirm(id, action) {
-    activeConfirms.add(id);
-    const actionsEl = document.getElementById(`actions-${id}`);
-    const confirmEl = document.getElementById(`confirm-${id}`);
-    if (actionsEl) actionsEl.style.display = 'none';
-    const color = action === 'approve' ? 'var(--allowed)' : 'var(--blocked)';
-    const label = action === 'approve' ? 'Approving' : 'Rejecting';
-    if (confirmEl) confirmEl.innerHTML = `
-      <div class="confirm-wrap">
-        <div class="confirm-panel">
-          <div class="confirm-label" style="color:${color}">${label} — add a note (optional):</div>
-          <input class="confirm-input" id="note-${escHtml(id)}" type="text" placeholder="Reason…">
-          <div class="confirm-btns">
-            <button class="btn-confirm" onclick="confirmEscalation('${escHtml(id)}','${action}')">Confirm</button>
-            <button class="btn-cancel"  onclick="cancelConfirm('${escHtml(id)}')">Cancel</button>
-          </div>
-        </div>
-      </div>`;
-  }
-
-  function cancelConfirm(id) {
-    activeConfirms.delete(id);
-    const actionsEl = document.getElementById(`actions-${id}`);
-    const confirmEl = document.getElementById(`confirm-${id}`);
-    if (actionsEl) actionsEl.style.display = '';
-    if (confirmEl) confirmEl.innerHTML = '';
-  }
-
-  async function confirmEscalation(id, action) {
-    const noteEl = document.getElementById(`note-${id}`);
-    const note   = noteEl ? noteEl.value.trim() : '';
-    const item   = document.getElementById(`esc-${id}`);
-    if (!item) return;
-    item.querySelectorAll('button').forEach(b => b.disabled = true);
-    try {
-      const r = await fetch(`${BASE}/escalations/${encodeURIComponent(id)}/${action}`, {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({reason: note || `Dashboard ${action}`}),
-      });
-      if (!r.ok) throw new Error(await r.text());
-      item.style.transition = 'opacity 0.4s';
-      item.style.opacity = '0';
-      setTimeout(() => {
-        item.remove();
-        activeConfirms.delete(id);
-        expandedEscalations.delete(id);
-        const list = document.getElementById('inbox-list');
-        if (list && list.querySelectorAll('.inbox-item').length === 0)
-          list.innerHTML = '<div class="empty-state-esc"><span class="empty-check">✓</span> No pending escalations</div>';
-        const badge = document.getElementById('inbox-count');
-        if (badge) badge.textContent = Math.max(0, parseInt(badge.textContent || '0') - 1);
-      }, 400);
-      showToast('Decision recorded');
-    } catch (err) {
-      item.querySelectorAll('button').forEach(b => b.disabled = false);
-      showToast(`Failed: ${err.message}`, true);
-    }
-  }
-
-  // ── Filters ───────────────────────────────────────────────────────────────
-  function getFilteredDecisions() {
-    return feedDecisions.filter(d => {
-      if (filterOutcome) {
-        if (filterOutcome === 'escalated') {
-          if (!['escalated','escalation_approved','escalation_rejected'].includes(d.outcome))
-            return false;
-        } else if (d.outcome !== filterOutcome) {
-          return false;
-        }
-      }
-      if (filterAttack && d.attack_type !== filterAttack) return false;
-      if (filterTool   && !(d.tool_name || '').toLowerCase().includes(filterTool.toLowerCase()))
-        return false;
-      return true;
-    });
-  }
-
-  function onOutcomeFilter() {
-    filterOutcome = document.getElementById('filter-outcome').value;
-    // Hide attack filter when outcome is 'allowed' or 'escalated'
-    const showAttack = filterOutcome === '' || filterOutcome === 'blocked';
-    const attackEl = document.getElementById('filter-attack');
-    attackEl.style.display = showAttack ? '' : 'none';
-    if (!showAttack) { filterAttack = ''; attackEl.value = ''; }
-    updateFilterClear();
-    renderFeed();
-  }
-
-  function onAttackFilter() {
-    filterAttack = document.getElementById('filter-attack').value;
-    updateFilterClear();
-    renderFeed();
-  }
-
-  function onToolFilter() {
-    filterTool = document.getElementById('filter-tool').value;
-    updateFilterClear();
-    renderFeed();
-  }
-
-  function updateFilterClear() {
-    const active = filterOutcome || filterAttack || filterTool;
-    document.getElementById('filter-clear').style.display = active ? '' : 'none';
-  }
-
-  function clearFilters() {
-    filterOutcome = '';
-    filterAttack  = '';
-    filterTool    = '';
-    document.getElementById('filter-outcome').value = '';
-    document.getElementById('filter-attack').value  = '';
-    document.getElementById('filter-tool').value    = '';
-    document.getElementById('filter-attack').style.display = '';
-    document.getElementById('filter-clear').style.display  = 'none';
-    renderFeed();
-  }
-
-  // ── Render feed ───────────────────────────────────────────────────────────
-  function renderFeed() {
-    const list     = document.getElementById('feed-list');
-    const filtered = getFilteredDecisions();
-    const countEl  = document.getElementById('filter-count');
-
-    if (countEl) {
-      if (feedDecisions.length === 0) {
-        countEl.textContent = '';
-      } else if (filtered.length === feedDecisions.length) {
-        countEl.textContent = `Showing ${feedDecisions.length} decisions`;
-      } else {
-        countEl.textContent = `Showing ${filtered.length} of ${feedDecisions.length} decisions`;
-      }
-    }
-
-    if (filtered.length === 0) {
-      if (feedDecisions.length === 0) {
-        list.innerHTML = `
-          <div class="empty-state">
-            <div>No decisions yet</div>
-            <div class="empty-sub">Run the agent and type a scenario to see decisions appear here</div>
-          </div>`;
-      } else {
-        list.innerHTML = `
-          <div class="empty-state">
-            <div>No decisions match these filters</div>
-            <div class="empty-sub">
-              <button class="empty-clear-link" onclick="clearFilters()">Clear filters</button>
-            </div>
-          </div>`;
-      }
-      document.getElementById('feed-count').textContent = '0';
-      return;
-    }
-
-    list.innerHTML = filtered.map(d => feedRowHtml(d)).join('');
-    document.getElementById('feed-count').textContent = filtered.length;
-
-    // Re-apply expanded states
-    expandedRows.forEach(cid => {
-      const expEl = document.getElementById(`exp-${cid}`);
-      const rowEl = document.getElementById(`row-${cid}`);
-      if (expEl) expEl.classList.add('open');
-      if (rowEl) rowEl.classList.add('expanded');
-    });
-  }
-
-  function prependDecision(d) {
-    feedDecisions.unshift(d);
-    if (feedDecisions.length > MAX_FEED) feedDecisions = feedDecisions.slice(0, MAX_FEED);
-    _lastNewCallId = d.call_id;
-    renderFeed();
-    _lastNewCallId = null;
-  }
-
-  // ── Render escalation inbox ────────────────────────────────────────────────
-  function renderInbox(escalations) {
-    // Don't disrupt an in-progress confirm
-    if (activeConfirms.size > 0) return;
-
-    const list = document.getElementById('inbox-list');
-    document.getElementById('inbox-count').textContent = escalations.length;
-
-    if (escalations.length === 0) {
-      list.innerHTML = '<div class="empty-state-esc"><span class="empty-check">✓</span> No pending escalations</div>';
-      return;
-    }
-
-    list.innerHTML = escalations.map(e => inboxItemHtml(e)).join('');
-
-    // Re-apply expanded states
-    expandedEscalations.forEach(id => {
-      const expEl    = document.getElementById(`esc-exp-${id}`);
-      const toggleEl = document.getElementById(`esc-toggle-${id}`);
-      if (expEl) expEl.classList.add('open');
-      if (toggleEl) toggleEl.style.transform = 'rotate(180deg)';
-    });
-  }
-
-  // ── Render flagged sessions ────────────────────────────────────────────────
-  function renderFlaggedSessions(decisions) {
-    const flagged = decisions
-      .filter(d => d.anomaly_score && d.anomaly_score > 30)
-      .reduce((acc, d) => {
-        const key = d.agent_id;
-        if (!acc[key] || acc[key].anomaly_score < d.anomaly_score) acc[key] = d;
-        return acc;
-      }, {});
-
-    const items  = Object.values(flagged).sort((a, b) => b.anomaly_score - a.anomaly_score);
-    const panel  = document.getElementById('sessions-panel');
-    const list   = document.getElementById('sessions-list');
-
-    if (items.length === 0) { panel.style.display = 'none'; return; }
-
-    panel.style.display = '';
-    document.getElementById('sessions-count').textContent = items.length;
-    list.innerHTML = items.map(d => `
-      <div class="session-item">
-        <div class="session-score">${d.anomaly_score}</div>
-        <div class="session-body">
-          <div class="session-agent">${escHtml(d.agent_id)}</div>
-          <div class="session-reason">${escHtml(d.anomaly_reason || 'Anomalous behavior detected')}</div>
-        </div>
-        <div class="session-time" data-ts="${escHtml(d.decided_at || '')}">${relativeTime(d.decided_at)}</div>
-      </div>`).join('');
-  }
-
-  // ── Agent breakdown ────────────────────────────────────────────────────────
-  let breakdownOpen = false;
-
-  function toggleBreakdown() {
-    breakdownOpen = !breakdownOpen;
-    const section = document.getElementById('breakdown-section');
-    if (breakdownOpen) section.classList.add('open');
-    else section.classList.remove('open');
-  }
-
-  function renderAgentBreakdown(byAgentOutcomes) {
-    const body = document.getElementById('breakdown-body');
-    const countEl = document.getElementById('breakdown-count');
-
-    if (!byAgentOutcomes || Object.keys(byAgentOutcomes).length === 0) {
-      countEl.textContent = '0';
-      body.innerHTML = '<div class="empty-state" style="padding:20px">No agent data yet — run the demo to populate</div>';
-      return;
-    }
-
-    const agents = Object.entries(byAgentOutcomes)
-      .map(([id, data]) => ({id, ...data}))
-      .sort((a, b) => (b.total || 0) - (a.total || 0));
-
-    countEl.textContent = agents.length;
-
-    const rows = agents.map(a => {
-      const total    = a.total || 0;
-      const allowed  = a.allowed || 0;
-      const blocked  = a.blocked || 0;
-      const escalated = (a.escalated || 0) + (a.escalation_approved || 0) + (a.escalation_rejected || 0);
-      const rate     = total ? Math.round(blocked / total * 100) : 0;
-      return `
-        <div class="at-row">
-          <div class="at-cell agent-id">${escHtml(a.id)}</div>
-          <div class="at-cell">${total.toLocaleString()}</div>
-          <div class="at-cell at-allowed">${allowed.toLocaleString()}</div>
-          <div class="at-cell at-blocked">${blocked.toLocaleString()}</div>
-          <div class="at-cell at-esc">${escalated.toLocaleString()}</div>
-          <div class="at-cell at-rate">${rate}%</div>
-        </div>`;
-    }).join('');
-
-    body.innerHTML = `
-      <div class="agent-table">
-        <div class="at-header">
-          <div class="at-cell">Agent ID</div>
-          <div class="at-cell">Total</div>
-          <div class="at-cell">Allowed</div>
-          <div class="at-cell">Blocked</div>
-          <div class="at-cell">Escalated</div>
-          <div class="at-cell">Block Rate</div>
-        </div>
-        ${rows}
-      </div>`;
-  }
-
-  // ── Status ─────────────────────────────────────────────────────────────────
-  function setStatus(online) {
-    const dot  = document.getElementById('status-dot');
-    const text = document.getElementById('status-text');
-    dot.className  = online ? 'dot green pulse' : 'dot red';
-    text.textContent = online ? 'Running' : 'Disconnected';
-  }
-
-  function setWsStatus(connected) {
-    const dot   = document.getElementById('ws-dot');
-    const label = document.getElementById('ws-label');
-    dot.className    = connected ? 'dot green' : 'dot red';
-    label.textContent = connected ? 'Live' : 'Reconnecting…';
-  }
-
-  // ── Stats polling ─────────────────────────────────────────────────────────
-  async function loadStats() {
-    try {
-      const r = await fetch(`${BASE}/dashboard/stats`);
-      if (!r.ok) throw new Error(r.status);
-      const data = await r.json();
-
-      document.getElementById('card-total').textContent     = data.total_actions_today;
-      const intervention = (data.block_rate || 0) + (data.escalation_rate || 0);
-      document.getElementById('card-block').textContent     = `${intervention.toFixed(1)}%`;
-      document.getElementById('card-injection').textContent = data.reliability_events_today != null ? data.reliability_events_today : data.injection_attempts_today;
-
-      // Agent Health Score card
-      const healthCard = document.querySelector('.card.health');
-      const healthVal = document.getElementById('card-health');
-      const healthSub = document.getElementById('card-health-sub');
-      const score = data.avg_reliability_score_today;
-      if (score == null) {
-        healthVal.textContent = '—';
-        healthSub.textContent = 'awaiting first decision';
-        healthCard.className = 'card health';
-      } else {
-        healthVal.textContent = `${score}%`;
-        let label, klass;
-        if (score >= 90) { label = 'Healthy'; klass = ''; }
-        else if (score >= 70) { label = 'Caution'; klass = 'health-caution'; }
-        else if (score >= 40) { label = 'Degraded'; klass = 'health-degraded'; }
-        else { label = 'Critical'; klass = 'health-critical'; }
-        healthSub.textContent = label;
-        healthCard.className = `card health ${klass}`.trim();
-      }
-
-      document.getElementById('agent-count').textContent    =
-        `${data.active_agents} agent${data.active_agents !== 1 ? 's' : ''} monitored`;
-
-      renderInbox(data.pending_escalations || []);
-      renderFlaggedSessions(data.recent_decisions || []);
-      setStatus(true);
-    } catch {
-      setStatus(false);
-    }
-  }
-
-  // ── Usage polling ─────────────────────────────────────────────────────────
-  async function loadUsage() {
-    try {
-      const r = await fetch(`${BASE}/usage`);
-      if (!r.ok) return;
-      const data = await r.json();
-      renderAgentBreakdown(data.by_agent_outcomes || {});
-    } catch { /* silently ignore */ }
-  }
-
-  // ── System health bar ──────────────────────────────────────────────────────
-  async function loadSystemHealth() {
-    const bar    = document.getElementById('system-status-bar');
-    const text   = document.getElementById('system-status-text');
-    const detail = document.getElementById('system-status-detail');
-    try {
-      const [r, ra] = await Promise.all([
-        fetch(`${BASE}/health/detailed`),
-        fetch(`${BASE}/health/agents`).catch(() => null),
-      ]);
-      if (!r.ok) throw new Error(r.status);
-      const h = await r.json();
-      const ah = ra && ra.ok ? await ra.json() : null;
-
-      // If any agent is critical, override and show a red alert.
-      if (ah && ah.summary && ah.summary.critical > 0) {
-        const offender = (ah.agents.find(a => a.health_status === 'Critical') || {}).agent_id || 'unknown';
-        bar.className = 'system-status-bar error';
-        text.textContent = `⚠ Agent health alert: ${offender} critical`;
-        detail.textContent = `${ah.summary.total_agents} agents · ${ah.summary.healthy} healthy · ${ah.summary.degraded} degraded · ${ah.summary.critical} critical`;
-        return;
-      }
-
-      bar.className = `system-status-bar ${h.status}`;
-      const agentSummary = ah && ah.summary
-        ? `${ah.summary.total_agents} agents · ${ah.summary.healthy} healthy · ${ah.summary.degraded + ah.summary.caution} degraded`
-        : '';
-      if (h.status === 'ok') {
-        const note = h.components.compliance_mode ? ' — Compliance mode (no LLM)' : '';
-        text.textContent = `All systems operational${note}`;
-        detail.textContent = agentSummary || (h.failed_open_today > 0 ? `${h.failed_open_today} fail-open today` : '');
-      } else if (h.status === 'degraded') {
-        text.textContent = `LLM API ${h.components.llm_api} — using heuristics`;
-        detail.textContent = `${h.decisions_today} decisions today`;
-      } else {
-        text.textContent = 'Database error — decisions may not be logged';
-        detail.textContent = `DB: ${h.components.database}`;
-      }
-    } catch {
-      bar.className = 'system-status-bar error';
-      text.textContent = 'AgentGate unreachable';
-      detail.textContent = '';
-    }
-  }
-
-  // ── WebSocket ──────────────────────────────────────────────────────────────
-  function connectWs() {
-    ws = new WebSocket(`${WS_BASE}/ws/feed`);
-    ws.onopen = () => setWsStatus(true);
-    ws.onmessage = (evt) => {
-      try {
-        const msg = JSON.parse(evt.data);
-        if (msg.type === 'initial') {
-          feedDecisions = msg.decisions || [];
-          renderFeed();
-          renderFlaggedSessions(feedDecisions);
-        } else if (msg.type === 'decision') {
-          prependDecision(msg.decision);
-          renderFlaggedSessions(feedDecisions);
-        }
-      } catch { /* ignore malformed */ }
-    };
-    ws.onclose = () => { setWsStatus(false); setTimeout(connectWs, 3000); };
-    ws.onerror = () => ws.close();
-  }
-
-  // ── Toast ──────────────────────────────────────────────────────────────────
-  function showToast(msg, isError = false) {
-    const container = document.getElementById('toast-container');
-    const toast = document.createElement('div');
-    toast.className = `toast${isError ? ' toast-error' : ''}`;
-    toast.textContent = msg;
-    container.appendChild(toast);
-    setTimeout(() => toast.classList.add('toast-visible'), 10);
-    setTimeout(() => {
-      toast.classList.remove('toast-visible');
-      setTimeout(() => toast.remove(), 250);
-    }, 2500);
-  }
-
-  // ── Copy to clipboard ──────────────────────────────────────────────────────
-  async function copyToClipboard(text, btnId) {
-    try {
-      await navigator.clipboard.writeText(text);
-    } catch {
-      const ta = document.createElement('textarea');
-      ta.value = text;
-      ta.style.position = 'fixed';
-      ta.style.opacity = '0';
-      document.body.appendChild(ta);
-      ta.select();
-      document.execCommand('copy');
-      document.body.removeChild(ta);
-    }
-    const btn = document.getElementById(btnId);
-    if (btn) {
-      const orig = btn.textContent;
-      btn.textContent = '✓ Copied';
-      setTimeout(() => { btn.textContent = orig; }, 2000);
-    }
-  }
-
-  // ── Tab Switching ──────────────────────────────────────────────────────────
-  function switchTab(name, btn) {
-    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-    const panel = document.getElementById('tab-' + name);
-    if (panel) panel.classList.add('active');
-    if (btn) btn.classList.add('active');
-    if (name === 'learning') {
-      loadPatterns();
-      loadExamples();
-    }
-  }
-
-  // ── Learning Tab ───────────────────────────────────────────────────────────
-  async function loadPatterns() {
-    const body = document.getElementById('patterns-body');
-    const countBadge = document.getElementById('patterns-count');
-    body.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted)">Loading...</div>';
-    try {
-      const res = await fetch('/patterns');
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      const data = await res.json();
-      countBadge.textContent = data.count;
-      if (!data.patterns || data.patterns.length === 0) {
-        body.innerHTML = '<div class="empty-state" style="padding:20px;text-align:center;color:var(--muted)">No patterns detected yet — run the learning demo to populate data.</div>';
-        return;
-      }
-      body.innerHTML = data.patterns.map(p => renderPatternCard(p)).join('');
-    } catch(e) {
-      body.innerHTML = `<div style="padding:20px;color:var(--blocked)">Error loading patterns: ${e.message}</div>`;
-    }
-  }
-
-  function renderPatternCard(p) {
-    const pct = Math.round(p.confidence * 100);
-    const autoLabel = p.auto_applicable ? 'Auto-applicable' : 'Manual review';
-    return `
-      <div class="pattern-card" id="pattern-${p.id}">
-        <div class="pattern-card-header">
-          <span class="pattern-type-badge pt-${p.pattern_type}">${p.pattern_type.replace(/_/g,' ')}</span>
-          <span class="impact-badge impact-${p.impact}">${p.impact} impact</span>
-          <span class="pattern-tool">${p.tool_name}</span>
-          <span style="font-size:11px;color:var(--muted);margin-left:auto">${autoLabel}</span>
-        </div>
-        <div class="pattern-desc">${escHtml(p.description)}</div>
-        <div class="pattern-suggestion">Suggestion: ${escHtml(p.suggestion)}</div>
-        <div class="confidence-bar-wrap">
-          <span class="confidence-label">Confidence</span>
-          <div class="confidence-bar"><div class="confidence-fill" style="width:${pct}%"></div></div>
-          <span class="confidence-pct">${pct}%</span>
-        </div>
-        ${p.auto_applicable ? `<button class="apply-btn" id="apply-btn-${p.id}" onclick="applyPattern(${JSON.stringify(p).replace(/"/g,'&quot;')})">Apply improvement</button>` : ''}
       </div>
     `;
-  }
+  }).join("");
+}
+function toggleFeedItem(rowEl) {
+  rowEl.parentElement.classList.toggle("open");
+}
+function copyId(id, ev) {
+  ev.stopPropagation();
+  navigator.clipboard.writeText(id).then(() => toast("Copied"));
+}
 
-  async function applyPattern(p) {
-    const btn = document.getElementById('apply-btn-' + p.id);
-    if (btn) { btn.disabled = true; btn.textContent = 'Applying...'; }
-    try {
-      const res = await fetch('/patterns/apply', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify(p),
-      });
-      const data = await res.json();
-      showToast(data.success ? 'Pattern applied: ' + data.description : 'Could not apply: ' + data.description, !data.success);
-      if (btn) { btn.textContent = data.success ? 'Applied' : 'Failed'; }
-    } catch(e) {
-      showToast('Error: ' + e.message, true);
-      if (btn) { btn.disabled = false; btn.textContent = 'Apply improvement'; }
+/* ─────────────────────────────────────────────────────────────────────────
+   Failure modes panel
+   ───────────────────────────────────────────────────────────────────────── */
+function renderFailureModes() {
+  const list = $("fm-list");
+  const decisions = allDecisions;
+  // Use the same precedence as the row-level badge so each decision counts in
+  // exactly one bucket — no double-count when policy_matched + injection both fire.
+  const buckets = {injection:0, policy:0, drift:0, loop:0, storm:0, excess:0, data:0, blast:0, anomaly:0};
+  for (const d of decisions) {
+    const fm = failureModeForDecision(d);
+    if (fm && buckets.hasOwnProperty(fm.key)) buckets[fm.key]++;
+    // High blast radius is independent: not a row-level badge, but worth surfacing.
+    const b = blastObj(d.blast_radius);
+    if (b && (b.severity === "critical" || b.severity === "high") && d.outcome !== "allowed") buckets.blast++;
+    if ((d.anomaly_score || 0) > 50 && (!fm || fm.key !== "drift")) buckets.anomaly++;
+  }
+  const modes = [
+    {name:"Prompt injection",   colorVar:"var(--fm-injection-text)", count: buckets.injection},
+    {name:"Policy violation",   colorVar:"var(--fm-policy-text)",    count: buckets.policy},
+    {name:"Goal drift",         colorVar:"var(--fm-drift-text)",     count: buckets.drift},
+    {name:"Retry storm",        colorVar:"var(--fm-loop-text)",      count: buckets.loop + buckets.storm},
+    {name:"Excessive agency",   colorVar:"var(--fm-excess-text)",    count: buckets.excess},
+    {name:"High blast radius",  colorVar:"var(--fm-blast-text)",     count: buckets.blast},
+    {name:"Session anomaly",    colorVar:"var(--fm-anomaly-text)",   count: buckets.anomaly},
+    {name:"Data exfiltration",  colorVar:"var(--fm-data-text)",      count: buckets.data},
+    {name:"Sequence loop",      colorVar:"var(--fm-loop-text)",      count: buckets.storm},
+    {name:"PII in output",      colorVar:"var(--fm-anomaly-text)",   count: 0},
+  ];
+  const max = Math.max(1, ...modes.map(m => m.count));
+  // present non-zero first by count desc, then zeros
+  const present = modes.filter(m => m.count > 0).sort((a,b) => b.count - a.count);
+  const absent  = modes.filter(m => m.count === 0);
+  const ordered = present.concat(absent);
+
+  list.innerHTML = ordered.map(m => {
+    const pct = m.count === 0 ? 0 : Math.max(8, Math.round((m.count / max) * 100));
+    return `
+      <div class="fm-row${m.count===0?" muted":""}">
+        <div class="name">${escHtml(m.name)}</div>
+        <div class="fm-bar-wrap">
+          ${m.count>0?`<div class="fm-bar" style="width:${pct}%;background:${m.colorVar};"></div>`:""}
+        </div>
+        <div class="count">${m.count}</div>
+      </div>
+    `;
+  }).join("");
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Escalations
+   ───────────────────────────────────────────────────────────────────────── */
+async function loadEscalations() {
+  // /dashboard/stats already enriches pending escalations with original_task,
+  // injection_score, blast_radius, etc. via a batched audit-log lookup.
+  const stats = await safeJson(`${BASE}/dashboard/stats`);
+  if (stats && Array.isArray(stats.pending_escalations)) {
+    pendingEscs = stats.pending_escalations;
+  }
+  // /escalations gives us the resolved bucket (decided_at is set).
+  const r = await safeJson(`${BASE}/escalations?limit=200`);
+  if (r) {
+    resolvedEscs = (r.escalations || [])
+      .filter(e => e.status !== "pending")
+      .slice(0, 10);
+  }
+  renderEscCompact();
+  if (activeTab === "escalations") renderEscFull();
+}
+
+function renderEscCompact() {
+  const wrap = $("esc-compact");
+  $("esc-count").textContent = `${pendingEscs.length} awaiting review`;
+  if (pendingEscs.length === 0) {
+    wrap.innerHTML = '<div class="empty" style="color:var(--color-text-success)">✓ No pending escalations</div>';
+    return;
+  }
+  wrap.innerHTML = pendingEscs.slice(0,5).map(e => renderEscCard(e, true)).join("");
+}
+
+function renderEscFull() {
+  const wrap = $("esc-full");
+  if (pendingEscs.length === 0) {
+    wrap.innerHTML = '<div class="empty" style="color:var(--color-text-success)">✓ No pending escalations</div>';
+  } else {
+    wrap.innerHTML = pendingEscs.map(e => renderEscCard(e, false)).join("");
+  }
+  const res = $("esc-resolved");
+  if (resolvedEscs.length === 0) {
+    res.innerHTML = '<div class="empty">No resolved escalations yet.</div>';
+  } else {
+    res.innerHTML = resolvedEscs.map(e => `
+      <div class="esc-card">
+        <div class="esc-head">
+          <div>
+            <span class="pill ${e.status === "approved" ? "allowed" : "blocked"}">${e.status}</span>
+            <span class="esc-tool" style="margin-left:8px">${escHtml(e.tool_name || "")}</span>
+            <span class="esc-meta"> · ${escHtml(e.agent_id || "")}</span>
+          </div>
+          <div class="esc-meta">${escHtml(relTime(e.decided_at || e.created_at))}</div>
+        </div>
+      </div>
+    `).join("");
+  }
+}
+
+function renderEscCard(e, compact) {
+  const id = e.id || "";
+  const args = e.args;  // string or null
+  const br = blastObj(e.blast_radius);
+  const taskHtml = e.original_task
+    ? escHtml(e.original_task)
+    : '<span class="muted">No task context available</span>';
+  const argList = args ? formatArgsList(args) : '<span class="muted tiny">No arguments captured</span>';
+  return `
+    <div class="esc-card" id="esc-${escHtml(id)}">
+      <div class="esc-head" onclick="toggleEsc('${escHtml(id)}')">
+        <div>
+          <span class="pill escalated">Escalated</span>
+          <span class="esc-tool" style="margin-left:8px">${escHtml(e.tool_name || "")}</span>
+          <div class="tiny muted" style="margin-top:2px">${escHtml(e.agent_id || "")} · ${escHtml(describeAgent(e.agent_id))}</div>
+        </div>
+        <div class="esc-meta">${escHtml(relTime(e.created_at))}</div>
+      </div>
+      <div class="detail-kv-label" style="margin-top:10px">What the customer asked for</div>
+      <div class="esc-task">${taskHtml}</div>
+
+      <div class="detail-kv-label" style="margin-top:12px">What the agent was about to do</div>
+      <div class="kv-list">${argList}</div>
+
+      ${(e.risk_score || e.injection_score || e.anomaly_score) ? `
+        <div class="detail-kv-label" style="margin-top:12px">Risk assessment</div>
+        <div class="tiny muted">
+          ${e.risk_score ? `Risk: ${e.risk_score}% — ${escHtml(e.risk_reason || "")}<br>` : ""}
+          ${e.injection_score ? `Injection: ${e.injection_score}% confident${e.attack_type ? " — "+escHtml(e.attack_type) : ""}<br>` : ""}
+          ${e.anomaly_score ? `Anomaly: ${e.anomaly_score}%<br>` : ""}
+        </div>
+      ` : ""}
+
+      ${br ? `
+        <div class="detail-kv-label" style="margin-top:12px">Financial impact</div>
+        <div class="kv-list">
+          <div><span class="k">Amount:</span><span class="v">${escHtml(br.financial_impact || "—")}</span></div>
+          <div><span class="k">Reversible:</span><span class="v">${escHtml(br.reversibility || "—")}</span></div>
+          <div><span class="k">Severity:</span><span class="v">${escHtml(br.severity || "—")}</span></div>
+          ${br.regulatory_flags && br.regulatory_flags.length ? `<div><span class="k">Regulations:</span><span class="v">${escHtml(br.regulatory_flags.join(" · "))}</span></div>` : ""}
+        </div>
+      ` : ""}
+
+      <div class="esc-actions">
+        <button class="btn primary" onclick="resolveEsc('${escHtml(id)}','approve')">Approve</button>
+        <button class="btn danger"  onclick="resolveEsc('${escHtml(id)}','reject')">Reject</button>
+        <input class="note-input" id="note-${escHtml(id)}" placeholder="Add a note for the audit log…" />
+      </div>
+    </div>
+  `;
+}
+function toggleEsc(id) { /* compact view is always expanded; placeholder for future */ }
+
+async function resolveEsc(id, action) {
+  const note = ($(`note-${id}`) || {value: ""}).value || "";
+  const r = await fetch(`${BASE}/escalations/${id}/${action}`, {
+    method: "POST",
+    headers: {...HEADERS, "Content-Type": "application/json"},
+    body: JSON.stringify({reason: note}),
+  });
+  if (r.ok) {
+    toast("Decision recorded");
+    const card = $(`esc-${id}`);
+    if (card) card.style.opacity = "0.4";
+    await loadEscalations();
+  } else {
+    toast("Failed to record decision", true);
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Agents tab
+   ───────────────────────────────────────────────────────────────────────── */
+function renderAgentCards() {
+  const wrap = $("agent-cards");
+  const list = Object.values(agentHealth);
+  if (list.length === 0) {
+    wrap.innerHTML = '<div class="empty card">No agent data yet.</div>';
+    return;
+  }
+  list.sort((a,b) => (a.health_score ?? 100) - (b.health_score ?? 100));
+  wrap.innerHTML = list.map(a => {
+    const decs = allDecisions.filter(d => d.agent_id === a.agent_id);
+    const total     = decs.length;
+    const allowed   = decs.filter(d => d.outcome === "allowed").length;
+    const blocked   = decs.filter(d => d.outcome === "blocked").length;
+    const escalated = decs.filter(d => (d.outcome||"").startsWith("escalat")).length;
+    const score = a.health_score;
+    let cls = "health-good";
+    if (score < 40) cls = "health-bad";
+    else if (score < 70) cls = "health-bad";
+    else if (score < 90) cls = "health-warn";
+    const issues = a.active_issues && a.active_issues.length ? a.active_issues.map(i => `
+      <div class="issue-row bad">
+        <div class="desc">${escHtml(i.description || i.type)}</div>
+        <div class="when">${escHtml(i.occurrences || 1)} event${(i.occurrences||1)===1?"":"s"} · first seen ${escHtml(relTime(i.first_seen))}</div>
+      </div>
+    `).join("") : '<div class="issue-row good"><div class="desc" style="color:var(--color-text-success)">✓ No active issues</div></div>';
+    const pct = (total ? n => Math.round((n/total)*100) : () => 0);
+    return `
+      <div class="agent-card card">
+        <div class="agent-head">
+          <div>
+            <div class="agent-name">${escHtml(a.agent_id)}</div>
+            <div class="agent-desc">${escHtml(describeAgent(a.agent_id))}</div>
+          </div>
+          <div style="text-align:right">
+            <span class="pill ${cls}" style="font-size:11px">${escHtml(a.health_status || "Unknown")}</span>
+            <div class="agent-score" style="margin-top:4px">${score!==null&&score!==undefined?score+"%":"—"}</div>
+          </div>
+        </div>
+        <div class="agent-grid">
+          <div>
+            <div class="detail-kv-label">Activity</div>
+            <div class="agent-metric"><span class="lbl">Today: </span><span class="val">${total} decisions</span></div>
+            <div class="agent-metric"><span class="lbl">Allowed: </span><span class="val">${allowed} (${pct(allowed)}%)</span></div>
+            <div class="agent-metric"><span class="lbl">Blocked: </span><span class="val">${blocked} (${pct(blocked)}%)</span></div>
+            <div class="agent-metric"><span class="lbl">Escalated: </span><span class="val">${escalated} (${pct(escalated)}%)</span></div>
+          </div>
+          <div>
+            <div class="detail-kv-label">Active issues</div>
+            ${issues}
+            <div style="margin-top:10px"><a href="#" onclick="filterFeedToAgent('${escHtml(a.agent_id)}');return false;" class="tiny" style="color:var(--color-text-info)">View decisions →</a></div>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+function filterFeedToAgent(id) {
+  switchTabById("overview");
+  $("f-tool").value = "";  // tool filter doesn't fit; we use tool name only — keep simple
+  $("f-outcome").value = "";
+  $("f-failure").value = "";
+  // Filter via tool name doesn't help; cheap solution: prepend agent description into search
+  // — but we lack an agent filter. So just switch tab and scroll.
+  document.querySelector(".feed-card").scrollIntoView({behavior:"smooth"});
+  toast(`Showing all decisions — agent: ${id}`);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Learning tab
+   ───────────────────────────────────────────────────────────────────────── */
+const PATTERN_LABELS = {
+  over_escalation:    "Over-escalation detected",
+  threshold_too_low:  "Threshold too conservative",
+  repeated_block:     "Repeated policy violation",
+  false_positive:     "Possible false positive",
+  prompt_improvement: "Agent needs clearer instructions",
+  policy_drift:       "Policy change made things worse",
+};
+async function loadLearning() {
+  const ps = await safeJson(`${BASE}/patterns`);
+  patterns = (ps && ps.patterns) || [];
+  const cs = await safeJson(`${BASE}/learning/changes`);
+  policyChanges = (cs && cs.changes) || [];
+  renderPatterns();
+  renderPolicyChanges();
+}
+function renderPatterns() {
+  const wrap = $("patterns-list");
+  if (!patterns.length) {
+    wrap.innerHTML = '<div class="empty card">No patterns detected yet — needs more decision history.</div>';
+    return;
+  }
+  wrap.innerHTML = patterns.map(p => {
+    const pct = Math.round((p.confidence || 0) * 100);
+    let confClass = "pattern-confidence-low", confLabel = `Building confidence (${pct}% — need more data)`;
+    if (pct >= 90)      { confClass = "pattern-confidence-good"; confLabel = `${pct}% confident — safe to apply`; }
+    else if (pct >= 70) { confClass = "pattern-confidence-mid";  confLabel = `${pct}% confident — moderate`; }
+    const label = PATTERN_LABELS[p.pattern_type] || p.pattern_type;
+    return `
+      <div class="pattern-card card">
+        <div class="pattern-head">
+          <div class="pattern-type">${escHtml(label)} <span class="muted tiny">· ${escHtml(p.tool_name || "")}</span></div>
+          <div class="${confClass} tiny">${escHtml(confLabel)}</div>
+        </div>
+        <div class="pattern-desc">${escHtml(p.description || "")}</div>
+        <div class="pattern-suggestion">${escHtml(p.suggestion || "")}</div>
+        <div class="esc-actions">
+          ${p.auto_applicable ? `<button class="btn primary" title="Apply this improvement to the live agent policy" onclick='applyPattern(${JSON.stringify(p).replace(/'/g, "&#39;")})'>Apply</button>` : `<span class="tiny muted">Manual review required</span>`}
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+function renderPolicyChanges() {
+  const body = $("changes-body");
+  if (!policyChanges.length) {
+    body.innerHTML = '<tr><td colspan="4" class="empty">No policy changes yet.</td></tr>';
+    return;
+  }
+  body.innerHTML = policyChanges.map(c => `
+    <tr>
+      <td class="tiny">${escHtml(relTime(c.applied_at))}</td>
+      <td>${escHtml(c.tool_name || "—")}</td>
+      <td class="tiny">${escHtml(c.action || "")}</td>
+      <td class="tiny muted">${escHtml(c.before_value || "—")} → ${escHtml(c.after_value || "—")}</td>
+    </tr>
+  `).join("");
+}
+async function applyPattern(p) {
+  const r = await fetch(`${BASE}/patterns/apply`, {
+    method: "POST",
+    headers: {...HEADERS, "Content-Type": "application/json"},
+    body: JSON.stringify(p),
+  });
+  if (r.ok) { toast("Pattern applied to live policy"); loadLearning(); }
+  else      { toast("Apply failed", true); }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Audit tab
+   ───────────────────────────────────────────────────────────────────────── */
+async function loadAudit() {
+  const agent = $("a-agent").value;
+  const outcome = $("a-outcome").value;
+  const params = new URLSearchParams();
+  if (agent) params.set("agent_id", agent);
+  if (outcome) params.set("outcome", outcome);
+  params.set("limit", "100");
+  const r = await safeJson(`${BASE}/audit?${params.toString()}`);
+  const entries = (r && r.entries) || [];
+  populateAgentSelect();
+  const fFail = $("a-failure").value;
+  const filtered = fFail ? entries.filter(d => {
+    const fm = failureModeForDecision(d);
+    return fm && fm.key === fFail;
+  }) : entries;
+  const body = $("audit-body");
+  if (!filtered.length) {
+    body.innerHTML = '<tr><td colspan="8" class="empty">No matching audit entries.</td></tr>';
+    return;
+  }
+  body.innerHTML = filtered.map(d => {
+    const fm = failureModeForDecision(d);
+    const br = blastObj(d.blast_radius);
+    const sev = br && br.severity && br.severity !== "low" ? br.severity : "—";
+    return `
+      <tr>
+        <td class="tiny" title="${escHtml(d.decided_at || "")}">${escHtml(relTime(d.decided_at))}</td>
+        <td>
+          <div>${escHtml(d.agent_id || "")}</div>
+          <div class="tiny muted">${escHtml(describeAgent(d.agent_id))}</div>
+        </td>
+        <td>${escHtml(d.tool_name || "")}</td>
+        <td><span class="pill ${escHtml(d.outcome || "allowed")}">${escHtml((d.outcome || "").replace(/_/g," "))}</span></td>
+        <td>${fm ? `<span class="fm-badge ${fm.cls}">${fm.label}</span>` : "—"}</td>
+        <td class="num">${d.reliability_score!==null&&d.reliability_score!==undefined?d.reliability_score+"%":"—"}</td>
+        <td class="tiny">${escHtml(sev)}</td>
+        <td class="tiny"><a href="#" onclick="event.preventDefault();copyId('${escHtml(d.call_id||"")}',event)">Copy id</a></td>
+      </tr>
+    `;
+  }).join("");
+}
+function populateAgentSelect() {
+  const sel = $("a-agent");
+  const have = new Set(Array.from(sel.options).map(o => o.value));
+  for (const id of Object.keys(agentHealth)) {
+    if (!have.has(id)) {
+      const opt = document.createElement("option");
+      opt.value = id; opt.textContent = id;
+      sel.appendChild(opt);
     }
   }
+}
+function exportCsv() {
+  window.location = `${BASE}/audit/export`;
+}
 
-  async function loadExamples() {
-    const body = document.getElementById('examples-body');
-    const countBadge = document.getElementById('examples-count');
-    try {
-      const res = await fetch('/learning/examples');
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      const data = await res.json();
-      countBadge.textContent = data.count;
-      if (!data.examples || data.examples.length === 0) {
-        body.innerHTML = '<div class="empty-state" style="padding:20px;text-align:center;color:var(--muted)">No approved decisions yet.</div>';
-        return;
-      }
-      body.innerHTML = `
-        <table class="examples-table">
-          <thead>
-            <tr>
-              <th>Task</th>
-              <th>Action</th>
-              <th>Outcome</th>
-              <th>Reason</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${data.examples.map(ex => `
-              <tr>
-                <td>${escHtml((ex.task || '').substring(0,80))}${(ex.task||'').length>80?'…':''}</td>
-                <td><code style="font-size:11px;color:var(--blue)">${escHtml(ex.action||'')}</code></td>
-                <td><span class="pill allowed">approved</span></td>
-                <td style="color:var(--muted)">${escHtml((ex.reason||'').substring(0,60))}</td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
-      `;
-    } catch(e) {
-      body.innerHTML = `<div style="padding:20px;color:var(--blocked)">Error loading examples: ${e.message}</div>`;
+/* ─────────────────────────────────────────────────────────────────────────
+   Tab switching
+   ───────────────────────────────────────────────────────────────────────── */
+function switchTab(tab, btn) {
+  switchTabById(tab);
+  document.querySelectorAll(".tab").forEach(b => b.classList.toggle("active", b === btn));
+}
+function switchTabById(tab) {
+  activeTab = tab;
+  document.querySelectorAll(".tab-pane").forEach(p =>
+    p.classList.toggle("active", p.id === `tab-${tab}`));
+  document.querySelectorAll(".tab").forEach(b =>
+    b.classList.toggle("active", b.dataset.tab === tab));
+  if (tab === "agents")      renderAgentCards();
+  if (tab === "escalations") renderEscFull();
+  if (tab === "learning")    loadLearning();
+  if (tab === "audit")       loadAudit();
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   WebSocket
+   ───────────────────────────────────────────────────────────────────────── */
+let ws = null;
+function setWs(connected) {
+  $("ws-dot").className = "ws-dot " + (connected ? "live" : "dead");
+  $("ws-text").textContent = connected ? "Live" : "Reconnecting…";
+}
+function connectWs() {
+  try { ws = new WebSocket(`${WS_BASE}/ws/feed`); } catch { return setTimeout(connectWs, 3000); }
+  ws.onopen = () => setWs(true);
+  ws.onmessage = (ev) => {
+    let msg; try { msg = JSON.parse(ev.data); } catch { return; }
+    if (msg.type === "initial") {
+      allDecisions = (msg.decisions || []).slice(0, 200);
+      renderEverything();
+    } else if (msg.type === "decision") {
+      allDecisions.unshift(msg.decision);
+      if (allDecisions.length > 200) allDecisions.pop();
+      renderEverything();
     }
-  }
+  };
+  ws.onclose = () => { setWs(false); setTimeout(connectWs, 3000); };
+  ws.onerror = () => { try { ws.close(); } catch {} };
+}
+function renderEverything() {
+  loadStats();   // recomputes events count from feed
+  renderFeed();
+  renderAgentTable();
+  renderFailureModes();
+  if (activeTab === "agents") renderAgentCards();
+}
 
-  function escHtml(s) {
-    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-  }
-
-  // ── Boot ───────────────────────────────────────────────────────────────────
-  loadStats();
-  loadSystemHealth();
-  loadUsage();
+/* ─────────────────────────────────────────────────────────────────────────
+   Boot
+   ───────────────────────────────────────────────────────────────────────── */
+async function boot() {
+  await Promise.all([loadStatusBar(), loadAgentHealth(), loadEscalations()]);
+  await loadStats();
   connectWs();
-
+  setInterval(loadStatusBar,    10000);
+  setInterval(loadAgentHealth,  10000);
+  setInterval(loadEscalations,  15000);
   setInterval(() => {
-    loadStats();
-    loadSystemHealth();
-    refreshTimestamps();
-  }, 5000);
-
-  setInterval(loadUsage, 30000);
+    // Refresh relative-time labels in place
+    document.querySelectorAll("[data-cid]").forEach(el => {
+      // no-op; renderFeed re-runs on each new decision
+    });
+  }, 30000);
+}
+boot();
 </script>
+
 </body>
 </html>

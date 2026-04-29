@@ -7,7 +7,9 @@ from pathlib import Path
 from typing import Optional
 
 from dotenv import load_dotenv
-load_dotenv(override=True)
+# override=False so explicit env vars (e.g. set on the uvicorn command line or
+# by pytest's monkeypatch.setenv) win over .env defaults.
+load_dotenv(override=False)
 
 from fastapi import FastAPI, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, JSONResponse, Response
