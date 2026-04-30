@@ -555,6 +555,13 @@ class AuditLogger:
             if aid in agents:
                 agents[aid]["active_issues"] = list(kinds.values())
 
+        # If no active issues are surfaced for this agent, "Caution" is misleading —
+        # the score band fired on noise that already aged out of the recent window.
+        # Promote to Healthy so the pill matches the "Operating normally" detail.
+        for a in agents.values():
+            if a["health_status"] == "Caution" and not a["active_issues"]:
+                a["health_status"] = "Healthy"
+
         return sorted(agents.values(), key=lambda a: a["health_score"])
 
     async def get_tool_metrics(
