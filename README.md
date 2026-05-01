@@ -223,39 +223,6 @@ User Request
 
 ---
 
-## Learning Loop
-
-The learning loop closes the feedback cycle between human decisions and agent behavior — no retraining required.
-
-```bash
-# Requires OPENAI_API_KEY + ANTHROPIC_API_KEY
-poetry run python examples/learning_loop/learning_demo.py
-```
-
-Expected output:
-
-```
-Metric             Week 1    Week 2    Week 3    Total Delta
------------------  --------  --------  --------  -----------
-Escalation rate    20.0%     20.0%     10.0%     -50%
-Human reviews/wk   2         2         1         -50%
-Allowed rate       60.0%     60.0%     70.0%     +10pp
-Injections caught  100%      100%      100%      OK
-Policy blocks      20%       20%       20%       —
-
-Improvements applied:  1
-Examples injected:     2
-
-Your agent handled the same workload with 50% less human oversight in 3 weeks.
-```
-
-The demo runs a LangGraph payment support agent through 3 simulated weeks:
-- **Week 1** — baseline: policy escalates all refunds ≥ $100
-- **Between weeks** — PatternAnalyzer finds over-escalation on `issue_refund`; LearningEngine raises threshold to $1,500 (p90 of approved amounts); 2 few-shot examples injected into system prompt
-- **Week 3** — $1,450 refund now auto-approved; human review burden cut in half; injection detection unchanged at 100%
-
----
-
 ## Dashboard
 
 Single-file SPA at `http://localhost:8000` — no build step.
@@ -313,21 +280,29 @@ ESCALATION_EMAIL=oncall@example.com
 
 ---
 
-## Demos
+## Demo — FinMate
+
+A single end-to-end example: an enterprise finance agent (Claude Sonnet) protected by AgentGate. Shows every detector — policy, injection, drift, retry storm, sequence loop, excessive agency, blast radius, anomaly, data exfiltration, PII — against realistic scenarios.
 
 ```bash
-# Learning loop — 3-week LangGraph agent improvement simulation
-poetry run python examples/learning_loop/learning_demo.py
+# Tab 1 — start the dashboard
+AGENTGATE_DB_PATH=./examples/finmate/finmate_agentgate.db \
+AGENTGATE_POLICY_PATH=./examples/finmate/policy.yaml \
+AGENTGATE_ESCALATION_TIMEOUT_SEC=300 \
+.venv/bin/python -m uvicorn agentgate.api.main:app --host 0.0.0.0 --port 8000
 
-# Interactive fintech payment agent
-poetry run python examples/fintech_live_agent/agent.py
+# Tab 2 — seed all 10 failure modes (one shot)
+AGENTGATE_DB_PATH=./examples/finmate/finmate_agentgate.db \
+AGENTGATE_POLICY_PATH=./examples/finmate/policy.yaml \
+.venv/bin/python examples/finmate/seed_all_failures.py
 
-# Basic demo — 6 scenarios across allow/escalate/block
-poetry run python examples/demo_agent.py
-
-# Injection detection — 4 attack types
-poetry run python examples/prompt_injection_demo.py
+# Tab 2 — interactive agent
+.venv/bin/python examples/finmate/agent.py
 ```
+
+Open <http://localhost:8000>. Type `scenarios` once FinMate starts to see the demo prompt menu.
+
+Full setup notes and demo script: [examples/finmate/README.md](examples/finmate/README.md).
 
 ---
 

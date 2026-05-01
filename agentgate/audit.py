@@ -232,6 +232,16 @@ class AuditLogger:
             ) as cur:
                 injections: int = (await cur.fetchone())[0]  # type: ignore[index]
 
+            # PII findings today (rows in pii_scan_log marked unsafe).
+            try:
+                async with db.execute(
+                    "SELECT COUNT(*) FROM pii_scan_log WHERE scanned_at >= ? AND safe = 0",
+                    (today,),
+                ) as cur:
+                    pii_findings: int = (await cur.fetchone())[0]  # type: ignore[index]
+            except Exception:
+                pii_findings = 0
+
             # Reliability events: any non-trivial component score elevated today.
             # Captures injection + anomaly (covers drift) + (future) loop signals.
             async with db.execute(
@@ -265,6 +275,7 @@ class AuditLogger:
             "block_rate": round(blocked / total * 100, 1) if total else 0.0,
             "escalation_rate": round(escalated / total * 100, 1) if total else 0.0,
             "injection_attempts_today": injections,
+            "pii_findings_today": pii_findings,
             "reliability_events_today": reliability_events,
             "avg_reliability_score_today": round(avg_reliability) if avg_reliability is not None else None,
             "active_agents": active_agents,

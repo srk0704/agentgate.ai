@@ -1,0 +1,80 @@
+policies:
+  # ── Read operations — always allowed ─────────────────────────────────────
+  - name: allow_expense_lookup
+    match:
+      tool: get_expense
+    effect: allow
+    reason: "Expense lookup is read-only"
+
+  - name: allow_pending_expenses
+    match:
+      tool: get_pending_expenses
+    effect: allow
+    reason: "Listing pending expenses is read-only"
+
+  - name: allow_invoice_lookup
+    match:
+      tool: get_invoice
+    effect: allow
+    reason: "Invoice lookup is read-only"
+
+  - name: allow_budget_check
+    match:
+      tool: get_budget
+    effect: allow
+    reason: "Budget queries are read-only"
+
+  - name: allow_balance_check
+    match:
+      tool: get_account_balance
+    effect: allow
+    reason: "Balance check is read-only"
+
+  # ── Export — always blocked via agent ────────────────────────────────────
+  - name: block_financial_export
+    match:
+      tool: export_financials
+    effect: block
+    reason: "Financial exports require compliance approval — use the finance portal"
+
+  # ── Invoice processing ──────────────────────────────────────────────────
+  - name: block_large_invoice
+    match:
+      tool: process_invoice
+    conditions:
+      - field: args.amount
+        op: gte
+        value: 10000
+    effect: block
+    reason: "Invoices over $10,000 require CFO sign-off — cannot be processed via agent"
+
+  - name: escalate_medium_invoice
+    match:
+      tool: process_invoice
+    conditions:
+      - field: args.amount
+        op: gte
+        value: 1000
+    effect: escalate
+    reason: "Invoices over $1,000 require human approval"
+
+  # ── Expense approval ────────────────────────────────────────────────────
+  - name: block_large_expense
+    match:
+      tool: approve_expense
+    conditions:
+      - field: args.amount
+        op: gte
+        value: 2000
+    effect: block
+    reason: "Expenses over $2,000 require VP approval — cannot be approved via agent"
+
+  - name: escalate_medium_expense
+    match:
+      tool: approve_expense
+    conditions:
+      - field: args.amount
+        op: gte
+        value: 500
+    effect: escalate
+    reason: "Expenses over $500 require manager approval"

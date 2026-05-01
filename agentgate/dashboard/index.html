@@ -933,6 +933,7 @@ let resolvedEscs = [];
 let auditCache   = {};   // {call_id: decision}
 let activeTab    = "overview";
 let alertDismissed = false;
+let piiFindingsToday = 0;
 
 /* ─────────────────────────────────────────────────────────────────────────
    Utilities
@@ -1294,6 +1295,7 @@ function bucketByDecisions(decisions) {
 async function loadStats() {
   const s = await safeJson(BASE + "/dashboard/stats");
   if (!s) return;
+  piiFindingsToday = s.pii_findings_today || 0;
 
   const total = s.total_actions_today || 0;
   $("kpi-actions-v").textContent = total;
@@ -1451,7 +1453,7 @@ function renderFailureModes() {
     {name:"Session anomaly",   count: buckets.anomaly,   color: "var(--color-text-secondary)"},
     {name:"Data exfiltration", count: buckets.data,      color: "var(--color-text-purple)"},
     {name:"Sequence loop",     count: buckets.storm,     color: "var(--color-text-purple)"},
-    {name:"PII in output",     count: 0,                 color: "var(--color-text-secondary)"},
+    {name:"PII in output",     count: piiFindingsToday,  color: "var(--color-text-secondary)"},
   ];
   const max = Math.max(1, ...items.map(i => i.count));
   const present = items.filter(i => i.count > 0).sort((a,b) => b.count - a.count);
