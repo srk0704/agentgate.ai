@@ -4,43 +4,52 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>AgentGate · Agent reliability infrastructure</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
 <style>
 :root {
-  /* surfaces */
-  --color-bg: #F7F7F5;
+  /* surfaces — warm cream palette */
+  --color-bg: #FAF8F3;
   --color-surface: #FFFFFF;
-  --color-surface-secondary: #F2F2F0;
-  --color-surface-tertiary: #ECECEA;
+  --color-surface-secondary: #F4F1EA;
+  --color-surface-tertiary: #EBE7DD;
 
-  /* text */
-  --color-text-primary: #111111;
-  --color-text-secondary: #4F4F4D;
-  --color-text-tertiary: #8A8A88;
+  /* text — ink palette */
+  --color-text-primary: #0A0E0A;
+  --color-text-secondary: #2A2F2A;
+  --color-text-tertiary: #5C625C;
+  --color-text-muted:    #A8AEA8;
 
-  /* semantic — text */
-  --color-text-success: #16A34A;
-  --color-text-warning: #D97706;
-  --color-text-danger:  #DC2626;
-  --color-text-info:    #1D4ED8;
-  --color-text-purple:  #7C3AED;
+  /* semantic — text (kept for outcome / status colors) */
+  --color-text-success: #047857;
+  --color-text-warning: #B45309;
+  --color-text-danger:  #B91C1C;
+  --color-text-info:    #1E40AF;
+  --color-text-purple:  #6D28D9;
 
   /* semantic — backgrounds (subtle) */
-  --color-background-success:  #DCFCE7;
+  --color-background-success:  #ECFDF5;
   --color-background-warning:  #FEF3C7;
   --color-background-danger:   #FEE2E2;
-  --color-background-info:     #DBEAFE;
+  --color-background-info:     #E0E7FF;
   --color-background-purple:   #EDE9FE;
   --color-background-orange:   #FED7AA;
 
   /* avatar text colors */
-  --color-avatar-success:  #166534;
+  --color-avatar-success:  #065F46;
   --color-avatar-warning:  #92400E;
   --color-avatar-danger:   #991B1B;
   --color-avatar-info:     #1E40AF;
 
-  /* borders */
-  --color-border-tertiary: rgba(17, 17, 17, 0.08);
-  --color-border-primary:  rgba(17, 17, 17, 0.16);
+  /* borders — ink-tinted, very low alpha */
+  --color-border-tertiary: rgba(10, 14, 10, 0.06);
+  --color-border-primary:  rgba(10, 14, 10, 0.14);
+
+  /* type stacks */
+  --font-sans:  "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-serif: "Instrument Serif", Georgia, "Times New Roman", serif;
+  --font-mono:  "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -48,15 +57,24 @@ html, body { height: 100%; }
 body {
   background: var(--color-bg);
   color: var(--color-text-primary);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-family: var(--font-sans);
   font-size: 13px;
   font-weight: 400;
   line-height: 1.5;
+  letter-spacing: -0.005em;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
+.font-serif { font-family: var(--font-serif); font-weight: 400; }
+.font-mono  { font-family: var(--font-mono); }
 a { color: inherit; text-decoration: none; }
 button { font-family: inherit; cursor: pointer; }
+code, .audit-time, .feed-scores, .agent-stat .num, .activity-stat .n,
+.kv-list .v, .agent-score, .esc-meta {
+  font-family: var(--font-mono);
+  font-feature-settings: "tnum" 1, "ss01" 1;
+  letter-spacing: 0;
+}
 
 /* ── Header ────────────────────────────────────────────────────────────── */
 .header {
@@ -70,7 +88,7 @@ button { font-family: inherit; cursor: pointer; }
 .brand {
   display: flex; align-items: center; gap: 12px;
 }
-.brand-name { font-size: 14px; font-weight: 500; letter-spacing: -0.01em; }
+.brand-name { font-size: 15px; font-weight: 600; letter-spacing: -0.02em; }
 .brand-divider {
   width: 1px; height: 14px;
   background: var(--color-border-tertiary);
@@ -185,6 +203,36 @@ button { font-family: inherit; cursor: pointer; }
   border-radius: 12px;
 }
 
+/* ── Time filter pill ──────────────────────────────────────────────────── */
+.timebar {
+  display: flex; justify-content: flex-end;
+  margin-bottom: 12px;
+}
+.time-filter {
+  display: flex; gap: 0;
+  border: 0.5px solid var(--color-border-tertiary);
+  border-radius: 8px;
+  overflow: hidden;
+  width: fit-content;
+  background: var(--color-surface);
+}
+.tf-btn {
+  padding: 5px 14px;
+  font-size: 12px;
+  border: none;
+  border-right: 0.5px solid var(--color-border-tertiary);
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  font-family: inherit;
+}
+.tf-btn:last-child { border-right: none; }
+.tf-btn:hover:not(.active) { background: var(--color-surface-secondary); }
+.tf-btn.active {
+  background: var(--color-text-primary);
+  color: var(--color-surface);
+}
+
 /* ── KPI grid ──────────────────────────────────────────────────────────── */
 .kpi-grid {
   display: grid;
@@ -202,7 +250,9 @@ button { font-family: inherit; cursor: pointer; }
   margin-bottom: 8px;
 }
 .kpi-value {
-  font-size: 28px; font-weight: 500; line-height: 1.05;
+  font-size: 32px; font-weight: 600; line-height: 1.05;
+  letter-spacing: -0.02em;
+  font-feature-settings: "tnum" 1, "ss01" 1;
 }
 .kpi-sub { font-size: 11px; color: var(--color-text-secondary); margin-top: 6px; }
 .kpi.is-good .kpi-value    { color: var(--color-text-success); }
@@ -487,7 +537,7 @@ button { font-family: inherit; cursor: pointer; }
 }
 .task-empty { color: var(--color-text-tertiary); font-style: normal; }
 .tool-mono {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
+  font-family: var(--font-mono);
   font-size: 12px;
   margin-bottom: 4px;
 }
@@ -769,6 +819,15 @@ button { font-family: inherit; cursor: pointer; }
 <!-- OVERVIEW ──────────────────────────────────────────────────────────── -->
 <section class="tab-pane active" id="tab-overview">
 
+  <div class="timebar">
+    <div class="time-filter" role="tablist" aria-label="Time range">
+      <button class="tf-btn active" data-range="today"  onclick="setTimeRange('today')">Today</button>
+      <button class="tf-btn"        data-range="7days"  onclick="setTimeRange('7days')">7 days</button>
+      <button class="tf-btn"        data-range="30days" onclick="setTimeRange('30days')">30 days</button>
+      <button class="tf-btn"        data-range="all"    onclick="setTimeRange('all')">All time</button>
+    </div>
+  </div>
+
   <div class="kpi-grid">
     <div class="kpi card" id="kpi-actions">
       <div class="kpi-label">Actions today</div>
@@ -896,12 +955,8 @@ const WS_BASE = BASE.replace(/^http/, "ws");
 const HEADERS = {};
 
 const AGENT_DESCRIPTIONS = {
-  "payment-bot-prod":            "Processes refunds, payments, wire transfers",
-  "payment-support-agent-live":  "Live fintech payment support",
-  "support-agent-v2":            "Customer support · account lookups · data access",
-  "ops-bot":                     "Operations monitoring · account status checks",
-  "demo-payment-agent":          "Demo agent · fintech payment scenarios",
-  "default":                     "AI agent",
+  "finmate-prod":  "Enterprise financial operations · refunds, invoices, budgets",
+  "default":       "AI agent",
 };
 
 const ISSUE_LABELS = {
@@ -934,6 +989,37 @@ let auditCache   = {};   // {call_id: decision}
 let activeTab    = "overview";
 let alertDismissed = false;
 let piiFindingsToday = 0;
+let timeRange    = "today";
+
+const RANGE_LABEL = {
+  today:  "today",
+  "7days":  "last 7 days",
+  "30days": "last 30 days",
+  all:    "all time",
+};
+
+function rangeCutoffISO(range) {
+  const now = new Date();
+  if (range === "today")  return new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+  if (range === "7days")  return new Date(Date.now() - 7  * 86400000).toISOString();
+  if (range === "30days") return new Date(Date.now() - 30 * 86400000).toISOString();
+  return null;  // "all"
+}
+
+function filterByTimeRange(decisions, range) {
+  const cutoff = rangeCutoffISO(range);
+  if (!cutoff) return decisions.slice();
+  return decisions.filter(d => (d.decided_at || "") >= cutoff);
+}
+
+function setTimeRange(range) {
+  timeRange = range;
+  document.querySelectorAll(".tf-btn").forEach(b =>
+    b.classList.toggle("active", b.dataset.range === range));
+  // Re-fetch server-side aggregates with the new since, then redraw.
+  loadStats().then(() => renderEverything());
+  if (activeTab === "audit") loadAudit();
+}
 
 /* ─────────────────────────────────────────────────────────────────────────
    Utilities
@@ -945,15 +1031,23 @@ function escHtml(s) {
     .replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");
 }
 function relTime(iso) {
+  // Kept as a thin alias for callers that still reference relTime.
+  return timeAgo(iso);
+}
+
+function timeAgo(iso) {
   if (!iso) return "—";
-  const t = new Date(iso).getTime();
-  if (isNaN(t)) return iso;
-  const s = (Date.now() - t) / 1000;
-  if (s < 5)    return "just now";
-  if (s < 60)   return Math.floor(s) + "s ago";
-  if (s < 3600) return Math.floor(s/60) + "m ago";
-  if (s < 86400) return Math.floor(s/3600) + "h ago";
-  return Math.floor(s/86400) + "d ago";
+  const then = new Date(iso);
+  const t = then.getTime();
+  if (isNaN(t)) return String(iso);
+  const seconds = Math.floor((Date.now() - t) / 1000);
+  if (seconds < 60)    return seconds + "s ago";
+  if (seconds < 3600)  return Math.floor(seconds / 60) + "m ago";
+  if (seconds < 86400) return Math.floor(seconds / 3600) + "h ago";
+  return then.toLocaleDateString("en-US", {
+    month: "short", day: "numeric",
+    hour: "2-digit", minute: "2-digit",
+  });
 }
 function describeAgent(id) { return AGENT_DESCRIPTIONS[id] || AGENT_DESCRIPTIONS["default"]; }
 function initialsFor(id) {
@@ -1293,25 +1387,31 @@ function bucketByDecisions(decisions) {
 }
 
 async function loadStats() {
-  const s = await safeJson(BASE + "/dashboard/stats");
+  const since = rangeCutoffISO(timeRange);
+  const url = BASE + "/dashboard/stats" + (since ? "?since=" + encodeURIComponent(since) : "");
+  const s = await safeJson(url);
   if (!s) return;
   piiFindingsToday = s.pii_findings_today || 0;
 
+  const rangeLbl = RANGE_LABEL[timeRange];
   const total = s.total_actions_today || 0;
   $("kpi-actions-v").textContent = total;
   $("kpi-actions-sub").textContent = "across " + (s.active_agents || 0) +
-    " active agent" + (s.active_agents === 1 ? "" : "s");
+    " active agent" + (s.active_agents === 1 ? "" : "s") + " · " + rangeLbl;
 
   const interv = +(((s.block_rate || 0) + (s.escalation_rate || 0)).toFixed(1));
   $("kpi-intervention-v").textContent = interv + "%";
-  $("kpi-intervention-sub").textContent = (s.block_rate || 0) + "% blocked · " + (s.escalation_rate || 0) + "% escalated";
+  $("kpi-intervention-sub").textContent =
+    (s.block_rate || 0) + "% blocked · " + (s.escalation_rate || 0) + "% escalated · " + rangeLbl;
   const interventionEl = $("kpi-intervention");
   interventionEl.classList.remove("is-good","is-warn","is-danger");
   if (interv < 20) interventionEl.classList.add("is-good");
   else if (interv <= 40) interventionEl.classList.add("is-warn");
   else interventionEl.classList.add("is-danger");
 
-  const buckets = bucketByDecisions(allDecisions);
+  // Failure-mode card uses the time-filtered decisions, not raw allDecisions.
+  const filtered = filterByTimeRange(allDecisions, timeRange);
+  const buckets = bucketByDecisions(filtered);
   const failures = buckets.injection + buckets.drift + buckets.loop + buckets.policy + buckets.excess;
   $("kpi-failures-v").textContent = failures;
   const failuresEl = $("kpi-failures");
@@ -1326,21 +1426,22 @@ async function loadStats() {
   if (buckets.policy)    types.push("policy");
   if (buckets.loop)      types.push("loop");
   if (buckets.excess)    types.push("excess agency");
-  $("kpi-failures-sub").textContent = types.length ? types.join(" · ") : "none detected today";
+  $("kpi-failures-sub").textContent =
+    (types.length ? types.join(" · ") : "none detected") + " · " + rangeLbl;
 
   const score = s.avg_reliability_score_today;
   const fleetEl = $("kpi-fleet");
   fleetEl.classList.remove("is-good","is-warn","is-danger");
   if (score == null) {
     $("kpi-fleet-v").textContent = "—";
-    $("kpi-fleet-sub").textContent = "awaiting first decision";
+    $("kpi-fleet-sub").textContent = "awaiting first decision · " + rangeLbl;
   } else {
     $("kpi-fleet-v").textContent = score + "%";
     if (score >= 90) fleetEl.classList.add("is-good");
     else if (score >= 60) fleetEl.classList.add("is-warn");
     else fleetEl.classList.add("is-danger");
   }
-  // sub line populated from /health/agents
+  // sub line populated from /health/agents (will append rangeLbl there)
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -1356,7 +1457,8 @@ async function loadAgentHealth() {
   $("kpi-fleet-sub").textContent =
     (summary.critical || 0) + " critical · " +
     (summary.degraded || 0) + " degraded · " +
-    ((summary.healthy || 0) + (summary.caution || 0)) + " healthy";
+    ((summary.healthy || 0) + (summary.caution || 0)) + " healthy" +
+    " · " + RANGE_LABEL[timeRange];
 
   setWs(true, summary.total_agents != null ? summary.total_agents : Object.keys(map).length);
   updateAlertbar();
@@ -1369,7 +1471,7 @@ async function loadAgentHealth() {
    ───────────────────────────────────────────────────────────────────────── */
 function decisionsByAgent() {
   const m = {};
-  for (const d of allDecisions) {
+  for (const d of filterByTimeRange(allDecisions, timeRange)) {
     if (!m[d.agent_id]) m[d.agent_id] = [];
     m[d.agent_id].push(d);
   }
@@ -1435,7 +1537,7 @@ function renderAgentTable() {
 function renderFailureModes() {
   const list = $("fm-list");
   const buckets = {injection:0, policy:0, drift:0, loop:0, storm:0, excess:0, data:0, blast:0, anomaly:0, pii:0};
-  for (const d of allDecisions) {
+  for (const d of filterByTimeRange(allDecisions, timeRange)) {
     const fm = failureModeFor(d);
     if (fm && buckets.hasOwnProperty(fm.key)) buckets[fm.key]++;
     const br = blastObj(d.blast_radius);
@@ -1562,7 +1664,7 @@ function renderEscTab() {
           ' <span style="margin-left:8px;font-weight:500">' + escHtml(e.tool_name || "") + '</span>' +
           ' <span class="muted tiny">· ' + escHtml(e.agent_id || "") + '</span>' +
         '</div>' +
-        '<span class="muted tiny">' + escHtml(relTime(e.decided_at || e.created_at)) + '</span>' +
+        '<span class="muted tiny" title="' + escHtml(e.decided_at || e.created_at || "") + '">' + escHtml(timeAgo(e.decided_at || e.created_at)) + '</span>' +
       '</div>'
     ).join("");
   }
@@ -1617,7 +1719,7 @@ function renderFullEscCard(e) {
         '</div>' +
       '</div>' +
       '<div class="r">' +
-        '<div class="time">' + escHtml(relTime(e.created_at)) + '</div>' +
+        '<div class="time" title="' + escHtml(e.created_at || "") + '">' + escHtml(timeAgo(e.created_at)) + '</div>' +
         '<div class="risk-chip">Risk ' + (e.risk_score != null ? e.risk_score + "%" : "—") + '</div>' +
       '</div>' +
     '</div>' +
@@ -1671,9 +1773,10 @@ function renderAgentCards() {
   }
   ids.sort((a, b) => (agentHealth[a].health_score ?? 100) - (agentHealth[b].health_score ?? 100));
 
+  const filtered = filterByTimeRange(allDecisions, timeRange);
   wrap.innerHTML = ids.map(id => {
     const a = agentHealth[id];
-    const decs = allDecisions.filter(d => d.agent_id === id);
+    const decs = filtered.filter(d => d.agent_id === id);
     const total = decs.length;
     const allowed = decs.filter(d => d.outcome === "allowed").length;
     const blocked = decs.filter(d => d.outcome === "blocked").length;
@@ -1713,7 +1816,7 @@ function renderAgentCards() {
       '</div>' +
       '<div class="agent-card-grid">' +
         '<div>' +
-          '<div class="section-label">Activity today</div>' +
+          '<div class="section-label">Activity · ' + escHtml(RANGE_LABEL[timeRange]) + '</div>' +
           '<div class="activity-grid">' +
             '<div class="activity-stat"><div class="n">' + total + '</div><div class="l">Actions</div></div>' +
             '<div class="activity-stat"><div class="n">' + allowed + '</div><div class="l">Allowed</div></div>' +
@@ -1818,6 +1921,8 @@ async function renderAudit() {
   if (agentSel) params.set("agent_id", agentSel);
   if (outcomeSel) params.set("outcome", outcomeSel);
   params.set("limit", "200");
+  const since = rangeCutoffISO(timeRange);
+  if (since) params.set("since", since);
   const r = await safeJson(BASE + "/audit?" + params.toString());
   let entries = (r && r.entries) || [];
 
@@ -1848,7 +1953,7 @@ async function renderAudit() {
         tags +
         '<span class="audit-tool">' + escHtml(d.tool_name || "") + ' <span class="agent">· ' + escHtml(d.agent_id || "") + '</span></span>' +
         '<span class="audit-reason">— ' + escHtml(reasonShort) + '</span>' +
-        '<span class="audit-time">' + escHtml(relTime(d.decided_at)) + '</span>' +
+        '<span class="audit-time" title="' + escHtml(d.decided_at || "") + '">' + escHtml(timeAgo(d.decided_at)) + '</span>' +
         '<span class="chev">›</span>' +
       '</div>' +
       '<div class="audit-detail" id="auddet-' + escHtml(cid) + '"></div>' +

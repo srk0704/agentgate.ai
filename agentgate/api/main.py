@@ -77,10 +77,10 @@ async def dashboard() -> FileResponse:
 
 
 @app.get("/dashboard/stats")
-async def dashboard_stats() -> dict:
+async def dashboard_stats(since: Optional[str] = Query(default=None)) -> dict:
     """Aggregate stats for the dashboard metric cards."""
     audit = _audit()
-    stats = await audit.get_stats()
+    stats = await audit.get_stats(since=since)
     recent = await audit.recent(50)
     pending = await EscalationQueue.recent(limit=200)
     pending_only = [e for e in pending if e["status"] == "pending"]
@@ -235,6 +235,7 @@ async def list_audit(
     outcome: Optional[str] = Query(default=None),
     limit: int = Query(default=100, le=1000),
     offset: int = Query(default=0, ge=0),
+    since: Optional[str] = Query(default=None),
 ) -> dict:
     """Paginated audit log with optional filters. Compliance export endpoint."""
     audit = _audit()
@@ -244,6 +245,7 @@ async def list_audit(
         outcome=outcome,
         limit=limit,
         offset=offset,
+        since=since,
     )
     return {"count": len(entries), "offset": offset, "entries": entries}
 

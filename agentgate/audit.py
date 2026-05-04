@@ -204,59 +204,63 @@ class AuditLogger:
                 rows = await cur.fetchall()
         return [dict(r) for r in rows]
 
-    async def get_stats(self, injection_threshold: int = 70) -> dict[str, Any]:
-        """Return dashboard stats for today."""
+    async def get_stats(
+        self,
+        injection_threshold: int = 70,
+        since: str | None = None,
+    ) -> dict[str, Any]:
+        """Return dashboard stats. If `since` is None, defaults to start of today."""
         await self._ensure_init()
-        today = date.today().isoformat()  # "YYYY-MM-DD" — ISO prefix comparison works in SQLite
+        # If caller didn't pin a window, the legacy "today" cutoff still applies.
+        cutoff = since if since else date.today().isoformat()
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute(
-                "SELECT COUNT(*) FROM audit_log WHERE decided_at >= ?", (today,)
+                "SELECT COUNT(*) FROM audit_log WHERE decided_at >= ?", (cutoff,)
             ) as cur:
                 total: int = (await cur.fetchone())[0]  # type: ignore[index]
 
             async with db.execute(
                 "SELECT COUNT(*) FROM audit_log WHERE decided_at >= ? AND outcome = 'blocked'",
-                (today,),
+                (cutoff,),
             ) as cur:
                 blocked: int = (await cur.fetchone())[0]  # type: ignore[index]
 
             async with db.execute(
                 "SELECT COUNT(*) FROM audit_log WHERE decided_at >= ? AND outcome LIKE 'escalat%'",
-                (today,),
+                (cutoff,),
             ) as cur:
                 escalated: int = (await cur.fetchone())[0]  # type: ignore[index]
 
             async with db.execute(
                 "SELECT COUNT(*) FROM audit_log WHERE decided_at >= ? AND injection_score >= ?",
-                (today, injection_threshold),
+                (cutoff, injection_threshold),
             ) as cur:
                 injections: int = (await cur.fetchone())[0]  # type: ignore[index]
 
-            # PII findings today (rows in pii_scan_log marked unsafe).
+            # PII findings within window (rows in pii_scan_log marked unsafe).
             try:
                 async with db.execute(
                     "SELECT COUNT(*) FROM pii_scan_log WHERE scanned_at >= ? AND safe = 0",
-                    (today,),
+                    (cutoff,),
                 ) as cur:
                     pii_findings: int = (await cur.fetchone())[0]  # type: ignore[index]
             except Exception:
                 pii_findings = 0
 
-            # Reliability events: any non-trivial component score elevated today.
-            # Captures injection + anomaly (covers drift) + (future) loop signals.
+            # Reliability events: any non-trivial component score elevated.
             async with db.execute(
                 """SELECT COUNT(*) FROM audit_log
                    WHERE decided_at >= ?
                      AND (injection_score >= 50 OR anomaly_score >= 50 OR risk_score >= 70)""",
-                (today,),
+                (cutoff,),
             ) as cur:
                 reliability_events: int = (await cur.fetchone())[0]  # type: ignore[index]
 
-            # Average reliability score today (None if no decisions yet).
+            # Average reliability score within window (None if no decisions yet).
             async with db.execute(
                 """SELECT AVG(reliability_score) FROM audit_log
                    WHERE decided_at >= ? AND reliability_score IS NOT NULL""",
-                (today,),
+                (cutoff,),
             ) as cur:
                 avg_row = await cur.fetchone()
             avg_reliability = avg_row[0] if avg_row and avg_row[0] is not None else None  # type: ignore[index]
@@ -271,6 +275,8 @@ class AuditLogger:
                 active_agents: int = (await cur.fetchone())[0]  # type: ignore[index]
 
         return {
+            # Field names retain the "_today" suffix for backwards compat;
+            # values now reflect whatever time window was requested.
             "total_actions_today": total,
             "block_rate": round(blocked / total * 100, 1) if total else 0.0,
             "escalation_rate": round(escalated / total * 100, 1) if total else 0.0,
@@ -279,6 +285,7 @@ class AuditLogger:
             "reliability_events_today": reliability_events,
             "avg_reliability_score_today": round(avg_reliability) if avg_reliability is not None else None,
             "active_agents": active_agents,
+            "since": cutoff,
         }
 
     async def get_paginated(
@@ -288,8 +295,9 @@ class AuditLogger:
         outcome: str | None = None,
         limit: int = 100,
         offset: int = 0,
+        since: str | None = None,
     ) -> list[dict]:
-        """Paginated query with optional filters."""
+        """Paginated query with optional filters. `since` is an ISO timestamp."""
         await self._ensure_init()
         conditions: list[str] = []
         params: list[Any] = []
@@ -302,6 +310,9 @@ class AuditLogger:
         if outcome:
             conditions.append("outcome = ?")
             params.append(outcome)
+        if since:
+            conditions.append("decided_at >= ?")
+            params.append(since)
         where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
         query = f"SELECT * FROM audit_log {where} ORDER BY decided_at DESC LIMIT ? OFFSET ?"
         params.extend([limit, offset])
