@@ -71,6 +71,7 @@ class LoopDetector:
 
     async def _detect_retry_storm(self, tool_call: ToolCall) -> tuple[int, str]:
         await self._session_tracker._ensure_init()
+        await self._output_logger._ensure_init()
         since = (datetime.utcnow() - timedelta(seconds=self._window_sec)).isoformat()
 
         params: list[Any] = [tool_call.agent_id, tool_call.tool_name, since]

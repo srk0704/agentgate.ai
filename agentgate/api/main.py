@@ -615,6 +615,184 @@ async def measure_change_impact(change_id: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Failure modes catalog
+# ---------------------------------------------------------------------------
+
+
+@app.get("/failure-modes")
+async def list_failure_modes() -> dict:
+    from agentgate.failure_modes import (
+        get_all_categories,
+        get_modes_by_category,
+        get_summary,
+    )
+    return {
+        "summary": get_summary(),
+        "categories": [
+            {**cat, "modes": get_modes_by_category(cat["id"])}
+            for cat in get_all_categories()
+        ],
+    }
+
+
+@app.get("/failure-modes/stats")
+async def failure_mode_stats(
+    since: Optional[str] = Query(default=None),
+    agent_id: Optional[str] = Query(default=None),
+) -> dict:
+    from datetime import datetime, timedelta, timezone
+
+    import aiosqlite
+
+    from agentgate.failure_modes import DETECTOR_WIRING, get_built_modes
+
+    db_path = os.getenv("AGENTGATE_DB_PATH", "./agentgate.db")
+
+    now = datetime.now(timezone.utc)
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0).strftime(
+        "%Y-%m-%dT%H:%M:%S"
+    )
+    week_start = (now - timedelta(days=7)).strftime("%Y-%m-%dT%H:%M:%S")
+
+    # 8 boundaries → 7 day buckets, ending at tomorrow_00:00 so today is the last bucket
+    day_boundaries: list[str] = []
+    for i in range(6, -1, -1):
+        b = (now - timedelta(days=i)).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        ).strftime("%Y-%m-%dT%H:%M:%S")
+        day_boundaries.append(b)
+    day_boundaries.append(
+        (now + timedelta(days=1)).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        ).strftime("%Y-%m-%dT%H:%M:%S")
+    )
+
+    stats: dict = {}
+
+    async with aiosqlite.connect(db_path) as db:
+        db.row_factory = aiosqlite.Row
+
+        # Composite index for the audit_log scans below.
+        try:
+            await db.execute(
+                """CREATE INDEX IF NOT EXISTS idx_fm_stats
+                   ON audit_log(decided_at, agent_id, tool_name, outcome)"""
+            )
+            await db.commit()
+        except Exception:
+            pass
+
+        for mode in get_built_modes():
+            mode_id = mode["id"]
+            wiring = DETECTOR_WIRING.get(mode_id)
+            if not wiring:
+                continue
+
+            table = wiring["table"]
+            where = wiring["where"]
+            time_field = wiring.get("time_field", "decided_at")
+
+            params_base: list = []
+            agent_clause = ""
+            if agent_id:
+                agent_clause = " AND agent_id = ?"
+                params_base.append(agent_id)
+
+            since_clause = ""
+            since_params: list = []
+            if since:
+                since_clause = f" AND {time_field} >= ?"
+                since_params.append(since)
+
+            try:
+                # Total in window
+                async with db.execute(
+                    f"SELECT COUNT(*) AS cnt FROM {table} WHERE {where}"
+                    f"{agent_clause}{since_clause}",
+                    params_base + since_params,
+                ) as cur:
+                    row = await cur.fetchone()
+                total = row["cnt"] if row else 0
+
+                # Today
+                async with db.execute(
+                    f"SELECT COUNT(*) AS cnt FROM {table} WHERE {where}"
+                    f"{agent_clause} AND {time_field} >= ?",
+                    params_base + [today_start],
+                ) as cur:
+                    row = await cur.fetchone()
+                today = row["cnt"] if row else 0
+
+                # This week
+                async with db.execute(
+                    f"SELECT COUNT(*) AS cnt FROM {table} WHERE {where}"
+                    f"{agent_clause} AND {time_field} >= ?",
+                    params_base + [week_start],
+                ) as cur:
+                    row = await cur.fetchone()
+                this_week = row["cnt"] if row else 0
+
+                # Last triggered + top tool
+                async with db.execute(
+                    f"SELECT {time_field} AS ts, tool_name FROM {table} "
+                    f"WHERE {where}{agent_clause} "
+                    f"ORDER BY {time_field} DESC LIMIT 1",
+                    params_base,
+                ) as cur:
+                    row = await cur.fetchone()
+                last_triggered = row["ts"] if row else None
+                top_tool = row["tool_name"] if row else None
+
+                # 7-day sparkline
+                sparkline: list[int] = []
+                for i in range(7):
+                    day_s = day_boundaries[i]
+                    day_e = day_boundaries[i + 1]
+                    async with db.execute(
+                        f"SELECT COUNT(*) AS cnt FROM {table} WHERE {where}"
+                        f"{agent_clause} AND {time_field} >= ? AND {time_field} < ?",
+                        params_base + [day_s, day_e],
+                    ) as cur:
+                        srow = await cur.fetchone()
+                    sparkline.append(srow["cnt"] if srow else 0)
+
+                # False-positive rate — only audit_log + total >= 10
+                fp_rate = None
+                if table == "audit_log" and total >= 10:
+                    async with db.execute(
+                        f"SELECT COUNT(*) AS cnt FROM audit_log WHERE {where}"
+                        f"{agent_clause} AND outcome = 'escalation_approved'",
+                        params_base,
+                    ) as cur:
+                        fp_row = await cur.fetchone()
+                    fp_count = fp_row["cnt"] if fp_row else 0
+                    fp_rate = round(fp_count / total, 3)
+
+                stats[mode_id] = {
+                    "total": total,
+                    "today": today,
+                    "this_week": this_week,
+                    "last_triggered": last_triggered,
+                    "top_tool": top_tool,
+                    "false_positive_rate": fp_rate,
+                    "sparkline": sparkline,
+                }
+            except Exception as e:
+                logger.warning("failure_mode_stats query failed for %s: %s", mode_id, e)
+                stats[mode_id] = {
+                    "total": 0,
+                    "today": 0,
+                    "this_week": 0,
+                    "last_triggered": None,
+                    "top_tool": None,
+                    "false_positive_rate": None,
+                    "sparkline": [0, 0, 0, 0, 0, 0, 0],
+                }
+
+    return stats
+
+
+# ---------------------------------------------------------------------------
 # Demo runner  [DEMO ONLY — not for production use]
 if __name__ == "__main__":
     import uvicorn
