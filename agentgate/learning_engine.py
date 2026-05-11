@@ -84,6 +84,20 @@ class LearningEngine:
                 description=f"No escalate policy with gte/gt condition found for {tool_name}",
             )
 
+        # Skip if nothing would actually change — prevents zero-delta rows
+        # from accumulating in policy_changes across re-runs.
+        if (
+            actual_current_value is not None
+            and float(suggested_value) == float(actual_current_value)
+        ):
+            return ApplyResult(
+                success=False,
+                description=(
+                    f"Threshold for {tool_name} already "
+                    f"at {actual_current_value} — no change needed"
+                ),
+            )
+
         # Capture metrics from the last 7 days before this change
         from agentgate.audit import AuditLogger
         audit = AuditLogger(self.db_path)
@@ -196,6 +210,13 @@ class LearningEngine:
     async def _increase_timeout(self, pattern: Pattern) -> ApplyResult:
         suggested = pattern.suggested_action.get("suggested_timeout_sec", 300)
         old = self.gateway.escalation_timeout_sec
+        if float(suggested) <= float(old):
+            return ApplyResult(
+                success=False,
+                description=(
+                    f"Timeout already at {old:.0f}s — no change needed"
+                ),
+            )
         self.gateway.escalation_timeout_sec = float(suggested)
 
         from agentgate.audit import AuditLogger

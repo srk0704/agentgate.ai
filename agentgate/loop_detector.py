@@ -55,8 +55,15 @@ class LoopDetector:
 
     # ── Public ─────────────────────────────────────────────────────────────
 
+    READ_ONLY_PREFIXES = ("get_", "list_", "fetch_", "read_", "search_")
+
     async def score(self, tool_call: ToolCall) -> tuple[int, str]:
         """Returns (max(retry_score, sequence_score), reason). Never raises."""
+        if any(tool_call.tool_name.startswith(p) for p in self.READ_ONLY_PREFIXES):
+            return 0, (
+                f"Safe: '{tool_call.tool_name}' is a read-only operation — "
+                f"loop detection skipped."
+            )
         try:
             retry_score, retry_reason = await self._detect_retry_storm(tool_call)
             seq_score, seq_reason = await self._detect_sequence_loop(tool_call)

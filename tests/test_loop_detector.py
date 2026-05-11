@@ -78,14 +78,16 @@ async def test_no_loop_normal_usage(detector):
 
 
 async def test_retry_storm_detected(detector):
-    # 5 prior calls of get_account_status + 4 failures → retry storm
+    # 5 prior calls of check_account_status + 4 failures → retry storm.
+    # Use a non-read-only tool name so the loop detector's read-only fast-path
+    # does not exempt this call from scoring.
     await _seed_session(
         detector.db_path, "a1",
-        ["get_account_status"] * 5,
+        ["check_account_status"] * 5,
         session_id="s1",
     )
-    await _seed_output(detector.db_path, "a1", "get_account_status", success=False, count=4)
-    tc = ToolCall(tool_name="get_account_status", args={}, agent_id="a1", session_id="s1")
+    await _seed_output(detector.db_path, "a1", "check_account_status", success=False, count=4)
+    tc = ToolCall(tool_name="check_account_status", args={}, agent_id="a1", session_id="s1")
     score, reason = await detector.score(tc)
     assert score > 70
     assert "retry storm" in reason.lower() or "called" in reason.lower()
@@ -104,12 +106,14 @@ async def test_retry_without_failure_low_score(detector):
 
 
 async def test_sequence_loop_detected(detector):
+    # Non-read-only tool name so the loop detector's read-only fast-path
+    # does not exempt this call from sequence loop scoring.
     await _seed_session(
         detector.db_path, "a1",
-        ["get_customer", "issue_refund", "get_customer", "issue_refund"],
+        ["check_customer", "issue_refund", "check_customer", "issue_refund"],
         session_id="s1",
     )
-    tc = ToolCall(tool_name="get_customer", args={}, agent_id="a1", session_id="s1")
+    tc = ToolCall(tool_name="check_customer", args={}, agent_id="a1", session_id="s1")
     score, reason = await detector.score(tc)
     assert score > 70
     assert "sequence" in reason.lower() or "loop" in reason.lower()

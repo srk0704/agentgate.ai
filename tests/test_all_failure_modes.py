@@ -204,9 +204,11 @@ class TestRetryStorm:
         logger = OutputLogger(db_path)
         await logger._ensure_init()
 
+        # Non-read-only tool name so the loop detector's read-only fast-path
+        # does not exempt the scored call from retry-storm scoring.
         for _ in range(5):
             tc = make_tool_call(
-                tool_name="get_account_status",
+                tool_name="check_account_status",
                 agent_id="ops-bot",
                 session_id="storm-1",
                 args={"account_id": "ACC-789"},
@@ -215,7 +217,7 @@ class TestRetryStorm:
         for i in range(4):
             await logger.log_tool_result(
                 call_id=f"c-{i}",
-                tool_name="get_account_status",
+                tool_name="check_account_status",
                 tool_result={},
                 agent_id="ops-bot",
                 success=False,
@@ -224,7 +226,7 @@ class TestRetryStorm:
 
         detector = LoopDetector(db_path=db_path)
         tc = make_tool_call(
-            tool_name="get_account_status",
+            tool_name="check_account_status",
             agent_id="ops-bot",
             session_id="storm-1",
             args={"account_id": "ACC-789"},
@@ -245,7 +247,9 @@ class TestSequenceLoop:
         tracker = SessionTracker(db_path)
         await tracker._ensure_init()
 
-        for tool in ["get_customer", "issue_refund", "get_customer", "issue_refund"]:
+        # Non-read-only tool name so the loop detector's read-only fast-path
+        # does not exempt the scored call from sequence loop scoring.
+        for tool in ["check_customer", "issue_refund", "check_customer", "issue_refund"]:
             await tracker.record(make_tool_call(
                 tool_name=tool,
                 agent_id="payment-bot",
@@ -255,7 +259,7 @@ class TestSequenceLoop:
 
         detector = LoopDetector(db_path=db_path)
         tc = make_tool_call(
-            tool_name="get_customer",
+            tool_name="check_customer",
             agent_id="payment-bot",
             session_id="seq-1",
             args={},
