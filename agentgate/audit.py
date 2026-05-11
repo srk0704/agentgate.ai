@@ -44,6 +44,7 @@ CREATE TABLE IF NOT EXISTS audit_log (
     policy_matched      TEXT,
     escalation_id       TEXT,
     latency_ms          REAL,
+    oversight_authority TEXT,
     decided_at          TEXT NOT NULL
 );
 """
@@ -77,6 +78,37 @@ CREATE TABLE IF NOT EXISTS policy_changes (
 """
 
 
+def _compute_oversight_authority(
+    outcome: str,
+    human_decision: str | None = None,
+) -> str:
+    """
+    Returns who had oversight authority for this decision.
+
+    Values:
+      auto_allowed    — system allowed automatically
+      auto_blocked    — system blocked automatically
+      pending_review  — escalated, awaiting human decision
+      human_approved  — human reviewed and approved
+      human_rejected  — human reviewed and rejected
+      learning_loop   — auto-resolved by learning loop (future use)
+
+    This field makes AgentGate audit logs compatible with
+    EU AI Act Article 14 human oversight requirements.
+    """
+    if outcome == "escalation_approved":
+        return "human_approved"
+    if outcome == "escalation_rejected":
+        return "human_rejected"
+    if outcome == "escalated":
+        return "pending_review"
+    if outcome == "blocked":
+        return "auto_blocked"
+    if outcome in ("allowed", "failed_open"):
+        return "auto_allowed"
+    return "auto_allowed"
+
+
 class AuditLogger:
     def __init__(self, db_path: str):
         self.db_path = db_path
@@ -102,6 +134,7 @@ class AuditLogger:
                 "loop_score INTEGER", "loop_reason TEXT",
                 "reliability_score INTEGER", "reliability_summary TEXT",
                 "risk_reason TEXT", "human_decision TEXT", "human_reason TEXT",
+                "oversight_authority TEXT",
             ):
                 try:
                     await db.execute(f"ALTER TABLE audit_log ADD COLUMN {col}")
@@ -130,6 +163,10 @@ class AuditLogger:
     async def log(self, decision: Decision) -> None:
         await self._ensure_init()
         tc = decision.tool_call
+        oversight = _compute_oversight_authority(
+            decision.outcome.value,
+            decision.human_decision,
+        )
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute(
                 """INSERT INTO audit_log
@@ -140,8 +177,9 @@ class AuditLogger:
                  drift_score, drift_reason, loop_score, loop_reason,
                  reliability_score, reliability_summary,
                  human_decision, human_reason,
-                 policy_matched, escalation_id, latency_ms, decided_at)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                 policy_matched, escalation_id, latency_ms,
+                 oversight_authority, decided_at)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (
                     f"{tc.call_id}-{decision.decided_at.timestamp()}",
                     tc.call_id,
@@ -173,6 +211,7 @@ class AuditLogger:
                     decision.policy_matched,
                     decision.escalation_id,
                     decision.latency_ms,
+                    oversight,
                     decision.decided_at.isoformat(),
                 ),
             )
@@ -422,12 +461,16 @@ class AuditLogger:
     ) -> None:
         """Update audit_log entry outcome when a human approves or rejects an escalation."""
         await self._ensure_init()
+        new_authority = _compute_oversight_authority(outcome, human_decision)
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute(
                 """UPDATE audit_log
-                   SET outcome = ?, human_decision = ?, human_reason = ?
+                   SET outcome = ?,
+                       human_decision = ?,
+                       human_reason = ?,
+                       oversight_authority = ?
                    WHERE escalation_id = ?""",
-                (outcome, human_decision, human_reason, escalation_id),
+                (outcome, human_decision, human_reason, new_authority, escalation_id),
             )
             await db.commit()
 
