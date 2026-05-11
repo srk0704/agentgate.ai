@@ -220,8 +220,14 @@ class PatternAnalyzer:
                 suggested_value = await self._compute_p90_threshold(
                     tool_name, condition_field, lookback_hours
                 )
-                if suggested_value is None or suggested_value <= current_value:
-                    suggested_value = current_value * 2  # fallback: double the threshold
+                if suggested_value is None:
+                    # Cannot compute p90 — no approved escalations with this field.
+                    # Skip rather than blindly doubling the threshold.
+                    continue
+                if suggested_value <= current_value:
+                    # p90 of approved amounts is already below the current threshold.
+                    # The threshold is calibrated correctly — no change needed.
+                    continue
 
                 patterns.append(Pattern(
                     id=str(uuid4()),

@@ -10,22 +10,29 @@ from uuid import uuid4
 
 import aiosqlite
 
+from agentgate.heuristic_injection import HeuristicInjectionDetector
+
 logger = logging.getLogger(__name__)
+
+# Shared, stateless — reused for every tool-result scan.
+_tool_result_detector = HeuristicInjectionDetector()
 
 CREATE_OUTPUT_LOG_TABLE = """
 CREATE TABLE IF NOT EXISTS output_log (
-    id                   TEXT PRIMARY KEY,
-    call_id              TEXT NOT NULL,
-    agent_id             TEXT NOT NULL,
-    tool_name            TEXT NOT NULL,
-    tool_result          TEXT,
-    success              INTEGER NOT NULL,
-    error_message        TEXT,
-    agent_final_response TEXT,
-    user_retried         INTEGER DEFAULT 0,
-    outcome_type         TEXT,
-    financial_impact     REAL,
-    logged_at            TEXT NOT NULL
+    id                           TEXT PRIMARY KEY,
+    call_id                      TEXT NOT NULL,
+    agent_id                     TEXT NOT NULL,
+    tool_name                    TEXT NOT NULL,
+    tool_result                  TEXT,
+    success                      INTEGER NOT NULL,
+    error_message                TEXT,
+    agent_final_response         TEXT,
+    user_retried                 INTEGER DEFAULT 0,
+    outcome_type                 TEXT,
+    financial_impact             REAL,
+    tool_result_injection_score  INTEGER,
+    tool_result_injection_reason TEXT,
+    logged_at                    TEXT NOT NULL
 );
 """
 
@@ -41,6 +48,15 @@ class OutputLogger:
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute("PRAGMA journal_mode=WAL")
             await db.execute(CREATE_OUTPUT_LOG_TABLE)
+            # Migrate existing DBs — ignore error if columns already exist.
+            for col in (
+                "tool_result_injection_score INTEGER",
+                "tool_result_injection_reason TEXT",
+            ):
+                try:
+                    await db.execute(f"ALTER TABLE output_log ADD COLUMN {col}")
+                except Exception:
+                    pass
             await db.commit()
         self._initialized = True
 
@@ -58,12 +74,28 @@ class OutputLogger:
         await self._ensure_init()
         row_id = str(uuid4())
         outcome_type = "success" if success else "failure"
+
+        # Scan the tool result for injection patterns (post-execution boundary).
+        # original_task=None: we're scanning the result content, not comparing
+        # it to a task.
+        tr_score, tr_reason = _tool_result_detector.detect(
+            tool_result if isinstance(tool_result, dict) else {},
+            original_task=None,
+        )
+        if tr_score > 0:
+            logger.warning(
+                "Tool result poisoning risk: tool=%s call_id=%s score=%d reason=%s",
+                tool_name, call_id, tr_score, tr_reason,
+            )
+
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute(
                 """INSERT INTO output_log
                 (id, call_id, agent_id, tool_name, tool_result, success,
-                 error_message, outcome_type, financial_impact, logged_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                 error_message, outcome_type, financial_impact,
+                 tool_result_injection_score, tool_result_injection_reason,
+                 logged_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     row_id,
                     call_id,
@@ -74,6 +106,8 @@ class OutputLogger:
                     error,
                     outcome_type,
                     financial_impact,
+                    tr_score if tr_score > 0 else None,
+                    tr_reason if tr_score > 0 else None,
                     datetime.utcnow().isoformat(),
                 ),
             )

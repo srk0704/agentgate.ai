@@ -46,6 +46,16 @@ AGENT_ID    = "finmate-prod"
 
 
 async def main() -> None:
+    # Reset policy.yaml to its committed state so learning-loop changes
+    # from prior seed runs do not compound across runs.
+    import subprocess
+    subprocess.run(
+        ["git", "checkout", "examples/finmate/policy.yaml"],
+        check=True,
+        capture_output=True,
+    )
+    print("  policy.yaml reset to committed state")
+
     EscalationQueue.configure(DB_PATH)
     gate = GatewayClient(
         policy_path=POLICY_PATH,
