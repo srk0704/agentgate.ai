@@ -62,6 +62,6 @@ policies:
   conditions:
   - field: args.amount
     op: gte
-    value: 6000.0
+    value: 48000.0
   effect: escalate
   reason: Expenses over $500 require manager approval

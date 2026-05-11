@@ -149,3 +149,45 @@ class SessionTracker:
             "tool_frequency": freq,
             "calls_last_60s": calls_60s,
         }
+
+    async def get_recent_calls(
+        self,
+        agent_id: str,
+        session_id: str | None = None,
+        limit: int = 3,
+    ) -> list[dict]:
+        """
+        Return the last `limit` tool calls for this agent/session,
+        oldest first, excluding the current call (which has not been
+        recorded yet).
+
+        Each dict has keys: tool_name, original_task, called_at.
+        """
+        await self._ensure_init()
+
+        conditions = ["agent_id = ?"]
+        params: list = [agent_id]
+        if session_id:
+            conditions.append("session_id = ?")
+            params.append(session_id)
+        where = " AND ".join(conditions)
+
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute(
+                f"""SELECT tool_name, original_task, called_at
+                    FROM session_calls
+                    WHERE {where}
+                    ORDER BY called_at DESC
+                    LIMIT ?""",
+                params + [limit],
+            ) as cur:
+                rows = await cur.fetchall()
+
+        return [
+            {
+                "tool_name": r[0],
+                "original_task": r[1] or "",
+                "called_at": r[2],
+            }
+            for r in reversed(rows)
+        ]

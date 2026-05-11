@@ -271,6 +271,14 @@ class GatewayClient:
                 policy_matched=policy_result.policy_name,
             )
 
+        # Fetch session trajectory once before scoring fan-out — risk scorer
+        # uses it to spot multi-step attack patterns.
+        recent_calls = await self._session_tracker.get_recent_calls(
+            agent_id=tool_call.agent_id,
+            session_id=tool_call.session_id,
+            limit=3,
+        )
+
         # Step 3: Parallel scoring (risk + injection + anomaly + drift + loop).
         # Note: explicit ALLOW policies do NOT skip scoring — injection can still override.
         try:
@@ -282,7 +290,7 @@ class GatewayClient:
                 (loop_score, loop_reason),
             ) = await asyncio.wait_for(
                 asyncio.gather(
-                    self._risk_scorer.score(tool_call),
+                    self._risk_scorer.score(tool_call, recent_calls),
                     self._injection_scorer.score(tool_call),
                     self._anomaly_scorer.score(tool_call),
                     self._drift_detector.score(tool_call),

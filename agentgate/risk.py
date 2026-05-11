@@ -31,7 +31,11 @@ class RiskScorer:
         self.model = model
         self.compliance_mode = compliance_mode
 
-    async def score(self, tool_call: ToolCall) -> tuple[int, str]:
+    async def score(
+        self,
+        tool_call: ToolCall,
+        recent_calls: list[dict] | None = None,
+    ) -> tuple[int, str]:
         # Fast path: obviously safe read-only tools
         if any(tool_call.tool_name.startswith(p) for p in LOW_RISK_TOOLS):
             return 5, (
@@ -42,12 +46,12 @@ class RiskScorer:
         if self.compliance_mode:
             return self._heuristic_score(tool_call)
 
-        cache_key = self._cache_key(tool_call)
+        cache_key = self._cache_key(tool_call, recent_calls)
         if cache_key in _cache:
             return _cache[cache_key]
 
         try:
-            result = await self._llm_score(tool_call)
+            result = await self._llm_score(tool_call, recent_calls)
         except Exception as e:
             logger.warning("Risk scorer LLM failed [%s]: %s — using heuristic", type(e).__name__, e)
             result = self._heuristic_score(tool_call)
@@ -55,9 +59,33 @@ class RiskScorer:
         _cache[cache_key] = result
         return result
 
-    async def _llm_score(self, tool_call: ToolCall) -> tuple[int, str]:
+    async def _llm_score(
+        self,
+        tool_call: ToolCall,
+        recent_calls: list[dict] | None = None,
+    ) -> tuple[int, str]:
         import anthropic
         client = anthropic.AsyncAnthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+
+        # Build trajectory section if we have recent calls in this session.
+        if recent_calls:
+            trajectory_lines = []
+            for i, call in enumerate(recent_calls, 1):
+                trajectory_lines.append(
+                    f"  {i}. {call['tool_name']}"
+                    f" (task: {call['original_task'][:60]})"
+                )
+            trajectory_str = "\n".join(trajectory_lines)
+            trajectory_section = (
+                f"\nRecent session history (last {len(recent_calls)} calls before this one):\n"
+                f"{trajectory_str}\n\n"
+                f"Consider: does this current action escalate risk "
+                f"given what the agent has already done this session? "
+                f"A sequence of actions can be more dangerous than "
+                f"any single action in isolation."
+            )
+        else:
+            trajectory_section = ""
 
         prompt = f"""You are a risk assessment system for AI agent actions.
 Score the following tool call from 0-100 for risk.
@@ -71,7 +99,7 @@ Scoring guide:
 Tool: {tool_call.tool_name}
 Args: {json.dumps(tool_call.args, default=str)}
 Context: {json.dumps(tool_call.context, default=str)}
-
+{trajectory_section}
 Respond with ONLY a JSON object:
 {{"score": <integer 0-100>, "reason": "<2-3 sentences written for a human reviewer who needs to decide whether to approve or reject this action. State: (1) what makes this risky or safe, (2) what the financial or data impact could be, (3) what the reviewer should verify before approving. Be specific about dollar amounts, tool names, and data involved.>"}}"""
 
@@ -117,6 +145,18 @@ Respond with ONLY a JSON object:
             f"Standard review applies."
         )
 
-    def _cache_key(self, tool_call: ToolCall) -> str:
-        payload = f"v1:{tool_call.tool_name}:{json.dumps(tool_call.args, sort_keys=True, default=str)}"
+    def _cache_key(
+        self,
+        tool_call: ToolCall,
+        recent_calls: list[dict] | None = None,
+    ) -> str:
+        trajectory = json.dumps(
+            [c["tool_name"] for c in recent_calls] if recent_calls else [],
+            sort_keys=True,
+        )
+        payload = (
+            f"v2:{tool_call.tool_name}:"
+            f"{json.dumps(tool_call.args, sort_keys=True, default=str)}:"
+            f"{trajectory}"
+        )
         return hashlib.sha256(payload.encode()).hexdigest()
