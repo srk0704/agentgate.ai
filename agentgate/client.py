@@ -18,14 +18,32 @@ logger = logging.getLogger(__name__)
 
 
 def _parse_attack_type(injection_reason: str | None) -> str | None:
-    """Extract attack_type from injection_reason prefix like '[goal_hijacking] ...'."""
-    if not injection_reason or not injection_reason.startswith("["):
+    """Extract attack_type from a human-readable injection_reason.
+
+    Reasons emitted today look like:
+      "⚠ Possible goal hijacking detected: ..."   → "goal_hijacking"
+      "No injection patterns detected ..."        → None
+
+    Legacy reasons used a bracketed prefix like "[goal_hijacking] ..." —
+    still recognized here so old audit_log rows decode correctly.
+    """
+    if not injection_reason:
         return None
-    bracket_end = injection_reason.find("]")
-    if bracket_end < 0:
-        return None
-    at = injection_reason[1:bracket_end]
-    return at if at not in ("none", "") else None
+
+    # New human-readable label form.
+    from agentgate.injection import LABEL_TO_ATTACK_TYPE
+    for label, attack_type in LABEL_TO_ATTACK_TYPE.items():
+        if injection_reason.startswith(label):
+            return attack_type
+
+    # Legacy bracketed form.
+    if injection_reason.startswith("["):
+        bracket_end = injection_reason.find("]")
+        if bracket_end > 0:
+            at = injection_reason[1:bracket_end]
+            return at if at not in ("none", "") else None
+
+    return None
 
 
 class GatewayClient:

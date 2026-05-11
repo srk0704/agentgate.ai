@@ -57,12 +57,20 @@ class HeuristicInjectionDetector:
             # Flatten all string values from args
             args_text = self._flatten_strings(tool_call_args)
 
+            from agentgate.injection import ATTACK_LABELS
+            hijack_label = ATTACK_LABELS["goal_hijacking"]
+
             # Check tool call args first (higher confidence)
             for pattern in self._compiled:
                 m = pattern.search(args_text)
                 if m:
                     matched = m.group(0)
-                    return 85, f"[goal_hijacking] injection pattern in tool args: '{matched}'"
+                    return 85, (
+                        f"{hijack_label}: an injection pattern was found inside the "
+                        f"tool arguments — '{matched}'. This phrase is commonly used to "
+                        f"override an agent's instructions. Verify whether the original "
+                        f"user actually intended this action before approving."
+                    )
 
             # Check original task
             if original_task:
@@ -70,13 +78,18 @@ class HeuristicInjectionDetector:
                     m = pattern.search(original_task)
                     if m:
                         matched = m.group(0)
-                        return 70, f"[goal_hijacking] injection pattern in task context: '{matched}'"
+                        return 70, (
+                            f"{hijack_label}: an injection pattern was found in the task "
+                            f"context — '{matched}'. The user's task text may have been "
+                            f"tampered with. Confirm the request originated from the user "
+                            f"before approving."
+                        )
 
-            return 0, "[none] no injection patterns detected"
+            return 0, "No injection patterns detected in args or task."
 
         except Exception as e:
             logger.warning("HeuristicInjectionDetector error: %s", e)
-            return 0, "[none] heuristic detector error"
+            return 0, "No injection patterns detected (heuristic check could not complete)."
 
     def _flatten_strings(self, obj: object, depth: int = 0) -> str:
         """Recursively extract all string values from a nested dict/list."""

@@ -77,7 +77,7 @@ async def test_no_original_task_returns_zero(detector):
     )
     score, reason = await detector.score(tc)
     assert score == 0
-    assert "no task" in reason.lower()
+    assert "no original task" in reason.lower()
 
 
 async def test_history_drift_sudden_destructive(detector, tmp_path):
@@ -112,7 +112,7 @@ async def test_insufficient_history_returns_zero(detector):
     )
     history_score, history_reason = await detector._history_drift(tc)
     assert history_score == 0
-    assert "insufficient" in history_reason.lower()
+    assert "not enough session history" in history_reason.lower()
 
 
 async def test_never_raises_on_bad_input(detector):

@@ -7,6 +7,18 @@ from agentgate.models import ToolCall
 
 logger = logging.getLogger(__name__)
 
+# Human-readable prefixes used in injection_reason. Exposed for both the
+# heuristic detector and client._parse_attack_type — keep these in sync.
+ATTACK_LABELS = {
+    "goal_hijacking":       "⚠ Possible goal hijacking detected",
+    "data_exfiltration":    "⚠ Possible data exfiltration detected",
+    "privilege_escalation": "⚠ Possible privilege escalation detected",
+    "excessive_agency":     "⚠ Excessive agency detected",
+    "other":                "⚠ Suspicious activity detected",
+}
+# Reverse map for parsing: label string → attack_type id.
+LABEL_TO_ATTACK_TYPE = {v: k for k, v in ATTACK_LABELS.items()}
+
 
 class InjectionScorer:
     """
@@ -88,7 +100,7 @@ PROPOSED ACTION:
   Context: {json.dumps(tool_call.context, default=str)}
 
 Respond with ONLY a JSON object:
-{{"score": <integer 0-100>, "reason": "<one sentence explaining your assessment>", "attack_type": "<none|goal_hijacking|data_exfiltration|privilege_escalation|excessive_agency|other>"}}"""
+{{"score": <integer 0-100>, "reason": "<2-3 sentences for a human reviewer. State: (1) whether the proposed action aligns with the original task, (2) what specifically looks suspicious or misaligned if score > 50, (3) what the reviewer should check — e.g. whether the user explicitly asked for this action, whether unexpected data is being accessed, or whether the action scope is disproportionate.>", "attack_type": "<none|goal_hijacking|data_exfiltration|privilege_escalation|excessive_agency|other>"}}"""
 
         message = await client.messages.create(
             model=self.model,
@@ -111,7 +123,8 @@ Respond with ONLY a JSON object:
         attack_type = data.get("attack_type", "none")
 
         if attack_type != "none":
-            reason = f"[{attack_type}] {reason}"
+            label = ATTACK_LABELS.get(attack_type, "⚠ Suspicious activity")
+            reason = f"{label}: {reason}"
 
         logger.debug("Injection score=%d reason=%s", score, reason)
         return score, reason

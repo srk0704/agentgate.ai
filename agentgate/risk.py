@@ -34,7 +34,10 @@ class RiskScorer:
     async def score(self, tool_call: ToolCall) -> tuple[int, str]:
         # Fast path: obviously safe read-only tools
         if any(tool_call.tool_name.startswith(p) for p in LOW_RISK_TOOLS):
-            return 5, "read-only tool prefix — safe by default"
+            return 5, (
+                f"Safe: '{tool_call.tool_name}' is a read-only operation. "
+                f"No data will be modified."
+            )
 
         if self.compliance_mode:
             return self._heuristic_score(tool_call)
@@ -70,7 +73,7 @@ Args: {json.dumps(tool_call.args, default=str)}
 Context: {json.dumps(tool_call.context, default=str)}
 
 Respond with ONLY a JSON object:
-{{"score": <integer 0-100>, "reason": "<one sentence explaining the specific risk factors>"}}"""
+{{"score": <integer 0-100>, "reason": "<2-3 sentences written for a human reviewer who needs to decide whether to approve or reject this action. State: (1) what makes this risky or safe, (2) what the financial or data impact could be, (3) what the reviewer should verify before approving. Be specific about dollar amounts, tool names, and data involved.>"}}"""
 
         message = await client.messages.create(
             model=self.model,
@@ -92,12 +95,27 @@ Respond with ONLY a JSON object:
         """Fallback when LLM is unavailable."""
         name = tool_call.tool_name.lower()
         if any(w in name for w in ["delete", "remove", "drop", "destroy"]):
-            return 85, "heuristic: destructive/irreversible action keyword"
+            return 85, (
+                f"High risk: '{tool_call.tool_name}' contains a destructive keyword "
+                f"(delete/remove/drop). This action may be irreversible. "
+                f"Verify the target scope before approving — confirm what will be deleted "
+                f"and whether a backup exists."
+            )
         if any(w in name for w in ["refund", "charge", "transfer", "payment"]):
-            return 45, "heuristic: financial action keyword"
+            return 45, (
+                f"Moderate risk: '{tool_call.tool_name}' is a financial action. "
+                f"Check the amount and recipient in the args before approving. "
+                f"Confirm this matches the user's original request."
+            )
         if any(w in name for w in ["update", "write", "create", "insert"]):
-            return 40, "heuristic: write action keyword"
-        return 20, "heuristic: no high-risk keyword matched"
+            return 40, (
+                f"Low-moderate risk: '{tool_call.tool_name}' will modify data. "
+                f"Verify the record being changed and confirm the change is intentional."
+            )
+        return 20, (
+            f"Low risk: '{tool_call.tool_name}' does not match any high-risk patterns. "
+            f"Standard review applies."
+        )
 
     def _cache_key(self, tool_call: ToolCall) -> str:
         payload = f"v1:{tool_call.tool_name}:{json.dumps(tool_call.args, sort_keys=True, default=str)}"

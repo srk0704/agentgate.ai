@@ -119,7 +119,10 @@ class DriftDetector:
             return best_score, best_reason
         except Exception as e:
             logger.debug("DriftDetector error (ignored): %s", e)
-            return 0, "drift scorer unavailable"
+            return 0, (
+                "Drift check did not complete due to an internal error. "
+                "Manual review recommended."
+            )
 
     # ── Stage 1: Structural ────────────────────────────────────────────────
 
@@ -143,31 +146,76 @@ class DriftDetector:
 
     def _structural_drift(self, tool_call: ToolCall) -> tuple[int, str]:
         if not tool_call.original_task:
-            return 0, "no task context"
+            return 0, (
+                f"Unable to assess drift: no original task was captured "
+                f"for this call to '{tool_call.tool_name}'. "
+                f"Pass an original_task on the ToolCall to enable drift checks."
+            )
+
+        task_excerpt = tool_call.original_task.strip().replace("\n", " ")
+        if len(task_excerpt) > 80:
+            task_excerpt = task_excerpt[:80] + "…"
 
         tool_cat = self._categorize_tool(tool_call.tool_name)
+        tool_cat_label = tool_cat or "uncategorized"
         expected = self._expected_categories(tool_call.original_task)
 
         if not expected:
-            return 0, "no task signal"
+            return 0, (
+                f"Unable to assess drift: the original task "
+                f"'{task_excerpt}' did not contain recognizable action "
+                f"keywords. Manual review recommended for this tool call."
+            )
+
+        expected_label = "/".join(sorted(expected))
 
         if tool_cat and tool_cat in expected:
-            return 0, "on task"
+            return 0, (
+                f"On task: '{tool_call.tool_name}' ({tool_cat_label}) matches the "
+                f"original task's expected action category ({expected_label})."
+            )
 
         # Severe mismatches first.
         if tool_cat == "destructive" and expected == {"read"}:
-            return 85, "destructive tool called for read task"
+            return 85, (
+                f"Strong drift detected: original task '{task_excerpt}' is a "
+                f"read/query but agent called '{tool_call.tool_name}' (destructive "
+                f"category). A read request should not lead to a destructive action. "
+                f"Block unless the destructive action was explicitly authorized by the user."
+            )
         if tool_cat == "destructive" and "destructive" not in expected:
-            return 80, f"destructive tool {tool_call.tool_name} not implied by task"
+            return 80, (
+                f"Strong drift detected: original task '{task_excerpt}' implies "
+                f"category {expected_label} but agent called '{tool_call.tool_name}' "
+                f"(destructive category). Verify the user explicitly authorized this "
+                f"destructive action."
+            )
         if tool_cat == "export" and "export" not in expected:
-            return 75, "export tool called for non-export task"
+            return 75, (
+                f"Drift detected: original task '{task_excerpt}' did not request an "
+                f"export (expected category {expected_label}) but agent called "
+                f"'{tool_call.tool_name}' (export category). Verify whether the export "
+                f"was explicitly requested."
+            )
         if tool_cat == "financial" and expected == {"read"}:
-            return 65, "financial tool called for lookup task"
+            return 65, (
+                f"Drift detected: original task '{task_excerpt}' is a lookup/read but "
+                f"agent called '{tool_call.tool_name}' (financial category). Confirm the "
+                f"user asked for a financial action, not just information."
+            )
         if tool_cat == "write" and expected == {"read"}:
-            return 55, "write tool called for read task"
+            return 55, (
+                f"Drift detected: original task '{task_excerpt}' is a read but agent "
+                f"called '{tool_call.tool_name}' (write category). Confirm the user "
+                f"asked to modify data, not just to read it."
+            )
 
         # Mild mismatch — falls into the LLM-clarification band.
-        return 30, "mild task mismatch"
+        return 30, (
+            f"Mild drift detected: '{tool_call.tool_name}' ({tool_cat_label}) may not "
+            f"align with the original task '{task_excerpt}' (expected category "
+            f"{expected_label}). No immediate action required but worth monitoring."
+        )
 
     # ── Stage 2: History ───────────────────────────────────────────────────
 
@@ -188,23 +236,47 @@ class DriftDetector:
                     rows = await cur.fetchall()
         except Exception as e:
             logger.debug("history_drift query error: %s", e)
-            return 0, "history unavailable"
+            return 0, (
+                "Session history was unavailable for the drift check. "
+                "Structural drift result still applies."
+            )
 
         prior = [r[0] for r in rows]
         if len(prior) < 3:
-            return 0, "insufficient history"
+            return 0, (
+                "Not enough session history yet to assess drift against prior "
+                "tool usage. Structural drift result still applies."
+            )
 
         prior_cats = {self._categorize_tool(p) for p in prior}
         prior_cats.discard(None)
         cur_cat = self._categorize_tool(tool_call.tool_name)
 
         if cur_cat == "destructive" and prior_cats and prior_cats.issubset({"read"}):
-            return 70, "sudden destructive action after read-only session"
+            return 70, (
+                f"Drift detected from session history: the session so far has been "
+                f"read-only but agent is now calling '{tool_call.tool_name}' "
+                f"(destructive category). A sudden destructive action after a "
+                f"read-only session is unusual — confirm the user explicitly "
+                f"requested this action."
+            )
         if cur_cat == "export" and prior_cats and prior_cats.issubset({"financial"}):
-            return 65, "data export after financial session"
+            return 65, (
+                f"Drift detected from session history: the session involved financial "
+                f"actions and now agent is exporting data via '{tool_call.tool_name}'. "
+                f"Verify the export was requested and that the exported data does not "
+                f"include sensitive financial details that should stay internal."
+            )
         if cur_cat == "export" and prior_cats and "export" not in prior_cats and prior_cats.issubset({"read"}):
-            return 60, "export action after read-only session"
-        return 0, "consistent with session history"
+            return 60, (
+                f"Drift detected from session history: the session has been read-only "
+                f"but agent is now calling '{tool_call.tool_name}' (export category). "
+                f"Confirm the user asked to export the data they had been viewing."
+            )
+        return 0, (
+            f"Consistent with session history: '{tool_call.tool_name}' aligns with the "
+            f"agent's recent tool usage in this session."
+        )
 
     # ── Stage 3: Semantic (LLM) ────────────────────────────────────────────
 
