@@ -72,7 +72,11 @@ class LoopDetector:
             return seq_score, seq_reason
         except Exception as e:
             logger.debug("LoopDetector error (ignored): %s", e)
-            return 0, "loop scorer unavailable"
+            return 0, (
+                f"Loop detection unavailable for "
+                f"'{tool_call.tool_name}' — an internal "
+                f"error occurred. Manual review recommended."
+            )
 
     # ── Stage 1: Retry storm ───────────────────────────────────────────────
 
@@ -108,7 +112,11 @@ class LoopDetector:
                 failures = (frow[0] if frow else 0) or 0
         except Exception as e:
             logger.debug("retry_storm query error: %s", e)
-            return 0, "retry storm scorer unavailable"
+            return 0, (
+                f"Retry storm check unavailable for "
+                f"'{tool_call.tool_name}' — database "
+                f"query failed. Manual review recommended."
+            )
 
         if count >= self._retry_threshold and count > 0 and failures / count > 0.5:
             score = min(85, 50 + count * 5)
@@ -117,11 +125,48 @@ class LoopDetector:
                 f"{failures} failures in {self._window_sec}s — retry storm"
             )
         if count >= self._retry_threshold and failures == 0:
-            return 30, (
-                f"{tool_call.tool_name} called {count} times "
-                f"without failures — monitoring"
+            # Only emit the monitoring signal if output_log has at least one
+            # row for this tool — proving we have real execution data, not
+            # just absence of data. If output_log is empty for this tool we
+            # cannot distinguish "succeeded" from "nobody called
+            # log_tool_result".
+            output_params: list[Any] = [
+                tool_call.agent_id,
+                tool_call.tool_name,
+            ]
+            try:
+                async with aiosqlite.connect(self.db_path) as db:
+                    async with db.execute(
+                        """SELECT COUNT(*) FROM output_log
+                           WHERE agent_id = ? AND tool_name = ?
+                           LIMIT 1""",
+                        output_params,
+                    ) as cur:
+                        orow = await cur.fetchone()
+                has_output_data = (orow[0] if orow else 0) > 0
+            except Exception as e:
+                logger.debug("output_log presence check error: %s", e)
+                has_output_data = False
+
+            if has_output_data:
+                return 30, (
+                    f"'{tool_call.tool_name}' called "
+                    f"{count} times with no failures "
+                    f"recorded — monitoring for "
+                    f"retry storm pattern."
+                )
+            # No output_log data for this tool. Cannot confirm success or
+            # failure. Return 0 — no signal.
+            return 0, (
+                f"'{tool_call.tool_name}' called "
+                f"{count} times — no execution data "
+                f"in output log to confirm failure "
+                f"pattern. Loop detection skipped."
             )
-        return 0, "no retry pattern"
+        return 0, (
+            f"No retry storm pattern detected for "
+            f"'{tool_call.tool_name}'."
+        )
 
     # ── Stage 2: Sequence loop ─────────────────────────────────────────────
 
@@ -146,7 +191,11 @@ class LoopDetector:
                     rows = await cur.fetchall()
         except Exception as e:
             logger.debug("sequence_loop query error: %s", e)
-            return 0, "sequence loop scorer unavailable"
+            return 0, (
+                f"Sequence loop check unavailable for "
+                f"'{tool_call.tool_name}' — database "
+                f"query failed. Manual review recommended."
+            )
 
         names = [r[0] for r in rows]
         names = list(reversed(names))
