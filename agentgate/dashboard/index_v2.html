@@ -1513,6 +1513,58 @@ strong { font-weight: 600; color: var(--color-text-primary); }
   flex-shrink: 0;
 }
 
+/* ── Failure-modes v2 (3-zone) ─────────────────────────────────────────── */
+.fmv2-page{padding:24px;display:flex;flex-direction:column;gap:24px}
+.fmv2-summary-bar{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.fmv2-sum-card{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:10px;padding:14px 16px;display:flex;align-items:center;gap:14px}
+.fmv2-sum-num{font-size:28px;font-weight:500;line-height:1;flex-shrink:0}
+.fmv2-sum-label{font-size:13px;font-weight:500;margin-bottom:2px}
+.fmv2-sum-sub{font-size:11px;color:var(--color-text-tertiary)}
+.fmv2-zone{display:flex;flex-direction:column;gap:12px}
+.fmv2-zone-header{display:flex;align-items:center;gap:10px}
+.fmv2-zone-label{font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:.07em;color:var(--color-text-tertiary);white-space:nowrap}
+.fmv2-zone-line{flex:1;height:0.5px;background:var(--color-border-tertiary)}
+.fmv2-zone-count{font-size:11px;color:var(--color-text-tertiary);white-space:nowrap}
+.fmv2-active-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+@media (max-width: 880px){.fmv2-active-grid{grid-template-columns:1fr}}
+.fmv2-active-card{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-left:3px solid var(--color-text-danger);border-radius:0 10px 10px 0;padding:14px 16px}
+.fmv2-active-card.fmv2-amber{border-left-color:var(--color-text-warning)}
+.fmv2-active-card.fmv2-purple{border-left-color:#8b5cf6}
+.fmv2-active-card.fmv2-info{border-left-color:var(--color-text-info)}
+.fmv2-ac-top{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:4px;gap:8px}
+.fmv2-ac-name{font-size:13px;font-weight:500}
+.fmv2-ac-badge{font-size:10px;font-weight:500;padding:2px 7px;border-radius:8px;flex-shrink:0;white-space:nowrap}
+.fmv2-badge-danger{background:var(--color-background-danger);color:var(--color-text-danger)}
+.fmv2-badge-warning{background:var(--color-background-warning);color:var(--color-text-warning)}
+.fmv2-badge-purple{background:#ede9fe;color:#6d28d9}
+.fmv2-badge-info{background:var(--color-background-info);color:var(--color-text-info)}
+.fmv2-ac-desc{font-size:12px;color:var(--color-text-secondary);margin-bottom:10px;line-height:1.4}
+.fmv2-ac-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;margin-bottom:10px}
+.fmv2-ac-stat{background:var(--color-background-secondary);border-radius:6px;padding:5px 8px;text-align:center}
+.fmv2-ac-stat-val{font-size:15px;font-weight:500;line-height:1}
+.fmv2-ac-stat-lbl{font-size:10px;color:var(--color-text-tertiary);margin-top:2px}
+.fmv2-sparkline-wrap{position:relative;width:100%;height:36px;margin-bottom:8px}
+.fmv2-ac-footer{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.fmv2-layer-tag{font-size:10px;color:var(--color-text-tertiary);padding:2px 6px;border-radius:4px;background:var(--color-background-secondary)}
+.fmv2-trigger{font-size:11px;color:var(--color-text-tertiary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fmv2-mon-list{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:10px;overflow:hidden}
+.fmv2-mon-row{display:flex;align-items:center;gap:12px;padding:10px 14px;border-bottom:0.5px solid var(--color-border-tertiary)}
+.fmv2-mon-row:last-child{border-bottom:none}
+.fmv2-mon-dot{width:7px;height:7px;border-radius:50%;background:var(--color-border-secondary);flex-shrink:0}
+.fmv2-mon-name{font-size:13px;font-weight:500;flex-shrink:0;min-width:160px}
+.fmv2-mon-desc{font-size:12px;color:var(--color-text-tertiary);flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fmv2-mon-layer{font-size:10px;color:var(--color-text-tertiary);padding:2px 6px;border-radius:4px;background:var(--color-background-secondary);flex-shrink:0}
+.fmv2-mon-zero{font-size:11px;color:var(--color-text-tertiary);width:60px;text-align:right;flex-shrink:0}
+.fmv2-coming-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+@media (max-width: 1100px){.fmv2-coming-grid{grid-template-columns:repeat(2,1fr)}}
+@media (max-width: 700px){.fmv2-coming-grid{grid-template-columns:1fr}}
+.fmv2-coming-pill{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:8px;padding:10px 12px}
+.fmv2-cp-name{font-size:12px;font-weight:500;margin-bottom:3px;color:var(--color-text-secondary)}
+.fmv2-cp-desc{font-size:11px;color:var(--color-text-tertiary);line-height:1.4}
+.fmv2-cp-footer{display:flex;align-items:center;justify-content:space-between;margin-top:6px}
+.fmv2-cp-layer{font-size:10px;color:var(--color-text-tertiary)}
+.fmv2-cp-tier{font-size:10px;font-weight:500;padding:1px 6px;border-radius:6px;background:var(--color-background-warning);color:var(--color-text-warning)}
+
 /* Stub pages for non-Overview nav items */
 .stub {
   background: var(--color-background-primary);
@@ -1692,26 +1744,33 @@ strong { font-weight: 600; color: var(--color-text-primary); }
 
   <!-- FAILURE MODES ─────────────────────────────────────────────────── -->
   <div class="content v2-content" id="content-failure-modes">
-    <div class="top-row">
-      <div class="section-label">Failure Modes</div>
+    <div class="fmv2-page">
+      <div class="fmv2-summary-bar" id="fmv2-summary"></div>
+      <div class="fmv2-zone">
+        <div class="fmv2-zone-header">
+          <span class="fmv2-zone-label">Active today</span>
+          <div class="fmv2-zone-line"></div>
+          <span class="fmv2-zone-count" id="fmv2-active-count"></span>
+        </div>
+        <div class="fmv2-active-grid" id="fmv2-active-grid"></div>
+      </div>
+      <div class="fmv2-zone">
+        <div class="fmv2-zone-header">
+          <span class="fmv2-zone-label">Monitoring</span>
+          <div class="fmv2-zone-line"></div>
+          <span class="fmv2-zone-count" id="fmv2-mon-count"></span>
+        </div>
+        <div class="fmv2-mon-list" id="fmv2-mon-list"></div>
+      </div>
+      <div class="fmv2-zone">
+        <div class="fmv2-zone-header">
+          <span class="fmv2-zone-label">Coming soon</span>
+          <div class="fmv2-zone-line"></div>
+          <span class="fmv2-zone-count" id="fmv2-coming-count"></span>
+        </div>
+        <div class="fmv2-coming-grid" id="fmv2-coming-grid"></div>
+      </div>
     </div>
-    <div class="fm-summary-row" id="fm-summary-chips"></div>
-    <div class="fm-filters">
-      <button class="fm-filter active" data-fm-status="all"        onclick="setFmStatus('all')">All</button>
-      <button class="fm-filter"        data-fm-status="built"      onclick="setFmStatus('built')">Detecting now</button>
-      <button class="fm-filter"        data-fm-status="coming_soon"onclick="setFmStatus('coming_soon')">Coming soon</button>
-      <button class="fm-filter"        data-fm-status="roadmap"    onclick="setFmStatus('roadmap')">Roadmap</button>
-      <span class="fm-filter-sep"></span>
-      <button class="fm-filter active" data-fm-layer="all"             onclick="setFmLayer('all')">All layers</button>
-      <button class="fm-filter"        data-fm-layer="Pre-execution"   onclick="setFmLayer('Pre-execution')">Pre-execution</button>
-      <button class="fm-filter"        data-fm-layer="Post-execution"  onclick="setFmLayer('Post-execution')">Post-execution</button>
-      <button class="fm-filter"        data-fm-layer="Output scan"     onclick="setFmLayer('Output scan')">Output scan</button>
-      <button class="fm-filter"        data-fm-layer="Session pattern" onclick="setFmLayer('Session pattern')">Session pattern</button>
-      <button class="fm-filter"        data-fm-layer="Memory layer"    onclick="setFmLayer('Memory layer')">Memory</button>
-      <span class="fm-showing" id="fm-showing"></span>
-    </div>
-    <div id="fm-stats-banner"></div>
-    <div id="fm-content"></div>
   </div>
 
   <!-- ESCALATIONS ───────────────────────────────────────────────────── -->
@@ -1798,6 +1857,8 @@ strong { font-weight: 600; color: var(--color-text-primary); }
 </main>
 
 <div class="toast" id="toast"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 
 <script>
 "use strict";
@@ -2823,161 +2884,254 @@ function renderDecisionFeed() {
 /* ─────────────────────────────────────────────────────────────────────────
    Failure Modes tab (ported from v1)
    ───────────────────────────────────────────────────────────────────────── */
-let fmStatusFilter = "all";
-let fmLayerFilter  = "all";
-let fmRoadmapOpen  = {};
-let fmStatsError   = false;
-function setFmStatus(s) {
-  fmStatusFilter = s;
-  document.querySelectorAll('[data-fm-status]').forEach(b =>
-    b.classList.toggle("active", b.dataset.fmStatus === s));
-  renderFmContent();
+// Old fm-tab filter state (renderFmSummary / renderFmContent / renderFmBuiltCard /
+// renderFmSecondaryRow / toggleFmRoadmap / setFmStatus / setFmLayer /
+// fmModeMatchesFilters / buildSparkline) has been replaced by the new
+// 3-zone fmv2 implementation below. The Overview's "What went wrong today"
+// panel still reads fmCatalog/fmStats — those globals continue to be
+// populated by loadFmCatalog / loadFmStats with a `since=` window.
+// The FM tab needs all-time stats (so the "All time" column is correct),
+// so it uses its own fmTabStats global, fetched WITHOUT a since param.
+let fmv2Charts = {};
+let fmTabStats = null;
+
+/* Map a mode (id + category) to one of four accent colors used by the
+   card's left border, badge, sparkline, and stat. */
+function fmv2Color(id, category) {
+  const cat = (category || "").toLowerCase();
+  if (cat.includes("inject") || cat.includes("hijack") ||
+      cat.includes("security") ||
+      id === "prompt_injection" || id === "goal_hijacking")
+    return "danger";
+  if (cat.includes("drift") || cat.includes("blast") ||
+      cat.includes("pii") || cat.includes("exfil") ||
+      id === "goal_drift" || id === "high_blast_radius" ||
+      id === "pii_in_output" || id === "data_exfiltration")
+    return "amber";
+  if (cat.includes("anomaly") || cat.includes("loop") ||
+      cat.includes("memory") ||
+      id === "session_anomaly" || id === "retry_storm" ||
+      id === "sequence_loop")
+    return "purple";
+  return "info";
 }
-function setFmLayer(l) {
-  fmLayerFilter = l;
-  document.querySelectorAll('[data-fm-layer]').forEach(b =>
-    b.classList.toggle("active", b.dataset.fmLayer === l));
-  renderFmContent();
+
+function fmv2LineColor(color) {
+  const map = {
+    danger: { border: "#A32D2D", bg: "rgba(163,45,45,0.12)" },
+    amber:  { border: "#BA7517", bg: "rgba(186,117,23,0.12)" },
+    purple: { border: "#7c3aed", bg: "rgba(124,58,237,0.12)" },
+    info:   { border: "#185FA5", bg: "rgba(24,95,165,0.12)" }
+  };
+  return map[color] || map.info;
 }
-function fmTimeAgo(iso) { return timeAgo(iso); }
-function buildSparkline(data, width) {
-  const h = 28;
-  const n = data.length;
-  const gap = 2;
-  const bw = Math.max(2, Math.floor((width - gap * (n - 1)) / n));
-  const mx = Math.max(...data, 1);
-  // Read CSS variables at render time so dark/light mode both work.
-  const root = getComputedStyle(document.documentElement);
-  const fillOn  = root.getPropertyValue("--color-text-success").trim() || "#22C55E";
-  const fillOff = root.getPropertyValue("--color-border-tertiary").trim() || "#1E1E1E";
-  const bars = data.map((v, i) => {
-    const bh = v === 0 ? 2 : Math.max(3, Math.floor(v / mx * h));
-    const x = i * (bw + gap);
-    const y = h - bh;
-    const fill = v === 0 ? fillOff : fillOn;
-    return `<rect x="${x}" y="${y}" width="${bw}" height="${bh}" fill="${fill}" rx="1"/>`;
-  }).join("");
-  return `<svg class="fm-spark" width="100%" height="${h}" viewBox="0 0 ${width} ${h}" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">${bars}</svg>`;
-}
-function renderFmSummary() {
-  const wrap = $("fm-summary-chips");
-  if (!fmCatalog) { wrap.innerHTML = ""; return; }
-  const s = fmCatalog.summary || {};
-  wrap.innerHTML =
-    `<div class="fm-chip green"><span class="fm-chip-dot"></span>${(s.built || 0)} detecting now</div>` +
-    `<div class="fm-chip amber"><span class="fm-chip-dot"></span>${(s.coming_soon || 0)} coming soon</div>` +
-    `<div class="fm-chip muted"><span class="fm-chip-dot"></span>${(s.roadmap || 0)} on roadmap</div>`;
-}
-function fmModeMatchesFilters(m) {
-  if (fmStatusFilter !== "all" && m.status !== fmStatusFilter) return false;
-  if (fmLayerFilter  !== "all" && m.detection_layer !== fmLayerFilter) return false;
-  return true;
-}
-function renderFmContent() {
-  const wrap = $("fm-content");
-  const banner = $("fm-stats-banner");
-  if (!wrap) return;
-  if (!fmCatalog) {
-    wrap.innerHTML = '<div class="fm-error">Loading failure modes…</div>';
-    if (banner) banner.innerHTML = "";
-    return;
+
+function fmv2BuildSparkline(canvasId, data, color) {
+  if (fmv2Charts[canvasId]) {
+    fmv2Charts[canvasId].destroy();
+    delete fmv2Charts[canvasId];
   }
-  if (banner) {
-    banner.innerHTML = fmStatsError ? '<div class="fm-stats-banner">Stats unavailable — retrying</div>' : "";
-  }
-  let visibleTotal = 0;
-  for (const cat of fmCatalog.categories) {
-    for (const m of cat.modes) if (fmModeMatchesFilters(m)) visibleTotal++;
-  }
-  $("fm-showing").textContent = `Showing ${visibleTotal} of ${fmCatalog.summary.total} failure modes`;
-  renderFmSummary();
-  const sections = fmCatalog.categories.map(cat => {
-    const visible = cat.modes.filter(fmModeMatchesFilters);
-    if (!visible.length) return "";
-    const built  = visible.filter(m => m.status === "built");
-    const coming = visible.filter(m => m.status === "coming_soon");
-    const road   = visible.filter(m => m.status === "roadmap");
-    const builtHtml = built.length
-      ? `<div class="fm-built-grid">${built.map(renderFmBuiltCard).join("")}</div>` : "";
-    const comingHtml = coming.length
-      ? `<div style="margin-top:8px">${coming.map(m => renderFmSecondaryRow(m, false)).join("")}</div>` : "";
-    const open = fmRoadmapOpen[cat.id];
-    const roadHtml = road.length
-      ? `<div class="fm-roadmap-wrap">
-          <button class="fm-roadmap-toggle ${open ? "open" : ""}" onclick="toggleFmRoadmap('${escHtml(cat.id)}')">
-            <span class="arrow">›</span> ${road.length} more planned
-          </button>
-          <div class="fm-roadmap-list ${open ? "open" : ""}">
-            ${road.map(m => renderFmSecondaryRow(m, true)).join("")}
-          </div>
-        </div>` : "";
-    const counts = `<div class="fm-cat-counts">
-        <span class="c-built">${cat.modes.filter(m => m.status === "built").length} detecting</span><span>·</span>
-        <span class="c-coming">${cat.modes.filter(m => m.status === "coming_soon").length} coming</span><span>·</span>
-        <span class="c-road">${cat.modes.filter(m => m.status === "roadmap").length} roadmap</span>
-      </div>`;
-    return `<div class="fm-cat-section">
-      <div class="fm-cat-head">
-        <div class="fm-cat-label">${escHtml(cat.label)}</div>
-        <div class="fm-cat-desc">${escHtml(cat.description)}</div>
-        ${counts}
-      </div>${builtHtml}${comingHtml}${roadHtml}
-    </div>`;
-  }).join("");
-  wrap.innerHTML = sections.trim() ? sections : '<div class="empty">No failure modes match these filters</div>';
+  const canvas = document.getElementById(canvasId);
+  if (!canvas || typeof Chart === "undefined") return;
+  const cols = fmv2LineColor(color);
+  const vals = (data && data.length === 7)
+    ? data : [0, 0, 0, 0, 0, 0, data ? (data[0] || 0) : 0];
+  fmv2Charts[canvasId] = new Chart(canvas, {
+    type: "line",
+    data: {
+      labels: ["D-6","D-5","D-4","D-3","D-2","D-1","Today"],
+      datasets: [{
+        data: vals,
+        borderColor: cols.border,
+        backgroundColor: cols.bg,
+        borderWidth: 1.5,
+        pointRadius: 0,
+        fill: true,
+        tension: 0.35
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { enabled: false } },
+      scales: {
+        x: { display: false },
+        y: { display: false, beginAtZero: true }
+      },
+      animation: false
+    }
+  });
 }
-function renderFmBuiltCard(m) {
-  const stats = (fmStats && fmStats[m.id]) || null;
-  const total = stats ? stats.total : 0;
-  const today = stats ? stats.today : 0;
-  const week  = stats ? stats.this_week : 0;
-  const last  = stats ? stats.last_triggered : null;
-  const top   = stats ? stats.top_tool : null;
-  const fp    = stats ? stats.false_positive_rate : null;
-  const sparkData = (stats && stats.sparkline) || [0,0,0,0,0,0,0];
-  const haveStats = !fmStatsError && stats;
-  const statsBlock = !haveStats
-    ? '<div class="fm-empty-stats">Stats unavailable</div>'
-    : total === 0
-      ? '<div class="fm-empty-stats">Not triggered yet</div>'
-      : `<div class="fm-stat-grid">
-          <div class="fm-stat"><div class="n">${today}</div><div class="l">Today</div></div>
-          <div class="fm-stat"><div class="n">${week}</div><div class="l">This week</div></div>
-          <div class="fm-stat"><div class="n">${total}</div><div class="l">All time</div></div>
-          <div class="fm-stat"><div class="n">${escHtml(fmTimeAgo(last))}</div><div class="l">Last seen</div></div>
-        </div>`;
-  const allZero = sparkData.every(v => v === 0);
-  const sparkBlock = allZero
-    ? '<div class="fm-spark-empty">No detections in 7 days</div>'
-    : buildSparkline(sparkData, 240);
-  const footParts = [];
-  if (top) footParts.push(`<div>Most common: ${escHtml(top)}</div>`);
-  if (fp != null) footParts.push(`<div title="Based on human escalation reviews">Human override rate: ${Math.round(fp * 100)}%</div>`);
-  const footBlock = footParts.length ? `<div class="fm-foot">${footParts.join("")}</div>` : "";
-  return `<div class="fm-card">
-    <div class="fm-card-top">
-      <div class="fm-card-name">${escHtml(m.name)}</div>
-      <span class="fm-status-pill">Detecting now</span>
+
+async function loadFmV2() {
+  try {
+    const [catRes, statsRes] = await Promise.all([
+      fetch(BASE + "/failure-modes"),
+      fetch(BASE + "/failure-modes/stats")  // no since: all-time `total`
+    ]);
+    fmCatalog  = await catRes.json();
+    fmTabStats = await statsRes.json();
+    renderFmV2();
+  } catch (e) {
+    console.error("loadFmV2:", e);
+  }
+}
+
+/* The actual API shapes we render against (verified against api/main.py):
+   /failure-modes        → { summary, categories: [{ id, label, description,
+                              modes: [{ id, name, category, plain_english,
+                              detection_layer, status, tier }] }] }
+   /failure-modes/stats  → flat map keyed by mode id:
+                           { mode_id: { total, today, this_week,
+                             last_triggered, top_tool, false_positive_rate,
+                             sparkline (7 ints) } } */
+function renderFmV2() {
+  if (!fmCatalog || !fmTabStats) return;
+
+  // Flatten all modes (they're nested inside categories) and look up stats by id.
+  const modes = [];
+  for (const cat of (fmCatalog.categories || [])) {
+    for (const m of (cat.modes || [])) modes.push(m);
+  }
+  const statsMap = fmTabStats || {};
+
+  const built  = modes.filter(m => m.status === "built");
+  const coming = modes.filter(m => m.status === "coming_soon" || m.status === "roadmap");
+  const active     = built.filter(m => ((statsMap[m.id] || {}).today || 0) > 0);
+  const monitoring = built.filter(m => ((statsMap[m.id] || {}).today || 0) === 0);
+
+  // Summary bar
+  $("fmv2-summary").innerHTML = `
+    <div class="fmv2-sum-card">
+      <div class="fmv2-sum-num" style="color:var(--color-text-danger)">${active.length}</div>
+      <div>
+        <div class="fmv2-sum-label">Active today</div>
+        <div class="fmv2-sum-sub">failure modes detected</div>
+      </div>
     </div>
-    <div class="fm-card-desc">${escHtml(m.plain_english)}</div>
-    <span class="fm-layer-pill">${escHtml(m.detection_layer)}</span>
-    <div class="fm-card-divider"></div>
-    ${statsBlock}${sparkBlock}${footBlock}
-  </div>`;
-}
-function renderFmSecondaryRow(m, isRoadmap) {
-  const cls = isRoadmap ? "road" : "coming";
-  const label = isRoadmap ? "Roadmap" : "Coming soon";
-  return `<div class="fm-row-secondary">
-    <span class="fm-row-dot ${cls}"></span>
-    <span class="fm-row-name ${isRoadmap ? "road" : ""}">${escHtml(m.name)}</span>
-    <span class="fm-layer-pill">${escHtml(m.detection_layer)}</span>
-    <span class="fm-row-status ${cls}">${label}</span>
-  </div>`;
-}
-function toggleFmRoadmap(catId) {
-  fmRoadmapOpen[catId] = !fmRoadmapOpen[catId];
-  renderFmContent();
+    <div class="fmv2-sum-card">
+      <div class="fmv2-sum-num" style="color:var(--color-text-secondary)">${monitoring.length}</div>
+      <div>
+        <div class="fmv2-sum-label">Monitoring</div>
+        <div class="fmv2-sum-sub">built · quiet today</div>
+      </div>
+    </div>
+    <div class="fmv2-sum-card">
+      <div class="fmv2-sum-num" style="color:var(--color-text-tertiary)">${coming.length}</div>
+      <div>
+        <div class="fmv2-sum-label">Coming soon</div>
+        <div class="fmv2-sum-sub">in development · on roadmap</div>
+      </div>
+    </div>`;
+
+  // ── Active zone ──────────────────────────────────────────────────────
+  $("fmv2-active-count").textContent = active.length + " firing";
+
+  const activeGrid = $("fmv2-active-grid");
+  if (active.length === 0) {
+    activeGrid.innerHTML =
+      '<div style="grid-column:1/-1;padding:24px;text-align:center;' +
+      'color:var(--color-text-tertiary);font-size:13px">' +
+      'No failure modes active today — all clear.</div>';
+  } else {
+    activeGrid.innerHTML = active.map(m => {
+      const s = statsMap[m.id] || {};
+      const color = fmv2Color(m.id, m.category);
+      const borderCls = color === "danger" ? "" :
+                        color === "amber"  ? " fmv2-amber" :
+                        color === "purple" ? " fmv2-purple" : " fmv2-info";
+      const badgeCls = "fmv2-badge-" +
+        (color === "danger" ? "danger" :
+         color === "amber"  ? "warning" :
+         color === "purple" ? "purple" : "info");
+      const statColor = color === "danger" ? "var(--color-text-danger)"
+                      : color === "amber"  ? "var(--color-text-warning)"
+                      : color === "purple" ? "#7c3aed"
+                      :                      "var(--color-text-info)";
+      const canvasId  = "fmv2-spark-" + m.id.replace(/_/g, "-");
+      const layer     = m.detection_layer || "Pre-execution";
+      const trigger   = s.top_tool ? ("Top: " + s.top_tool) : "";
+      return `
+        <div class="fmv2-active-card${borderCls}">
+          <div class="fmv2-ac-top">
+            <div class="fmv2-ac-name">${escHtml(m.name)}</div>
+            <span class="fmv2-ac-badge ${badgeCls}">${s.today || 0} today</span>
+          </div>
+          <div class="fmv2-ac-desc">${escHtml(m.plain_english || "")}</div>
+          <div class="fmv2-ac-stats">
+            <div class="fmv2-ac-stat">
+              <div class="fmv2-ac-stat-val" style="color:${statColor}">${s.today || 0}</div>
+              <div class="fmv2-ac-stat-lbl">Today</div>
+            </div>
+            <div class="fmv2-ac-stat">
+              <div class="fmv2-ac-stat-val">${s.this_week || 0}</div>
+              <div class="fmv2-ac-stat-lbl">This week</div>
+            </div>
+            <div class="fmv2-ac-stat">
+              <div class="fmv2-ac-stat-val">${s.total || 0}</div>
+              <div class="fmv2-ac-stat-lbl">All time</div>
+            </div>
+          </div>
+          <div class="fmv2-sparkline-wrap">
+            <canvas id="${canvasId}" role="img"
+              aria-label="7-day trend for ${escHtml(m.name)}">
+              ${escHtml(m.name)} trend over 7 days.
+            </canvas>
+          </div>
+          <div class="fmv2-ac-footer">
+            <span class="fmv2-layer-tag">${escHtml(layer)}</span>
+            <span class="fmv2-trigger">${escHtml(trigger)}</span>
+          </div>
+        </div>`;
+    }).join("");
+
+    // Draw sparklines after DOM commits so canvases have nonzero size.
+    setTimeout(() => {
+      active.forEach(m => {
+        const s = statsMap[m.id] || {};
+        const color    = fmv2Color(m.id, m.category);
+        const canvasId = "fmv2-spark-" + m.id.replace(/_/g, "-");
+        const data     = (s.sparkline && s.sparkline.length === 7)
+          ? s.sparkline
+          : [0, 0, 0, 0, 0, 0, s.today || 0];
+        fmv2BuildSparkline(canvasId, data, color);
+      });
+    }, 0);
+  }
+
+  // ── Monitoring zone ──────────────────────────────────────────────────
+  $("fmv2-mon-count").textContent = monitoring.length + " built · quiet today";
+  $("fmv2-mon-list").innerHTML = monitoring.length === 0
+    ? '<div class="fmv2-mon-row" style="color:var(--color-text-tertiary);font-size:13px">All built modes are active today</div>'
+    : monitoring.map(m => {
+        const layer = m.detection_layer || "Pre-execution";
+        return `
+          <div class="fmv2-mon-row">
+            <div class="fmv2-mon-dot"></div>
+            <div class="fmv2-mon-name">${escHtml(m.name)}</div>
+            <div class="fmv2-mon-desc">${escHtml(m.plain_english || "")}</div>
+            <span class="fmv2-mon-layer">${escHtml(layer)}</span>
+            <div class="fmv2-mon-zero">0 today</div>
+          </div>`;
+      }).join("");
+
+  // ── Coming soon zone ─────────────────────────────────────────────────
+  $("fmv2-coming-count").textContent = coming.length + " in development";
+  $("fmv2-coming-grid").innerHTML = coming.slice(0, 12).map(m => {
+    const layer = m.detection_layer || "Pre-execution";
+    const tier  = m.tier
+      ? (m.tier.charAt(0).toUpperCase() + m.tier.slice(1))
+      : "Pro";
+    return `
+      <div class="fmv2-coming-pill">
+        <div class="fmv2-cp-name">${escHtml(m.name)}</div>
+        <div class="fmv2-cp-desc">${escHtml(m.plain_english || "")}</div>
+        <div class="fmv2-cp-footer">
+          <span class="fmv2-cp-layer">${escHtml(layer)}</span>
+          <span class="fmv2-cp-tier">${escHtml(tier)}</span>
+        </div>
+      </div>`;
+  }).join("");
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -3342,7 +3496,7 @@ function switchTabV2(tabName) {
   // Load data for this tab
   if (tabName === "overview")          renderV2Overview();
   else if (tabName === "feed")         renderDecisionFeed();
-  else if (tabName === "failure-modes"){ loadFmCatalog().then(loadFmStats); }
+  else if (tabName === "failure-modes"){ loadFmV2(); }
   else if (tabName === "escalations")  { loadEscalations().then(() => { loadResolvedEscalations().then(renderEscTab); }); }
   else if (tabName === "audit")        loadAudit();
   else if (tabName === "learning")     loadPatternsAndChanges();
