@@ -306,7 +306,6 @@ class AuditLogger:
             avg_reliability = avg_row[0] if avg_row and avg_row[0] is not None else None  # type: ignore[index]
 
             # Active agents in last 5 min (proxy for "live agent count")
-            from datetime import datetime, timedelta
             five_min_ago = (datetime.utcnow() - timedelta(minutes=5)).isoformat()
             async with db.execute(
                 "SELECT COUNT(DISTINCT agent_id) FROM audit_log WHERE decided_at >= ?",

@@ -79,6 +79,15 @@ async def dashboard() -> FileResponse:
     return FileResponse(DASHBOARD_HTML, media_type="text/html")
 
 
+@app.get("/v2", include_in_schema=False)
+async def dashboard_v2() -> FileResponse:
+    """Serve the v2 single-page dashboard (sidebar + narrative hero)."""
+    p = Path(__file__).parent.parent / "dashboard" / "index_v2.html"
+    if not p.exists():
+        raise HTTPException(status_code=404, detail="v2 dashboard not built")
+    return FileResponse(p, media_type="text/html")
+
+
 # ---------------------------------------------------------------------------
 # Stats
 # ---------------------------------------------------------------------------

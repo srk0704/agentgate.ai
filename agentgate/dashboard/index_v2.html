@@ -1,0 +1,3404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AgentGate v2 · Agent reliability infrastructure</title>
+<style>
+/* ── Color tokens — light mode defaults, dark via prefers-color-scheme ─── */
+:root {
+  --color-background-primary:   #FFFFFF;
+  --color-background-secondary: #F7F7F5;
+  --color-background-tertiary:  #EFEFED;
+
+  --color-text-primary:   #0A0E0A;
+  --color-text-secondary: #424242;
+  --color-text-tertiary:  #8A8A8A;
+
+  --color-text-success: #047857;
+  --color-text-warning: #B45309;
+  --color-text-danger:  #B91C1C;
+  --color-text-info:    #1E40AF;
+
+  --color-background-success: #ECFDF5;
+  --color-background-warning: #FEF3C7;
+  --color-background-danger:  #FEE2E2;
+  --color-background-info:    #E0E7FF;
+
+  --color-border-tertiary:  rgba(10, 14, 10, 0.08);
+  --color-border-secondary: rgba(10, 14, 10, 0.14);
+  --color-border-success: rgba(4, 120, 87, 0.30);
+  --color-border-warning: rgba(180, 83, 9, 0.30);
+  --color-border-danger:  rgba(185, 28, 28, 0.30);
+  --color-border-info:    rgba(30, 64, 175, 0.30);
+
+  --border-radius-sm: 6px;
+  --border-radius-md: 8px;
+  --border-radius-lg: 12px;
+
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-background-primary:   #0D0D0D;
+    --color-background-secondary: #161616;
+    --color-background-tertiary:  #1E1E1E;
+
+    --color-text-primary:   #FFFFFF;
+    --color-text-secondary: #CCCCCC;
+    --color-text-tertiary:  #6E6E6E;
+
+    --color-text-success: #22C55E;
+    --color-text-warning: #F59E0B;
+    --color-text-danger:  #F87171;
+    --color-text-info:    #60A5FA;
+
+    --color-background-success: rgba(34, 197, 94, 0.12);
+    --color-background-warning: rgba(245, 158, 11, 0.12);
+    --color-background-danger:  rgba(248, 113, 113, 0.12);
+    --color-background-info:    rgba(96, 165, 250, 0.12);
+
+    --color-border-tertiary:  rgba(255, 255, 255, 0.08);
+    --color-border-secondary: rgba(255, 255, 255, 0.14);
+    --color-border-success: rgba(34, 197, 94, 0.30);
+    --color-border-warning: rgba(245, 158, 11, 0.30);
+    --color-border-danger:  rgba(248, 113, 113, 0.30);
+    --color-border-info:    rgba(96, 165, 250, 0.30);
+  }
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body {
+  background: var(--color-background-secondary);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+a { color: inherit; text-decoration: none; cursor: pointer; }
+button { font-family: inherit; cursor: pointer; }
+strong { font-weight: 600; color: var(--color-text-primary); }
+
+/* ── Layout shell ───────────────────────────────────────────────────────── */
+.sidebar {
+  position: fixed;
+  left: 0; top: 0; bottom: 0;
+  width: 220px;
+  background: var(--color-background-primary);
+  border-right: 0.5px solid var(--color-border-tertiary);
+  display: flex;
+  flex-direction: column;
+}
+.main {
+  margin-left: 220px;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Sidebar — logo + agent selector ───────────────────────────────────── */
+.sb-top { padding: 16px; }
+.sb-logo {
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 14px;
+}
+.sb-logo-mark {
+  width: 26px; height: 26px;
+  border-radius: 7px;
+  background: #1A1A2E;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 3px;
+  padding: 6px;
+}
+.sb-logo-mark span {
+  background: #FFFFFF;
+  border-radius: 1px;
+  opacity: 0.85;
+}
+.sb-logo-name { font-size: 14px; font-weight: 500; }
+
+.sb-agent {
+  background: var(--color-background-secondary);
+  border-radius: var(--border-radius-md);
+  padding: 8px 10px;
+}
+.sb-agent-label {
+  font-size: 10px; text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-tertiary);
+  margin-bottom: 2px;
+}
+.sb-agent-name { font-size: 13px; font-weight: 500; }
+.sb-agent-status {
+  font-size: 11px; color: var(--color-text-success);
+  display: flex; align-items: center; gap: 6px;
+  margin-top: 2px;
+}
+.sb-agent-status .dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--color-text-success);
+}
+
+/* ── Sidebar nav ───────────────────────────────────────────────────────── */
+.sb-nav {
+  flex: 1;
+  padding: 10px 8px;
+  overflow-y: auto;
+}
+.sb-group { margin: 10px 0 4px; }
+.sb-group-label {
+  font-size: 10px; text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-tertiary);
+  padding: 0 8px 4px;
+}
+.sb-item {
+  display: flex; align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  user-select: none;
+}
+.sb-item:hover { color: var(--color-text-primary); }
+.sb-item.active {
+  background: var(--color-background-secondary);
+  color: var(--color-text-primary);
+  font-weight: 500;
+}
+.sb-icon {
+  width: 16px; text-align: center;
+  font-size: 13px;
+  color: var(--color-text-tertiary);
+}
+.sb-item.active .sb-icon { color: var(--color-text-primary); }
+.sb-badge {
+  margin-left: auto;
+  font-size: 10px; font-weight: 500;
+  padding: 1px 6px;
+  border-radius: 8px;
+}
+.sb-badge.red   { background: var(--color-background-danger);  color: var(--color-text-danger); }
+.sb-badge.green { background: var(--color-background-success); color: var(--color-text-success); }
+
+/* ── Sidebar footer health widget ──────────────────────────────────────── */
+.sb-foot {
+  padding: 14px 16px;
+  border-top: 0.5px solid var(--color-border-tertiary);
+}
+.sb-health {
+  background: var(--color-background-secondary);
+  border-radius: var(--border-radius-md);
+  padding: 10px 12px;
+}
+.sb-health-top {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 4px;
+}
+.sb-health-score {
+  font-size: 24px; font-weight: 500; line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.sb-health-badge {
+  font-size: 10px; font-weight: 500;
+  padding: 2px 7px;
+  border-radius: 999px;
+}
+.sb-health-name {
+  font-size: 11px; color: var(--color-text-tertiary);
+  margin-bottom: 6px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.sb-health-bar {
+  height: 2px; width: 100%;
+  background: var(--color-border-tertiary);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.sb-health-bar > div { height: 100%; border-radius: 999px; }
+
+.sb-health-score.good  { color: var(--color-text-success); }
+.sb-health-score.warn  { color: var(--color-text-warning); }
+.sb-health-score.bad   { color: var(--color-text-danger); }
+.sb-health-score.muted { color: var(--color-text-tertiary); }
+
+.sb-health-badge.good  { background: var(--color-background-success); color: var(--color-text-success); }
+.sb-health-badge.warn  { background: var(--color-background-warning); color: var(--color-text-warning); }
+.sb-health-badge.bad   { background: var(--color-background-danger);  color: var(--color-text-danger); }
+.sb-health-badge.muted { background: var(--color-background-tertiary); color: var(--color-text-tertiary); }
+
+/* ── Topbar ────────────────────────────────────────────────────────────── */
+.topbar {
+  position: sticky; top: 0; z-index: 10;
+  height: 48px;
+  background: var(--color-background-primary);
+  border-bottom: 0.5px solid var(--color-border-tertiary);
+  padding: 0 24px;
+  display: flex; align-items: center;
+}
+.tb-title { font-size: 14px; font-weight: 500; }
+.tb-sep {
+  width: 1px; height: 14px;
+  background: var(--color-border-tertiary);
+  margin: 0 12px;
+}
+.tb-sub { font-size: 12px; color: var(--color-text-tertiary); }
+.tb-right { margin-left: auto; }
+
+.time-filter {
+  display: flex;
+  border: 0.5px solid var(--color-border-tertiary);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.tf-btn {
+  background: var(--color-background-primary);
+  color: var(--color-text-secondary);
+  border: none;
+  border-right: 0.5px solid var(--color-border-tertiary);
+  padding: 4px 10px;
+  font-size: 11px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.tf-btn:last-child { border-right: none; }
+.tf-btn:hover:not(.active) { color: var(--color-text-primary); }
+.tf-btn.active {
+  background: var(--color-text-primary);
+  color: var(--color-background-primary);
+}
+
+/* ── Content ───────────────────────────────────────────────────────────── */
+.content {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: 100%;
+  background: var(--color-background-secondary);
+}
+
+/* ── Hero ──────────────────────────────────────────────────────────────── */
+.hero {
+  background: var(--color-background-primary);
+  border: 0.5px solid var(--color-border-tertiary);
+  border-radius: var(--border-radius-lg);
+  padding: 20px 24px;
+}
+.hero-label {
+  font-size: 10px; text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-text-tertiary);
+  margin-bottom: 10px;
+}
+.hero-headline {
+  font-size: 22px; font-weight: 500;
+  line-height: 1.25;
+  margin-bottom: 10px;
+}
+.hero-body {
+  font-size: 14px;
+  color: var(--color-text-secondary);
+  line-height: 1.6;
+}
+.hero-chips {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  margin-top: 12px;
+}
+.chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+  border: 0.5px solid var(--color-border-tertiary);
+  background: var(--color-background-secondary);
+  color: var(--color-text-secondary);
+}
+.chip-dot { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; }
+.chip.danger  { border-color: var(--color-border-danger);  background: var(--color-background-danger);  color: var(--color-text-danger); }
+.chip.success { border-color: var(--color-border-success); background: var(--color-background-success); color: var(--color-text-success); }
+.chip.warning { border-color: var(--color-border-warning); background: var(--color-background-warning); color: var(--color-text-warning); }
+
+/* ── KPI grid ──────────────────────────────────────────────────────────── */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+@media (max-width: 880px) { .kpi-grid { grid-template-columns: repeat(2, 1fr); } }
+.kpi {
+  background: var(--color-background-primary);
+  border: 0.5px solid var(--color-border-tertiary);
+  border-radius: var(--border-radius-md);
+  padding: 14px 16px;
+}
+.kpi-label {
+  font-size: 11px; text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-tertiary);
+  margin-bottom: 8px;
+}
+.kpi-value {
+  font-size: 26px; font-weight: 500; line-height: 1;
+  margin-bottom: 3px;
+  font-variant-numeric: tabular-nums;
+}
+.kpi-sub { font-size: 11px; color: var(--color-text-tertiary); }
+.kpi-value.good { color: var(--color-text-success); }
+.kpi-value.warn { color: var(--color-text-warning); }
+.kpi-value.bad  { color: var(--color-text-danger); }
+
+/* ── Two-column section ───────────────────────────────────────────────── */
+.two-col {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+  gap: 12px;
+}
+@media (max-width: 880px) { .two-col { grid-template-columns: 1fr; } }
+.right-stack { display: flex; flex-direction: column; gap: 12px; }
+
+.panel {
+  background: var(--color-background-primary);
+  border: 0.5px solid var(--color-border-tertiary);
+  border-radius: var(--border-radius-md);
+  overflow: hidden;
+}
+.panel-head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 0.5px solid var(--color-border-tertiary);
+}
+.panel-title { font-size: 13px; font-weight: 500; }
+.panel-link  { font-size: 11px; color: var(--color-text-info); }
+.panel-link:hover { text-decoration: underline; }
+
+/* Failure modes list */
+.fm-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 16px;
+  border-bottom: 0.5px solid var(--color-border-tertiary);
+  font-size: 13px;
+}
+.fm-row:last-child { border-bottom: 0; }
+.fm-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.fm-name {
+  flex: 1; min-width: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.fm-bar {
+  width: 80px; height: 2px;
+  background: var(--color-border-tertiary);
+  border-radius: 999px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.fm-bar > div { height: 100%; border-radius: 999px; }
+.fm-count {
+  width: 20px; text-align: right;
+  font-size: 13px; font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+.fm-monitor {
+  font-size: 10px;
+  color: var(--color-text-tertiary);
+  margin-left: auto;
+}
+.fm-empty {
+  padding: 24px 16px;
+  text-align: center;
+  color: var(--color-text-tertiary);
+  font-size: 12px;
+}
+
+/* Dot colors by category */
+.dot-danger    { background: var(--color-text-danger); }
+.dot-warning   { background: var(--color-text-warning); }
+.dot-info      { background: var(--color-text-info); }
+.dot-secondary { background: var(--color-text-secondary); }
+.dot-muted     { background: var(--color-border-tertiary); }
+.fill-danger   { background: var(--color-text-danger); }
+.fill-warning  { background: var(--color-text-warning); }
+.fill-info     { background: var(--color-text-info); }
+.fill-secondary{ background: var(--color-text-secondary); }
+.txt-danger    { color: var(--color-text-danger); }
+.txt-warning   { color: var(--color-text-warning); }
+.txt-info      { color: var(--color-text-info); }
+.txt-secondary { color: var(--color-text-secondary); }
+
+/* Needs review card */
+.esc-empty {
+  padding: 28px 16px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--color-text-tertiary);
+}
+.esc-card { padding: 14px 16px; }
+.esc-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px;
+}
+.esc-tool { font-size: 13px; font-weight: 500; }
+.esc-agent { font-size: 11px; color: var(--color-text-tertiary); margin-top: 2px; }
+.risk-chip {
+  font-size: 10px; font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--color-background-warning);
+  color: var(--color-text-warning);
+  white-space: nowrap;
+}
+.esc-task {
+  margin: 10px 0;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-style: italic;
+  color: var(--color-text-secondary);
+  background: var(--color-background-secondary);
+  border-radius: 6px;
+  border-left: 2px solid var(--color-border-secondary);
+  white-space: normal;
+  overflow: visible;
+  word-break: break-word;
+  line-height: 1.5;
+}
+.esc-impact {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--color-text-danger);
+  margin-top: 6px;
+}
+.esc-actions {
+  display: flex; gap: 6px;
+  margin-top: 10px;
+}
+.btn {
+  font-family: inherit;
+  font-size: 11px; font-weight: 500;
+  padding: 5px 12px;
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+}
+.btn-approve {
+  border: 0.5px solid var(--color-border-success);
+  color: var(--color-text-success);
+}
+.btn-approve:hover { background: var(--color-background-success); }
+.btn-reject {
+  border: 0.5px solid var(--color-border-danger);
+  color: var(--color-text-danger);
+}
+.btn-reject:hover { background: var(--color-background-danger); }
+
+/* Learning panel */
+.learning {
+  background: var(--color-background-primary);
+  border: 0.5px solid var(--color-border-tertiary);
+  border-left: 2px solid var(--color-text-success);
+  border-radius: var(--border-radius-md);
+  padding: 14px 16px;
+}
+.learning.hidden { display: none; }
+.learning-title { font-size: 13px; font-weight: 500; margin-bottom: 8px; }
+.learning-row {
+  display: flex; align-items: flex-start; gap: 8px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  padding: 3px 0;
+}
+.learning-row .plus {
+  color: var(--color-text-success);
+  font-weight: 500;
+  flex-shrink: 0;
+}
+.learning-foot {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 0.5px dashed var(--color-border-tertiary);
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+}
+
+/* Agent health rows */
+.agent-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 0.5px solid var(--color-border-tertiary);
+}
+.agent-row:last-child { border-bottom: 0; }
+.avatar {
+  width: 32px; height: 32px;
+  border-radius: 8px;
+  background: var(--color-background-info);
+  color: var(--color-text-info);
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 500;
+  flex-shrink: 0;
+}
+.agent-body { flex: 1; min-width: 0; }
+.agent-name { font-size: 13px; font-weight: 500; }
+.agent-desc {
+  font-size: 11px; color: var(--color-text-tertiary);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.agent-bar {
+  height: 2px; width: 100%;
+  background: var(--color-border-tertiary);
+  border-radius: 999px;
+  overflow: hidden;
+  margin-top: 5px;
+}
+.agent-bar > div { height: 100%; border-radius: 999px; }
+
+.agent-stats {
+  display: flex; gap: 14px;
+  flex-shrink: 0;
+}
+.agent-stat { text-align: right; }
+.agent-stat .n {
+  font-size: 12px; font-weight: 500;
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.agent-stat.danger .n  { color: var(--color-text-danger); }
+.agent-stat.warning .n { color: var(--color-text-warning); }
+.agent-stat .l { font-size: 10px; color: var(--color-text-tertiary); margin-top: 2px; }
+
+.health-pill {
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 10px; font-weight: 500;
+  padding: 3px 9px;
+  border-radius: 999px;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.health-pill.good { background: var(--color-background-success); color: var(--color-text-success); }
+.health-pill.warn { background: var(--color-background-warning); color: var(--color-text-warning); }
+.health-pill.bad  { background: var(--color-background-danger);  color: var(--color-text-danger); }
+.health-pill.muted{ background: var(--color-background-tertiary); color: var(--color-text-tertiary); }
+
+/* ── v1-ported components (using v2 design tokens) ─────────────────────── */
+/* Per-tab visibility */
+.v2-content { display: none; }
+.v2-content.active { display: flex; }
+
+/* Section labels reused by tabs */
+.section-label {
+  font-size: 11px; font-weight: 500;
+  text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--color-text-tertiary);
+}
+.section-sublabel {
+  font-size: 10px; font-weight: 500;
+  text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--color-text-tertiary);
+  margin: 14px 0 6px;
+}
+.section-sublabel:first-child { margin-top: 0; }
+.top-row {
+  display: flex; align-items: center; justify-content: space-between;
+}
+.muted { color: var(--color-text-tertiary); }
+.tiny { font-size: 11px; }
+.empty {
+  padding: 28px 16px;
+  text-align: center;
+  color: var(--color-text-tertiary);
+  font-size: 12px;
+}
+.card {
+  background: var(--color-background-primary);
+  border: 0.5px solid var(--color-border-tertiary);
+  border-radius: var(--border-radius-md);
+}
+
+/* Generic outcome / status pills */
+.pill {
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 10px; font-weight: 500;
+  padding: 3px 9px; border-radius: 999px;
+  white-space: nowrap; flex-shrink: 0;
+}
+.pill.allowed,
+.pill.escalation_approved,
+.pill.approved,
+.pill.healthy             { background: var(--color-background-success); color: var(--color-text-success); }
+.pill.blocked,
+.pill.rejected,
+.pill.degraded,
+.pill.critical            { background: var(--color-background-danger);  color: var(--color-text-danger); }
+.pill.escalated,
+.pill.escalation_rejected,
+.pill.failed_open,
+.pill.caution             { background: var(--color-background-warning); color: var(--color-text-warning); }
+
+.fm-tag {
+  display: inline-block;
+  font-size: 10px; font-weight: 500;
+  padding: 2px 8px; border-radius: 999px;
+  letter-spacing: 0.02em; flex-shrink: 0;
+}
+.fm-tag.injection,
+.fm-tag.excess,
+.fm-tag.blast       { background: var(--color-background-danger);  color: var(--color-text-danger); }
+.fm-tag.policy      { background: var(--color-background-info);    color: var(--color-text-info); }
+.fm-tag.drift       { background: var(--color-background-warning); color: var(--color-text-warning); }
+.fm-tag.loop,
+.fm-tag.data        { background: var(--color-background-info);    color: var(--color-text-info); }
+
+/* Agents tab cards */
+.agent-card {
+  background: var(--color-background-primary);
+  border: 0.5px solid var(--color-border-tertiary);
+  border-radius: var(--border-radius-md);
+  padding: 18px 20px; margin-bottom: 12px;
+}
+.agent-card-head {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 16px; margin-bottom: 16px;
+}
+.agent-card-head .left { display: flex; align-items: center; gap: 12px; }
+.agent-card-head .name { font-size: 15px; font-weight: 500; }
+.agent-card-head .desc { font-size: 12px; color: var(--color-text-tertiary); margin-top: 2px; }
+.agent-card-head .right { text-align: right; }
+.agent-card-head .score {
+  font-size: 28px; font-weight: 500; line-height: 1;
+  margin-bottom: 4px;
+  font-variant-numeric: tabular-nums;
+}
+.agent-card-grid {
+  display: grid; grid-template-columns: 1.1fr 1fr; gap: 24px;
+}
+@media (max-width: 880px) { .agent-card-grid { grid-template-columns: 1fr; } }
+.activity-grid {
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;
+}
+.activity-stat {
+  padding: 11px 12px;
+  border: 0.5px solid var(--color-border-tertiary);
+  border-radius: 8px;
+}
+.activity-stat .n {
+  font-size: 18px; font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.activity-stat .l { font-size: 11px; color: var(--color-text-tertiary); margin-top: 2px; }
+.activity-stat.danger .n  { color: var(--color-text-danger); }
+.activity-stat.warning .n { color: var(--color-text-warning); }
+
+.issue-list .issue {
+  padding: 9px 12px;
+  border-left: 2px solid var(--color-text-warning);
+  background: var(--color-background-secondary);
+  border-radius: 0 8px 8px 0;
+  margin-bottom: 8px;
+}
+.issue.danger { border-left-color: var(--color-text-danger); }
+.issue.purple { border-left-color: var(--color-text-info); }
+.issue.info   { border-left-color: var(--color-text-info); }
+.issue .desc  { font-size: 12px; }
+.issue .when  { font-size: 11px; color: var(--color-text-tertiary); margin-top: 2px; }
+.issue-empty  { padding: 8px 0; font-size: 12px; color: var(--color-text-success); }
+.agent-card-foot {
+  margin-top: 16px; padding-top: 12px;
+  border-top: 0.5px solid var(--color-border-tertiary);
+  font-size: 12px;
+}
+.agent-card-foot a { color: var(--color-text-info); }
+.avatar.lg { width: 40px; height: 40px; font-size: 13px; }
+.health-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 10px; font-weight: 500;
+  padding: 3px 9px; border-radius: 999px;
+}
+.health-badge.healthy  { background: var(--color-background-success); color: var(--color-text-success); }
+.health-badge.caution  { background: var(--color-background-warning); color: var(--color-text-warning); }
+.health-badge.degraded,
+.health-badge.critical { background: var(--color-background-danger);  color: var(--color-text-danger); }
+
+/* Escalations tab */
+.esc-card {
+  background: var(--color-background-primary);
+  border: 0.5px solid var(--color-border-tertiary);
+  border-radius: var(--border-radius-md);
+  padding: 18px 20px; margin-bottom: 12px;
+}
+.esc-card.severity-critical { border-left: 3px solid var(--color-text-danger); }
+.esc-card.severity-high     { border-left: 3px solid var(--color-text-warning); }
+.esc-head-row {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 16px; margin-bottom: 12px;
+}
+.esc-head-row .l { display: flex; align-items: center; gap: 12px; }
+.esc-head-row .tool { font-size: 14px; font-weight: 500; }
+.esc-head-row .desc { font-size: 12px; color: var(--color-text-tertiary); margin-top: 2px; }
+.esc-head-row .r { text-align: right; }
+.esc-head-row .time { font-size: 11px; color: var(--color-text-tertiary); }
+.task-block {
+  font-size: 12px; font-style: italic;
+  padding: 8px 10px;
+  background: var(--color-background-secondary);
+  border-radius: 8px;
+}
+.task-block.task-empty { color: var(--color-text-tertiary); font-style: normal; }
+.tool-mono {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+.kv-list { font-size: 12px; line-height: 1.7; }
+.kv-list .k { color: var(--color-text-tertiary); margin-right: 8px; }
+.kv-list .v {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+.note-input {
+  flex: 1; min-width: 180px;
+  padding: 6px 8px;
+  font-size: 12px;
+  border: 0.5px solid var(--color-border-secondary);
+  border-radius: 8px;
+  background: var(--color-background-primary);
+  color: var(--color-text-primary);
+}
+.note-input:focus { outline: none; border-color: var(--color-text-info); }
+.resolved-toggle {
+  background: transparent; border: none;
+  color: var(--color-text-info);
+  font-size: 12px; padding: 8px 0; cursor: pointer;
+}
+.resolved-list { display: none; }
+.resolved-list.open { display: block; }
+.resolved-item {
+  padding: 12px 16px;
+  border-top: 0.5px solid var(--color-border-tertiary);
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; font-size: 12px;
+}
+
+/* Audit tab */
+.filterbar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  padding: 12px 16px;
+  border-bottom: 0.5px solid var(--color-border-tertiary);
+}
+.filterbar select, .filterbar input {
+  font-family: inherit; font-size: 12px;
+  padding: 5px 10px;
+  background: var(--color-background-primary);
+  border: 0.5px solid var(--color-border-tertiary);
+  border-radius: 8px;
+  color: var(--color-text-primary);
+}
+.filterbar input { min-width: 200px; }
+.filterbar select:focus, .filterbar input:focus {
+  outline: none; border-color: var(--color-text-info);
+}
+.filterbar .right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+.filterbar .count { font-size: 11px; color: var(--color-text-tertiary); }
+.btn-secondary {
+  background: var(--color-background-primary);
+  color: var(--color-text-secondary);
+  border: 0.5px solid var(--color-border-secondary);
+  padding: 5px 12px; border-radius: 8px;
+  font-size: 12px; font-weight: 500; cursor: pointer;
+}
+.btn-secondary:hover { background: var(--color-background-secondary); }
+.audit-item { border-bottom: 0.5px solid var(--color-border-tertiary); }
+.audit-item:last-child { border-bottom: none; }
+.audit-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 16px;
+  cursor: pointer;
+  white-space: nowrap; min-width: 0;
+}
+.audit-row:hover { background: var(--color-background-secondary); }
+.audit-tool {
+  font-size: 13px; font-weight: 500;
+  flex: 0 0 auto;
+}
+.audit-tool .agent { color: var(--color-text-tertiary); font-weight: 400; font-size: 12px; }
+.audit-reason {
+  font-size: 12px; color: var(--color-text-tertiary);
+  flex: 1 1 auto; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.audit-time {
+  font-size: 11px; color: var(--color-text-tertiary);
+  flex: 0 0 auto; margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+.chev {
+  width: 12px; height: 12px;
+  display: inline-block; line-height: 1;
+  color: var(--color-text-tertiary);
+  transition: transform 0.15s ease;
+}
+.audit-item.open .chev { transform: rotate(90deg); }
+.audit-detail {
+  display: none;
+  padding: 16px 16px 18px;
+  background: var(--color-background-secondary);
+  border-top: 1px dashed var(--color-border-tertiary);
+}
+.audit-item.open .audit-detail { display: block; }
+
+/* Pipeline trace */
+.pipeline {
+  display: flex; align-items: stretch; gap: 0;
+  padding: 4px 0 8px;
+  overflow-x: auto; white-space: nowrap;
+}
+.pipe-node {
+  flex: 0 0 90px; height: 56px;
+  border: 0.5px solid var(--color-border-secondary);
+  border-radius: 8px;
+  padding: 6px;
+  background: var(--color-background-primary);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  text-align: center;
+}
+.pipe-node .name {
+  font-size: 9px; font-weight: 500;
+  text-transform: uppercase; letter-spacing: 0.04em;
+  color: var(--color-text-tertiary);
+}
+.pipe-node .metric {
+  font-size: 9px; line-height: 1.25;
+  margin-top: 4px; white-space: normal;
+}
+.pipe-node.pass { background: var(--color-background-success); border-color: var(--color-border-success); }
+.pipe-node.pass .name { color: var(--color-text-success); }
+.pipe-node.fail { background: var(--color-background-danger);  border-color: var(--color-border-danger); }
+.pipe-node.fail .name { color: var(--color-text-danger); }
+.pipe-node.warn { background: var(--color-background-warning); border-color: var(--color-border-warning); }
+.pipe-node.warn .name { color: var(--color-text-warning); }
+.pipe-node.skip { background: var(--color-background-secondary); border-style: dashed; opacity: 0.5; }
+.pipe-node.skip .name, .pipe-node.skip .metric { color: var(--color-text-tertiary); }
+.pipe-arrow {
+  flex: 0 0 24px;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--color-text-success);
+  font-size: 14px;
+}
+.pipe-arrow.fail { color: var(--color-text-danger); }
+.pipe-arrow.warn { color: var(--color-text-warning); }
+.pipe-arrow.skip { color: var(--color-text-tertiary); }
+.why {
+  margin-top: 14px;
+  padding: 10px 12px;
+  border-left: 3px solid var(--color-border-secondary);
+  background: var(--color-background-primary);
+  border-radius: 0 8px 8px 0;
+}
+.why.pass { border-left-color: var(--color-text-success); }
+.why.warn { border-left-color: var(--color-text-warning); }
+.why.fail { border-left-color: var(--color-text-danger); }
+.why .lbl {
+  display: block;
+  font-size: 10px; font-weight: 500;
+  text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--color-text-tertiary);
+  margin-bottom: 4px;
+}
+.why .text { font-size: 12px; }
+.args-block {
+  margin-top: 12px;
+  padding: 10px 12px;
+  background: var(--color-background-primary);
+  border: 0.5px solid var(--color-border-tertiary);
+  border-radius: 8px;
+}
+.args-block .lbl {
+  display: block;
+  font-size: 10px; font-weight: 500;
+  text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--color-text-tertiary);
+  margin-bottom: 4px;
+}
+
+/* Failure modes tab (full v1 view) */
+.fm-summary-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.fm-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px; border-radius: 999px;
+  font-size: 11px;
+  background: var(--color-background-primary);
+  border: 0.5px solid var(--color-border-tertiary);
+  color: var(--color-text-secondary);
+}
+.fm-chip-dot { width: 6px; height: 6px; border-radius: 50%; }
+.fm-chip.green .fm-chip-dot { background: var(--color-text-success); }
+.fm-chip.amber .fm-chip-dot { background: var(--color-text-warning); }
+.fm-chip.muted .fm-chip-dot { background: var(--color-text-tertiary); }
+.fm-chip.green { color: var(--color-text-success); }
+.fm-chip.amber { color: var(--color-text-warning); }
+.fm-chip.muted { color: var(--color-text-tertiary); }
+.fm-filters {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  align-items: center;
+}
+.fm-filter {
+  font-family: inherit; font-size: 11px;
+  padding: 4px 10px;
+  background: var(--color-background-primary);
+  border: 0.5px solid var(--color-border-tertiary);
+  border-radius: 999px;
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+}
+.fm-filter:hover { color: var(--color-text-primary); }
+.fm-filter.active {
+  background: var(--color-text-primary);
+  color: var(--color-background-primary);
+  border-color: var(--color-text-primary);
+}
+.fm-filter-sep {
+  width: 1px; height: 14px;
+  background: var(--color-border-tertiary);
+  margin: 0 4px;
+}
+.fm-showing { font-size: 11px; color: var(--color-text-tertiary); margin-left: auto; }
+.fm-cat-section { margin-top: 14px; }
+.fm-cat-head {
+  display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.fm-cat-label { font-size: 14px; font-weight: 500; }
+.fm-cat-desc { font-size: 12px; color: var(--color-text-tertiary); }
+.fm-cat-counts {
+  display: flex; gap: 8px;
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  margin-left: auto;
+}
+.fm-cat-counts .c-built  { color: var(--color-text-success); }
+.fm-cat-counts .c-coming { color: var(--color-text-warning); }
+.fm-cat-counts .c-road   { color: var(--color-text-tertiary); }
+.fm-built-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+@media (max-width: 1100px) { .fm-built-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 700px)  { .fm-built-grid { grid-template-columns: 1fr; } }
+.fm-card {
+  background: var(--color-background-primary);
+  border: 0.5px solid var(--color-border-tertiary);
+  border-left: 2px solid var(--color-text-success);
+  border-radius: var(--border-radius-md);
+  padding: 14px 16px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.fm-card-top {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+}
+.fm-card-name { font-size: 13px; font-weight: 500; }
+.fm-status-pill {
+  font-size: 10px; font-weight: 500;
+  padding: 2px 8px; border-radius: 999px;
+  background: var(--color-background-success);
+  color: var(--color-text-success);
+}
+.fm-card-desc { font-size: 11px; color: var(--color-text-tertiary); }
+.fm-layer-pill {
+  display: inline-block;
+  font-size: 10px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--color-background-secondary);
+  color: var(--color-text-tertiary);
+  border: 0.5px solid var(--color-border-tertiary);
+  width: fit-content;
+}
+.fm-card-divider {
+  height: 1px;
+  background: var(--color-border-tertiary);
+  margin: 2px 0;
+}
+.fm-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+.fm-stat .n {
+  font-size: 18px; font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.fm-stat .l { font-size: 10px; color: var(--color-text-tertiary); margin-top: 1px; }
+.fm-empty-stats {
+  text-align: center;
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  padding: 6px 0;
+}
+.fm-spark { width: 100%; }
+.fm-spark-empty {
+  text-align: center;
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  padding: 4px 0;
+}
+.fm-foot { font-size: 11px; color: var(--color-text-tertiary); }
+.fm-row-secondary {
+  display: flex; align-items: center; gap: 10px;
+  padding: 7px 12px;
+  background: var(--color-background-primary);
+  border: 0.5px solid var(--color-border-tertiary);
+  border-radius: 8px;
+  margin-bottom: 4px;
+}
+.fm-row-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.fm-row-dot.coming { background: var(--color-text-warning); }
+.fm-row-dot.road   { background: var(--color-text-tertiary); }
+.fm-row-name { font-size: 12px; flex: 1; min-width: 0; }
+.fm-row-name.road { color: var(--color-text-tertiary); }
+.fm-row-status {
+  font-size: 10px; flex-shrink: 0; font-weight: 500;
+}
+.fm-row-status.coming { color: var(--color-text-warning); }
+.fm-row-status.road   { color: var(--color-text-tertiary); }
+.fm-roadmap-wrap { margin-top: 6px; }
+.fm-roadmap-toggle {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: transparent;
+  border: none;
+  font-family: inherit;
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  padding: 4px 0;
+  cursor: pointer;
+}
+.fm-roadmap-toggle:hover { color: var(--color-text-primary); }
+.fm-roadmap-toggle .arrow {
+  display: inline-block;
+  transition: transform 0.15s;
+}
+.fm-roadmap-toggle.open .arrow { transform: rotate(90deg); }
+.fm-roadmap-list { display: none; margin-top: 4px; }
+.fm-roadmap-list.open { display: block; }
+.fm-skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--color-background-primary) 25%,
+    var(--color-background-secondary) 50%,
+    var(--color-background-primary) 75%);
+  background-size: 800px 100%;
+  animation: fmShimmer 1.5s infinite;
+  border-radius: var(--border-radius-md);
+  height: 160px;
+  border: 0.5px solid var(--color-border-tertiary);
+}
+@keyframes fmShimmer {
+  0%   { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+.fm-stats-banner {
+  font-size: 11px; color: var(--color-text-tertiary);
+  padding: 6px 12px;
+  background: var(--color-background-secondary);
+  border: 0.5px solid var(--color-border-tertiary);
+  border-radius: 8px;
+}
+.fm-error {
+  text-align: center;
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+  padding: 28px 16px;
+}
+
+/* Learning tab */
+.pattern-card {
+  padding: 16px 18px; margin-bottom: 10px;
+}
+.pattern-head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 12px; margin-bottom: 4px;
+}
+.pattern-type { font-size: 13px; font-weight: 500; }
+.pattern-conf { font-size: 11px; }
+.pattern-conf.high { color: var(--color-text-success); }
+.pattern-conf.mid  { color: var(--color-text-info); }
+.pattern-conf.low  { color: var(--color-text-warning); }
+.pattern-desc { font-size: 12px; margin: 6px 0 8px; }
+.pattern-suggestion {
+  font-size: 12px;
+  background: var(--color-background-secondary);
+  padding: 8px 10px; border-radius: 8px;
+  margin-bottom: 8px;
+}
+
+/* Decision feed cards */
+.feed-row {
+  background: var(--color-background-primary);
+  border: 0.5px solid var(--color-border-tertiary);
+  border-radius: var(--border-radius-md);
+  margin-bottom: 8px;
+  overflow: hidden;
+}
+.feed-head {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 14px 6px;
+}
+.feed-tool { font-size: 13px; font-weight: 500; flex: 1; min-width: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.feed-time {
+  font-size: 11px; color: var(--color-text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+.feed-body { padding: 0 14px 12px; }
+.feed-task {
+  font-size: 12px; font-style: italic;
+  color: var(--color-text-tertiary);
+  background: var(--color-background-secondary);
+  border-left: 2px solid var(--color-border-secondary);
+  padding: 6px 8px; border-radius: 5px;
+  margin-bottom: 8px;
+}
+.feed-reason {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+  margin-bottom: 8px;
+}
+.feed-scores { display: flex; flex-wrap: wrap; gap: 6px; }
+.score-chip {
+  padding: 2px 8px; border-radius: 8px;
+  font-size: 11px;
+  background: var(--color-background-secondary);
+  color: var(--color-text-tertiary);
+}
+.score-chip.warn { background: var(--color-background-warning); color: var(--color-text-warning); }
+.score-chip.bad  { background: var(--color-background-danger);  color: var(--color-text-danger); }
+.feed-foot {
+  padding: 8px 14px;
+  border-top: 0.5px solid var(--color-border-tertiary);
+  background: var(--color-background-secondary);
+  display: flex; align-items: center; gap: 8px;
+}
+
+/* ── Escalation v2 (rich) cards ────────────────────────────────────────── */
+.esc-card-v2 {
+  background: var(--color-background-primary);
+  border: 0.5px solid var(--color-border-tertiary);
+  border-radius: var(--border-radius-lg);
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+.esc-card-v2.severity-critical { border-left: 3px solid var(--color-text-danger); }
+.esc-card-v2.severity-high     { border-left: 3px solid var(--color-text-warning); }
+
+.escv2-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 16px 18px 12px;
+  gap: 12px;
+}
+.escv2-header-left { min-width: 0; }
+.escv2-tool {
+  font-size: 16px;
+  font-weight: 500;
+  margin-bottom: 3px;
+  word-break: break-word;
+}
+.escv2-meta {
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+}
+.escv2-risk-circle {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: 2px solid var(--color-border-danger);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+.escv2-risk-num {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--color-text-danger);
+  line-height: 1;
+}
+.escv2-risk-lbl {
+  font-size: 9px;
+  color: var(--color-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.escv2-section-label {
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-tertiary);
+  padding: 0 18px;
+  margin-bottom: 6px;
+}
+.escv2-task {
+  margin: 0 18px 14px;
+  padding: 10px 12px;
+  font-size: 13px;
+  font-style: italic;
+  color: var(--color-text-secondary);
+  background: var(--color-background-secondary);
+  border-radius: 8px;
+  border-left: 2px solid var(--color-border-secondary);
+  white-space: normal;
+  word-break: break-word;
+  line-height: 1.5;
+}
+.escv2-findings {
+  margin: 0 18px 14px;
+  background: var(--color-background-secondary);
+  border-radius: 8px;
+  padding: 4px 12px;
+  display: flex;
+  flex-direction: column;
+}
+.escv2-finding {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 0;
+  border-bottom: 0.5px solid var(--color-border-tertiary);
+}
+.escv2-finding:last-child { border-bottom: none; }
+.escv2-finding-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  margin-top: 6px;
+  flex-shrink: 0;
+}
+.escv2-dot-danger  { background: var(--color-text-danger); }
+.escv2-dot-warning { background: var(--color-text-warning); }
+.escv2-dot-neutral { background: var(--color-text-tertiary); }
+.escv2-finding-text {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+  flex: 1;
+  word-break: break-word;
+}
+.escv2-score-badge {
+  font-size: 10px;
+  font-weight: 500;
+  padding: 2px 7px;
+  border-radius: 6px;
+  flex-shrink: 0;
+  align-self: flex-start;
+  margin-top: 2px;
+  white-space: nowrap;
+}
+.escv2-score-danger  { background: var(--color-background-danger);  color: var(--color-text-danger); }
+.escv2-score-warning { background: var(--color-background-warning); color: var(--color-text-warning); }
+.escv2-score-neutral { background: var(--color-background-tertiary); color: var(--color-text-tertiary); }
+
+.escv2-suggestion {
+  margin: 0 18px 14px;
+  background: var(--color-background-info);
+  border: 0.5px solid var(--color-border-info);
+  border-radius: 8px;
+  padding: 12px 14px;
+}
+.escv2-suggestion-title {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-text-info);
+  margin-bottom: 8px;
+}
+.escv2-checks {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.escv2-check {
+  display: flex;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+  word-break: break-word;
+}
+.escv2-check-arrow {
+  color: var(--color-text-info);
+  flex-shrink: 0;
+  font-weight: 500;
+}
+
+.escv2-impact-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0 18px 14px;
+}
+@media (max-width: 640px) { .escv2-impact-row { grid-template-columns: 1fr; } }
+.escv2-impact-chip {
+  background: var(--color-background-secondary);
+  border-radius: 6px;
+  padding: 8px 10px;
+}
+.escv2-impact-label {
+  font-size: 10px;
+  color: var(--color-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 3px;
+}
+.escv2-impact-val {
+  font-size: 13px;
+  font-weight: 500;
+  word-break: break-word;
+}
+.escv2-impact-val.red   { color: var(--color-text-danger); }
+.escv2-impact-val.amber { color: var(--color-text-warning); }
+
+.escv2-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 18px;
+  border-top: 0.5px solid var(--color-border-tertiary);
+  background: var(--color-background-secondary);
+  gap: 12px;
+}
+.escv2-footer-note {
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+}
+.escv2-footer-btns {
+  display: flex;
+  gap: 8px;
+}
+.btn-escv2-approve {
+  padding: 7px 18px;
+  border-radius: 7px;
+  border: 0.5px solid var(--color-border-success);
+  color: var(--color-text-success);
+  background: var(--color-background-success);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: inherit;
+}
+.btn-escv2-reject {
+  padding: 7px 18px;
+  border-radius: 7px;
+  border: 0.5px solid var(--color-border-danger);
+  color: var(--color-text-danger);
+  background: transparent;
+  font-size: 13px;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+/* Resolved escalations section */
+.escv2-resolved-section { margin-top: 14px; }
+.escv2-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.escv2-divider-line {
+  flex: 1;
+  height: 0.5px;
+  background: var(--color-border-tertiary);
+}
+.escv2-divider-label {
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  white-space: nowrap;
+}
+.escv2-resolved-card {
+  background: var(--color-background-primary);
+  border: 0.5px solid var(--color-border-tertiary);
+  border-radius: 8px;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  opacity: 0.85;
+  margin-bottom: 8px;
+}
+.escv2-resolved-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+.escv2-resolved-icon.approved { background: var(--color-background-success); color: var(--color-text-success); }
+.escv2-resolved-icon.rejected { background: var(--color-background-danger);  color: var(--color-text-danger); }
+.escv2-resolved-body { flex: 1; min-width: 0; }
+.escv2-resolved-tool {
+  font-size: 13px;
+  font-weight: 500;
+}
+.escv2-resolved-detail {
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  margin-top: 1px;
+  white-space: normal;
+  word-break: break-word;
+}
+.escv2-resolved-badge {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+.escv2-resolved-badge.approved { background: var(--color-background-success); color: var(--color-text-success); }
+.escv2-resolved-badge.rejected { background: var(--color-background-danger);  color: var(--color-text-danger); }
+
+/* Overview mini card — full text, no truncation */
+.esc-mini-v2 {
+  padding: 14px 16px;
+}
+.esc-mini-v2 .escv2-tool { font-size: 13px; }
+.esc-mini-v2 .escv2-meta { font-size: 11px; }
+.esc-mini-v2 .mini-task {
+  margin: 8px 0;
+  padding: 8px 10px;
+  font-size: 12px;
+  font-style: italic;
+  color: var(--color-text-secondary);
+  background: var(--color-background-secondary);
+  border-left: 2px solid var(--color-border-secondary);
+  border-radius: 6px;
+  white-space: normal;
+  word-break: break-word;
+  line-height: 1.5;
+}
+.esc-mini-v2 .mini-reason {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+  margin-bottom: 8px;
+}
+.esc-mini-v2 .mini-check {
+  display: flex; gap: 6px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  background: var(--color-background-info);
+  border: 0.5px solid var(--color-border-info);
+  border-radius: 6px;
+  padding: 6px 10px;
+  margin-bottom: 10px;
+  line-height: 1.4;
+}
+.esc-mini-v2 .mini-check .arrow {
+  color: var(--color-text-info);
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+/* Stub pages for non-Overview nav items */
+.stub {
+  background: var(--color-background-primary);
+  border: 0.5px solid var(--color-border-tertiary);
+  border-radius: var(--border-radius-lg);
+  padding: 48px 24px;
+  text-align: center;
+  color: var(--color-text-tertiary);
+}
+.stub h2 { font-size: 16px; font-weight: 500; color: var(--color-text-primary); margin-bottom: 6px; }
+.stub p { font-size: 13px; }
+.stub a { color: var(--color-text-info); }
+
+.toast {
+  position: fixed; bottom: 20px; right: 20px;
+  background: var(--color-text-primary); color: var(--color-background-primary);
+  padding: 9px 14px;
+  border-radius: 8px;
+  font-size: 12px;
+  opacity: 0; transform: translateY(8px);
+  transition: opacity 0.18s, transform 0.18s;
+  z-index: 1000;
+}
+.toast.show { opacity: 1; transform: translateY(0); }
+</style>
+</head>
+<body>
+
+<aside class="sidebar">
+  <div class="sb-top">
+    <div class="sb-logo">
+      <div class="sb-logo-mark">
+        <span></span><span></span><span></span><span></span>
+      </div>
+      <div class="sb-logo-name">AgentGate</div>
+    </div>
+    <div class="sb-agent">
+      <div class="sb-agent-label">Active agent</div>
+      <div class="sb-agent-name" id="sb-agent-name">—</div>
+      <div class="sb-agent-status" id="sb-agent-status">
+        <span class="dot"></span><span>Connecting…</span>
+      </div>
+    </div>
+  </div>
+
+  <nav class="sb-nav" id="sb-nav">
+    <div class="sb-group">
+      <div class="sb-group-label">Overview</div>
+      <div class="sb-item active" data-tab="overview" onclick="switchTabV2('overview')"><span class="sb-icon">⊞</span>Overview</div>
+    </div>
+    <div class="sb-group">
+      <div class="sb-group-label">Monitor</div>
+      <div class="sb-item" data-tab="feed"           onclick="switchTabV2('feed')"><span class="sb-icon">◈</span>Decision feed</div>
+      <div class="sb-item" data-tab="failure-modes" onclick="switchTabV2('failure-modes')"><span class="sb-icon">⊡</span>Failure modes</div>
+      <div class="sb-item" data-tab="escalations"   onclick="switchTabV2('escalations')"><span class="sb-icon">△</span>Escalations<span class="sb-badge red" id="nav-esc-badge" style="display:none">0</span></div>
+      <div class="sb-item" data-tab="audit"         onclick="switchTabV2('audit')"><span class="sb-icon">≡</span>Audit log</div>
+    </div>
+    <div class="sb-group">
+      <div class="sb-group-label">Improve</div>
+      <div class="sb-item" data-tab="learning" onclick="switchTabV2('learning')"><span class="sb-icon">⟳</span>Learning loop<span class="sb-badge green" id="nav-learning-badge" style="display:none">0</span></div>
+      <div class="sb-item" data-tab="policy"   onclick="switchTabV2('policy')"><span class="sb-icon">◎</span>Policy editor</div>
+      <div class="sb-item" data-tab="agents"   onclick="switchTabV2('agents')"><span class="sb-icon">⬡</span>Agents</div>
+    </div>
+    <div class="sb-group">
+      <div class="sb-group-label">Export</div>
+      <div class="sb-item" data-tab="eval"       onclick="switchTabV2('eval')"><span class="sb-icon">↗</span>Eval dataset</div>
+      <div class="sb-item" data-tab="compliance" onclick="switchTabV2('compliance')"><span class="sb-icon">⊞</span>Compliance report</div>
+    </div>
+  </nav>
+
+  <div class="sb-foot">
+    <div class="sb-health" id="sb-health">
+      <div class="sb-health-top">
+        <span class="sb-health-score muted" id="sb-health-score">—</span>
+        <span class="sb-health-badge muted" id="sb-health-badge">No agents</span>
+      </div>
+      <div class="sb-health-name" id="sb-health-name">No agents</div>
+      <div class="sb-health-bar"><div id="sb-health-fill" style="width:0;background:var(--color-text-tertiary)"></div></div>
+    </div>
+  </div>
+</aside>
+
+<main class="main">
+  <div class="topbar">
+    <div class="tb-title" id="tb-title">Overview</div>
+    <div class="tb-sep"></div>
+    <div class="tb-sub" id="tb-sub">How are your agents doing?</div>
+    <div class="tb-right">
+      <div class="time-filter" role="tablist" id="time-filter">
+        <button class="tf-btn active" data-range="today"  onclick="setTimeRange('today')">Today</button>
+        <button class="tf-btn"        data-range="7days"  onclick="setTimeRange('7days')">7 days</button>
+        <button class="tf-btn"        data-range="30days" onclick="setTimeRange('30days')">30 days</button>
+        <button class="tf-btn"        data-range="all"    onclick="setTimeRange('all')">All time</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="content v2-content active" id="content-overview">
+    <section class="hero" id="hero">
+      <div class="hero-label" id="hero-label">AGENT SUMMARY · —</div>
+      <div class="hero-headline" id="hero-headline">Waiting for agent activity…</div>
+      <div class="hero-body" id="hero-body"></div>
+      <div class="hero-chips" id="hero-chips"></div>
+    </section>
+
+    <section class="kpi-grid">
+      <div class="kpi">
+        <div class="kpi-label">Unsafe actions caught</div>
+        <div class="kpi-value" id="kpi-unsafe">—</div>
+        <div class="kpi-sub" id="kpi-unsafe-sub">—</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Financial protected</div>
+        <div class="kpi-value good" id="kpi-money">$0</div>
+        <div class="kpi-sub">before execution</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Agent reliability</div>
+        <div class="kpi-value" id="kpi-rel">—</div>
+        <div class="kpi-sub" id="kpi-rel-sub">—</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Pending review</div>
+        <div class="kpi-value" id="kpi-pending">0</div>
+        <div class="kpi-sub" id="kpi-pending-sub">none pending</div>
+      </div>
+    </section>
+
+    <section class="two-col">
+      <div class="panel">
+        <div class="panel-head">
+          <div class="panel-title">What went wrong today</div>
+          <a class="panel-link" onclick="switchTabV2('failure-modes')">See all failure modes →</a>
+        </div>
+        <div id="fm-list"><div class="fm-empty">Loading…</div></div>
+      </div>
+
+      <div class="right-stack">
+        <div class="panel">
+          <div class="panel-head">
+            <div class="panel-title">Needs your review</div>
+            <span class="panel-link" id="esc-count-link" style="cursor:default">0 pending</span>
+          </div>
+          <div id="esc-card"><div class="esc-empty">Loading…</div></div>
+        </div>
+
+        <div class="learning hidden" id="learning">
+          <div class="learning-title">Self-tuning this week</div>
+          <div id="learning-items"></div>
+          <div class="learning-foot" id="learning-foot"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <div class="panel-title">Agent health</div>
+        <a class="panel-link" onclick="switchTabV2('agents')">See all agents →</a>
+      </div>
+      <div id="agent-list"><div class="fm-empty">No agents observed yet</div></div>
+    </section>
+  </div>
+
+  <!-- DECISION FEED ─────────────────────────────────────────────────── -->
+  <div class="content v2-content" id="content-feed">
+    <div class="top-row">
+      <div class="section-label">Decision feed</div>
+      <div class="time-filter" id="feed-filterbar">
+        <button class="tf-btn active" data-feed-filter="all"        onclick="setFeedFilter('all')">All</button>
+        <button class="tf-btn"        data-feed-filter="blocked"    onclick="setFeedFilter('blocked')">Blocked</button>
+        <button class="tf-btn"        data-feed-filter="escalated"  onclick="setFeedFilter('escalated')">Escalated</button>
+        <button class="tf-btn"        data-feed-filter="allowed"    onclick="setFeedFilter('allowed')">Allowed</button>
+      </div>
+    </div>
+    <div id="feed-list"><div class="empty">Loading…</div></div>
+  </div>
+
+  <!-- FAILURE MODES ─────────────────────────────────────────────────── -->
+  <div class="content v2-content" id="content-failure-modes">
+    <div class="top-row">
+      <div class="section-label">Failure Modes</div>
+    </div>
+    <div class="fm-summary-row" id="fm-summary-chips"></div>
+    <div class="fm-filters">
+      <button class="fm-filter active" data-fm-status="all"        onclick="setFmStatus('all')">All</button>
+      <button class="fm-filter"        data-fm-status="built"      onclick="setFmStatus('built')">Detecting now</button>
+      <button class="fm-filter"        data-fm-status="coming_soon"onclick="setFmStatus('coming_soon')">Coming soon</button>
+      <button class="fm-filter"        data-fm-status="roadmap"    onclick="setFmStatus('roadmap')">Roadmap</button>
+      <span class="fm-filter-sep"></span>
+      <button class="fm-filter active" data-fm-layer="all"             onclick="setFmLayer('all')">All layers</button>
+      <button class="fm-filter"        data-fm-layer="Pre-execution"   onclick="setFmLayer('Pre-execution')">Pre-execution</button>
+      <button class="fm-filter"        data-fm-layer="Post-execution"  onclick="setFmLayer('Post-execution')">Post-execution</button>
+      <button class="fm-filter"        data-fm-layer="Output scan"     onclick="setFmLayer('Output scan')">Output scan</button>
+      <button class="fm-filter"        data-fm-layer="Session pattern" onclick="setFmLayer('Session pattern')">Session pattern</button>
+      <button class="fm-filter"        data-fm-layer="Memory layer"    onclick="setFmLayer('Memory layer')">Memory</button>
+      <span class="fm-showing" id="fm-showing"></span>
+    </div>
+    <div id="fm-stats-banner"></div>
+    <div id="fm-content"></div>
+  </div>
+
+  <!-- ESCALATIONS ───────────────────────────────────────────────────── -->
+  <div class="content v2-content" id="content-escalations">
+    <div class="section-label">Pending escalations</div>
+    <div id="esc-full"><div class="empty card">No pending escalations</div></div>
+    <div class="card" style="margin-top:4px">
+      <div class="panel-head">
+        <button class="resolved-toggle" id="resolved-toggle" onclick="toggleResolved()">Show recently resolved</button>
+      </div>
+      <div class="resolved-list" id="resolved-list"></div>
+    </div>
+  </div>
+
+  <!-- AUDIT LOG ─────────────────────────────────────────────────────── -->
+  <div class="content v2-content" id="content-audit">
+    <div class="card">
+      <div class="filterbar">
+        <select id="a-agent" onchange="renderAudit()"><option value="">All agents</option></select>
+        <select id="a-outcome" onchange="renderAudit()">
+          <option value="">All outcomes</option>
+          <option value="allowed">Allowed</option>
+          <option value="blocked">Blocked</option>
+          <option value="escalated">Escalated</option>
+        </select>
+        <select id="a-failure" onchange="renderAudit()">
+          <option value="">All failure modes</option>
+          <option value="injection">Injection</option>
+          <option value="drift">Drift</option>
+          <option value="loop">Loop</option>
+          <option value="policy">Policy</option>
+          <option value="excess">Excess agency</option>
+        </select>
+        <input id="a-search" type="text" placeholder="Search by tool name" oninput="renderAudit()" />
+        <div class="right">
+          <span class="count" id="a-count">— decisions</span>
+          <button class="btn-secondary" onclick="exportCsv()">Export CSV</button>
+        </div>
+      </div>
+      <div id="audit-list"><div class="empty">No decisions yet</div></div>
+    </div>
+  </div>
+
+  <!-- LEARNING LOOP ─────────────────────────────────────────────────── -->
+  <div class="content v2-content" id="content-learning">
+    <div class="section-label">Detected patterns</div>
+    <div id="patterns-list"><div class="empty card">Loading patterns…</div></div>
+    <div class="section-label" style="margin-top:14px">Policy change history</div>
+    <div class="card">
+      <div class="panel-head"><div class="panel-title">Recent changes</div></div>
+      <div id="changes-list"><div class="empty">No policy changes yet</div></div>
+    </div>
+  </div>
+
+  <!-- POLICY EDITOR ─────────────────────────────────────────────────── -->
+  <div class="content v2-content" id="content-policy">
+    <div class="section-label">Detected patterns &amp; suggested actions</div>
+    <div id="patterns-list-policy"><div class="empty card">Loading patterns…</div></div>
+  </div>
+
+  <!-- AGENTS ────────────────────────────────────────────────────────── -->
+  <div class="content v2-content" id="content-agents">
+    <div class="section-label">All agents</div>
+    <div id="agent-cards"><div class="empty card">No agent data yet</div></div>
+  </div>
+
+  <!-- EVAL DATASET ──────────────────────────────────────────────────── -->
+  <div class="content v2-content" id="content-eval">
+    <div class="stub">
+      <h2>Eval dataset export</h2>
+      <p>Export your labeled production decisions as an eval dataset compatible with Braintrust, LangSmith, or any eval framework. Available in the next release.</p>
+      <p style="margin-top:16px"><a onclick="switchTabV2('overview')">← Back to Overview</a></p>
+    </div>
+  </div>
+
+  <!-- COMPLIANCE ────────────────────────────────────────────────────── -->
+  <div class="content v2-content" id="content-compliance">
+    <div class="stub">
+      <h2>Compliance report</h2>
+      <p>Generate a SOC2 / EU AI Act compliance report from your audit log. Available in the next release.</p>
+      <p style="margin-top:16px"><a onclick="switchTabV2('overview')">← Back to Overview</a></p>
+    </div>
+  </div>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Wiring — copied verbatim from index.html (BASE, WS_BASE, state, helpers,
+   loaders, WebSocket connect/reconnect). Same data sources, same shapes.
+   ───────────────────────────────────────────────────────────────────────── */
+const BASE    = window.location.origin;
+const WS_BASE = BASE.replace(/^http/, "ws");
+
+const AGENT_DESCRIPTIONS = {
+  "finmate-prod": "Enterprise financial operations · refunds, invoices, budgets",
+  "default":      "AI agent",
+};
+
+let allDecisions       = [];   // most recent first, capped at 200
+let agentHealth        = {};   // {agent_id: enriched}
+let pendingEscs        = [];
+let fmCatalog          = null;
+let fmStats            = null;
+let learningChanges    = [];
+let timeRange          = "today";
+let activePage         = "overview";
+let refreshTimer       = null;
+
+const RANGE_LABEL = {
+  today:    "today",
+  "7days":  "last 7 days",
+  "30days": "last 30 days",
+  all:      "all time",
+};
+
+function rangeCutoffISO(range) {
+  const now = new Date();
+  if (range === "today")  return new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+  if (range === "7days")  return new Date(Date.now() - 7  * 86400000).toISOString();
+  if (range === "30days") return new Date(Date.now() - 30 * 86400000).toISOString();
+  return null;
+}
+function filterByTimeRange(decisions, range) {
+  const cutoff = rangeCutoffISO(range);
+  if (!cutoff) return decisions.slice();
+  return decisions.filter(d => (d.decided_at || "") >= cutoff);
+}
+function setTimeRange(range) {
+  timeRange = range;
+  // Only update the topbar time-range buttons (not the feed-filter buttons,
+  // which also use .tf-btn but live in their own .time-filter container).
+  document.querySelectorAll('#time-filter .tf-btn').forEach(b =>
+    b.classList.toggle("active", b.dataset.range === range));
+  loadFmStats();
+  // Re-render whichever tab is currently active so its numbers refresh.
+  renderV2Overview();
+  if (activePage === "feed")         renderDecisionFeed();
+  else if (activePage === "audit")   loadAudit();
+  else if (activePage === "agents")  renderAgentCards();
+}
+
+/* ── Utilities ─────────────────────────────────────────────────────────── */
+function $(id) { return document.getElementById(id); }
+function escHtml(s) {
+  if (s === null || s === undefined) return "";
+  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;")
+    .replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");
+}
+function timeAgo(iso) {
+  if (!iso) return "—";
+  const t = new Date(iso).getTime();
+  if (isNaN(t)) return String(iso);
+  const s = Math.floor((Date.now() - t) / 1000);
+  if (s < 0)     return "just now";
+  if (s < 60)    return s + "s ago";
+  if (s < 3600)  return Math.floor(s / 60) + "m ago";
+  if (s < 86400) return Math.floor(s / 3600) + "h ago";
+  return new Date(iso).toLocaleDateString("en-US", {month: "short", day: "numeric"});
+}
+function describeAgent(id) { return AGENT_DESCRIPTIONS[id] || AGENT_DESCRIPTIONS["default"]; }
+function initialsFor(id) {
+  if (!id) return "?";
+  const parts = String(id).split(/[-_\s]+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[1][0]).toUpperCase();
+}
+function fmtMoneyShort(n) {
+  if (!n || n <= 0) return "$0";
+  if (n >= 1000000) return "$" + (n / 1000000).toFixed(1) + "M";
+  if (n >= 1000)    return "$" + Math.round(n).toLocaleString();
+  return "$" + Math.round(n);
+}
+function blastObj(b) {
+  if (!b) return null;
+  if (typeof b === "string") { try { return JSON.parse(b); } catch { return null; } }
+  return b;
+}
+function _impactDollars(d) {
+  const br = blastObj(d.blast_radius);
+  if (!br) return 0;
+  const raw = br.financial_impact;
+  if (!raw || raw === "unknown") return 0;
+  const n = parseFloat(String(raw).replace(/[$,]/g, ""));
+  return isNaN(n) ? 0 : n;
+}
+function toast(msg) {
+  const t = $("toast"); t.textContent = msg;
+  t.classList.add("show");
+  setTimeout(() => t.classList.remove("show"), 2200);
+}
+async function safeJson(url, opts) {
+  try {
+    const r = await fetch(url, opts);
+    if (!r.ok) return null;
+    return await r.json();
+  } catch { return null; }
+}
+function todayLabel() {
+  return new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+/* ── Failure-mode category → dot/fill/text variant ─────────────────────── */
+function modeVariant(modeId) {
+  if (!modeId) return "secondary";
+  if (modeId === "prompt_injection" || modeId === "goal_hijacking" ||
+      modeId === "excessive_agency") return "danger";
+  if (modeId === "policy_violation" || modeId === "high_blast_radius") return "info";
+  if (modeId === "goal_drift" || modeId === "pii_in_output" ||
+      modeId === "data_exfiltration") return "warning";
+  return "secondary";
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Loaders
+   ───────────────────────────────────────────────────────────────────────── */
+async function loadAgentHealth() {
+  const r = await safeJson(BASE + "/health/agents");
+  if (!r) return;
+  const map = {};
+  for (const a of r.agents || []) map[a.agent_id] = a;
+  agentHealth = map;
+  updateLiveStatus(true);
+  renderSidebar();
+  renderV2Overview();
+}
+
+async function loadEscalations() {
+  // /dashboard/stats enriches each pending escalation with the audit_log
+  // fields (original_task, injection_score, injection_reason, attack_type,
+  // blast_radius, policy_matched, risk_reason, anomaly_score, anomaly_reason).
+  // /escalations alone returns only the bare escalations table — not enough
+  // to render the rich card.
+  //
+  // Always pass `since` to work around a latent backend bug in audit.get_stats
+  // where the "no-since" branch hits an UnboundLocalError due to a function-local
+  // datetime re-import shadowing the module-level name. Passing `since` keeps
+  // the function on its happy path.
+  const since = rangeCutoffISO(timeRange) || new Date(Date.now() - 30 * 86400000).toISOString();
+  const s = await safeJson(BASE + "/dashboard/stats?since=" + encodeURIComponent(since));
+  pendingEscs = (s && s.pending_escalations) || [];
+  renderSidebar();
+  renderV2Overview();
+}
+
+async function loadFmCatalog() {
+  fmCatalog = await safeJson(BASE + "/failure-modes");
+  renderV2Overview();
+}
+
+async function loadFmStats() {
+  const since = rangeCutoffISO(timeRange);
+  const url = BASE + "/failure-modes/stats" +
+              (since ? "?since=" + encodeURIComponent(since) : "");
+  fmStats = await safeJson(url);
+  renderV2Overview();
+}
+
+async function loadLearning() {
+  const cs = await safeJson(BASE + "/learning/changes");
+  learningChanges = (cs && cs.changes) || [];
+  renderSidebar();
+  renderV2Overview();
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Sidebar (logo agent, nav badges, footer health)
+   ───────────────────────────────────────────────────────────────────────── */
+function renderSidebar() {
+  // Active agent: pick the worst-health agent as the focus
+  const ids = Object.keys(agentHealth);
+  let primary = null;
+  if (ids.length) {
+    ids.sort((a, b) => (agentHealth[a].health_score ?? 100) - (agentHealth[b].health_score ?? 100));
+    primary = agentHealth[ids[0]];
+  }
+  if (primary) {
+    $("sb-agent-name").textContent = primary.agent_id;
+  } else {
+    $("sb-agent-name").textContent = "—";
+  }
+
+  // Nav badges
+  const escBadge = $("nav-esc-badge");
+  if (pendingEscs.length > 0) {
+    escBadge.style.display = "inline-block";
+    escBadge.textContent = pendingEscs.length;
+  } else {
+    escBadge.style.display = "none";
+  }
+  const learnBadge = $("nav-learning-badge");
+  if (learningChanges.length > 0) {
+    learnBadge.style.display = "inline-block";
+    learnBadge.textContent = learningChanges.length;
+  } else {
+    learnBadge.style.display = "none";
+  }
+
+  // Footer health widget
+  const score = primary ? primary.health_score : null;
+  const status = primary ? primary.health_status : null;
+  const scoreEl = $("sb-health-score");
+  const badgeEl = $("sb-health-badge");
+  const nameEl  = $("sb-health-name");
+  const fillEl  = $("sb-health-fill");
+
+  scoreEl.classList.remove("good", "warn", "bad", "muted");
+  badgeEl.classList.remove("good", "warn", "bad", "muted");
+
+  if (score == null || status === "Unknown") {
+    scoreEl.textContent = "—";
+    badgeEl.textContent = status || "No agents";
+    scoreEl.classList.add("muted");
+    badgeEl.classList.add("muted");
+    nameEl.textContent = primary ? primary.agent_id : "No agents";
+    fillEl.style.width = "0";
+    fillEl.style.background = "var(--color-text-tertiary)";
+    return;
+  }
+
+  scoreEl.textContent = score;
+  badgeEl.textContent = status;
+  nameEl.textContent = primary.agent_id;
+
+  let variant = "muted", color = "var(--color-text-tertiary)";
+  if (score >= 90) { variant = "good"; color = "var(--color-text-success)"; }
+  else if (score >= 60) { variant = "warn"; color = "var(--color-text-warning)"; }
+  else { variant = "bad"; color = "var(--color-text-danger)"; }
+  scoreEl.classList.add(variant);
+  badgeEl.classList.add(variant);
+  fillEl.style.width = Math.max(2, score) + "%";
+  fillEl.style.background = color;
+}
+
+/* ── WS live indicator ──────────────────────────────────────────────────── */
+function updateLiveStatus(connected) {
+  const wrap = $("sb-agent-status");
+  if (!wrap) return;
+  if (connected) {
+    wrap.innerHTML = '<span class="dot"></span><span>Live · watching</span>';
+  } else {
+    wrap.innerHTML = '<span class="dot" style="background:var(--color-text-tertiary)"></span><span>Connecting…</span>';
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Overview renderer
+   ───────────────────────────────────────────────────────────────────────── */
+function renderV2Overview() {
+  const filtered = filterByTimeRange(allDecisions, timeRange);
+  renderHero(filtered);
+  renderKpis(filtered);
+  renderFailureModes(filtered);
+  renderEscalationCard();
+  renderLearningCard();
+  renderAgentList(filtered);
+}
+
+function _scoreBucket(score) {
+  if (score == null) return null;
+  if (score >= 90) return "good";
+  if (score >= 60) return "warn";
+  return "bad";
+}
+
+function _avgHealth() {
+  const scores = Object.values(agentHealth)
+    .map(a => a.health_score)
+    .filter(s => s != null);
+  if (!scores.length) return null;
+  return Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
+}
+
+function renderHero(filtered) {
+  $("hero-label").textContent = "AGENT SUMMARY · " + todayLabel().toUpperCase();
+
+  const blocked = filtered.filter(d => d.outcome === "blocked").length;
+  const escalated = filtered.filter(d => (d.outcome || "").startsWith("escalat")).length;
+  const total = filtered.length;
+  const unsafe = blocked + escalated;
+  const approved = filtered.filter(d => d.outcome === "escalation_approved").length;
+  const prevented = filtered
+    .filter(d => d.outcome === "blocked" || d.outcome === "escalation_approved")
+    .reduce((s, d) => s + _impactDollars(d), 0);
+
+  const agentName = (Object.keys(agentHealth)[0]) || "Your agent";
+  const avg = _avgHealth();
+
+  let headline;
+  if (avg == null && total === 0) {
+    headline = "Waiting for agent activity…";
+  } else if (avg == null) {
+    headline = "Watching " + agentName + " — reliability score still building.";
+  } else if (avg >= 90) {
+    headline = "Your agents are running cleanly today.";
+  } else if (avg >= 70) {
+    headline = "Your agent is operating with caution today.";
+  } else if (avg >= 40) {
+    headline = "Your agent needs attention today.";
+  } else {
+    headline = "Your agent is in a critical state.";
+  }
+  $("hero-headline").textContent = headline;
+
+  // Top 2 failure modes (from /failure-modes/stats — same time window as filter).
+  const topModes = [];
+  if (fmStats && fmCatalog) {
+    const modeNames = {};
+    for (const cat of (fmCatalog.categories || [])) {
+      for (const m of (cat.modes || [])) modeNames[m.id] = m.name;
+    }
+    const arr = Object.entries(fmStats)
+      .filter(([, v]) => (v.total || 0) > 0)
+      .map(([id, v]) => ({ id, name: modeNames[id] || id, count: v.total }))
+      .sort((a, b) => b.count - a.count);
+    for (const m of arr.slice(0, 2)) topModes.push(m);
+  }
+  let issueDetail = "";
+  if (topModes.length === 1) {
+    issueDetail = " — mostly <strong>" + escHtml(topModes[0].name.toLowerCase()) + "</strong>";
+  } else if (topModes.length === 2) {
+    issueDetail =
+      " — mostly <strong>" + escHtml(topModes[0].name.toLowerCase()) +
+      "</strong> and <strong>" + escHtml(topModes[1].name.toLowerCase()) + "</strong>";
+  }
+
+  let learningDetail = "";
+  if (learningChanges.length > 0) {
+    const tools = new Set(learningChanges.map(c => c.tool_name).filter(Boolean));
+    learningDetail = " — auto-tuning " + Array.from(tools).slice(0, 2).map(t => `<strong>${escHtml(t)}</strong>`).join(" and ");
+  }
+
+  const lbl = RANGE_LABEL[timeRange];
+  const body =
+    "<strong>" + escHtml(agentName) + "</strong> handled <strong>" + total +
+    "</strong> action" + (total === 1 ? "" : "s") + " " + lbl + ". " +
+    "AgentGate caught <strong>" + unsafe + "</strong> issue" + (unsafe === 1 ? "" : "s") +
+    " before they executed" + issueDetail + ". " +
+    "The learning loop auto-resolved <strong>" + approved + "</strong> escalation" +
+    (approved === 1 ? "" : "s") + " this week" + learningDetail + ".";
+  $("hero-body").innerHTML = body;
+
+  // Chips
+  const chips = [];
+  chips.push(unsafe > 0
+    ? `<span class="chip danger"><span class="chip-dot" style="background:var(--color-text-danger)"></span>${unsafe} issues caught</span>`
+    : `<span class="chip success"><span class="chip-dot" style="background:var(--color-text-success)"></span>0 issues</span>`);
+  chips.push(`<span class="chip success"><span class="chip-dot" style="background:var(--color-text-success)"></span>${fmtMoneyShort(prevented)} protected</span>`);
+  chips.push(pendingEscs.length > 0
+    ? `<span class="chip warning"><span class="chip-dot" style="background:var(--color-text-warning)"></span>${pendingEscs.length} pending review</span>`
+    : `<span class="chip success"><span class="chip-dot" style="background:var(--color-text-success)"></span>none pending</span>`);
+  chips.push(`<span class="chip"><span class="chip-dot" style="background:var(--color-text-tertiary)"></span>${approved} auto-resolved</span>`);
+  $("hero-chips").innerHTML = chips.join("");
+}
+
+function renderKpis(filtered) {
+  const blocked = filtered.filter(d => d.outcome === "blocked").length;
+  const escalated = filtered.filter(d => (d.outcome || "").startsWith("escalat")).length;
+  const total = filtered.length;
+  const unsafe = blocked + escalated;
+  const prevented = filtered
+    .filter(d => d.outcome === "blocked" || d.outcome === "escalation_approved")
+    .reduce((s, d) => s + _impactDollars(d), 0);
+
+  const unsafeEl = $("kpi-unsafe");
+  unsafeEl.textContent = unsafe;
+  unsafeEl.classList.remove("good", "warn", "bad");
+  unsafeEl.classList.add(unsafe > 0 ? "bad" : "good");
+  $("kpi-unsafe-sub").textContent = "of " + total + " total " + RANGE_LABEL[timeRange];
+
+  $("kpi-money").textContent = prevented > 0 ? fmtMoneyShort(prevented) : "$0";
+
+  const relEl = $("kpi-rel");
+  relEl.classList.remove("good", "warn", "bad");
+  const avg = _avgHealth();
+  if (avg == null) {
+    relEl.textContent = "—";
+    $("kpi-rel-sub").textContent = "no agents yet";
+  } else {
+    relEl.textContent = avg;
+    if (avg >= 90) relEl.classList.add("good");
+    else if (avg >= 60) relEl.classList.add("warn");
+    else relEl.classList.add("bad");
+    const needs = Object.values(agentHealth)
+      .filter(a => a.health_status === "Critical" || a.health_status === "Degraded").length;
+    $("kpi-rel-sub").textContent = needs > 0
+      ? "caution · " + needs + " agent" + (needs === 1 ? "" : "s")
+      : "all healthy";
+  }
+
+  const pendEl = $("kpi-pending");
+  const pending = pendingEscs.length;
+  pendEl.textContent = pending;
+  pendEl.classList.remove("good", "warn", "bad");
+  pendEl.classList.add(pending > 0 ? "warn" : "good");
+  $("kpi-pending-sub").textContent = pending > 0 ? "awaiting decision" : "none pending";
+}
+
+function renderFailureModes(filtered) {
+  const list = $("fm-list");
+  if (!fmStats || !fmCatalog) {
+    list.innerHTML = '<div class="fm-empty">Loading…</div>';
+    return;
+  }
+  const modeMeta = {};
+  for (const cat of (fmCatalog.categories || [])) {
+    for (const m of (cat.modes || [])) modeMeta[m.id] = m;
+  }
+  const present = Object.entries(fmStats)
+    .filter(([, v]) => (v.total || 0) > 0)
+    .map(([id, v]) => ({ id, name: (modeMeta[id] && modeMeta[id].name) || id, count: v.total }))
+    .sort((a, b) => b.count - a.count);
+
+  if (!present.length) {
+    list.innerHTML = '<div class="fm-empty">No failure modes triggered in this window.</div>';
+    return;
+  }
+
+  const max = Math.max(1, ...present.map(p => p.count));
+  const top = present.slice(0, 6);
+  const moreCount = present.length - top.length;
+
+  const rows = top.map(p => {
+    const variant = modeVariant(p.id);
+    const pct = Math.max(8, Math.round(p.count / max * 100));
+    return `<div class="fm-row">
+      <span class="fm-dot dot-${variant}"></span>
+      <div class="fm-name">${escHtml(p.name)}</div>
+      <div class="fm-bar"><div class="fill-${variant}" style="width:${pct}%"></div></div>
+      <div class="fm-count txt-${variant}">${p.count}</div>
+    </div>`;
+  });
+
+  // Up to 2 monitoring rows for modes with 0 count today (informational)
+  const monitorIds = ["pii_in_output", "data_exfiltration"];
+  const monitoring = monitorIds
+    .filter(id => fmStats[id] && (fmStats[id].total || 0) === 0 && modeMeta[id])
+    .slice(0, 2);
+  const monRows = monitoring.map(id => `<div class="fm-row">
+      <span class="fm-dot dot-muted"></span>
+      <div class="fm-name" style="color:var(--color-text-tertiary)">${escHtml(modeMeta[id].name)}</div>
+      <span class="fm-monitor">monitoring</span>
+    </div>`);
+
+  let footer = "";
+  if (moreCount > 0) {
+    footer = `<div class="fm-row" style="justify-content:center;color:var(--color-text-tertiary);font-size:11px">+ ${moreCount} more</div>`;
+  }
+
+  list.innerHTML = rows.join("") + monRows.join("") + footer;
+}
+
+/* Build a short list of action-oriented checks the human reviewer should
+   verify before approving. Generated client-side from blast_radius +
+   detector scores — no backend call. */
+function buildEscSuggestion(e, br) {
+  const checks = [];
+  const financial = (br && br.financial_impact) || "";
+  const regFlags = (br && br.regulatory_flags) || [];
+
+  if (financial && financial !== "unknown" && financial !== "$0") {
+    checks.push("Verify the amount matches a signed contract or approved purchase order.");
+    checks.push("Confirm the recipient is an approved vendor in your vendor registry.");
+  }
+  if (e.injection_score && e.injection_score >= 50) {
+    checks.push("Review the original request source — an injection pattern was detected. Confirm a human user actually made this request.");
+  }
+  if (e.drift_score && e.drift_score >= 60) {
+    checks.push("Verify the agent was supposed to take this action — it may have gone off-task from the original request.");
+  }
+  if (regFlags.includes("SOX")) {
+    checks.push("SOX compliance required — ensure a cost-center code and approver are logged for this transaction.");
+  }
+  if (regFlags.includes("PCI") || regFlags.includes("PCI-DSS")) {
+    checks.push("PCI-DSS applies — verify no raw card data is included in this transaction.");
+  }
+  if (br && br.reversibility && br.reversibility !== "reversible") {
+    const rev = br.reversibility.replace(/_/g, " ");
+    checks.push(`This action is ${rev} — confirm you are ready to commit before approving.`);
+  }
+  if (checks.length === 0) {
+    checks.push("Review the original task and confirm this action is what was intended.");
+    checks.push("Check the agent's session history for any unusual prior actions.");
+  }
+  return checks;
+}
+
+/* Build the per-finding rows (injection / risk / drift / blast). */
+function buildEscFindings(e, br) {
+  const findings = [];
+  if (e.injection_score && e.injection_score >= 50) {
+    findings.push({
+      color: "danger",
+      scoreLabel: "Inj " + e.injection_score,
+      text: e.injection_reason ||
+        `Injection pattern detected with score ${e.injection_score}/100.`
+    });
+  }
+  if (e.risk_score && e.risk_score >= 40) {
+    findings.push({
+      color: e.risk_score >= 70 ? "danger" : "warning",
+      scoreLabel: "Risk " + e.risk_score,
+      text: e.risk_reason || `Risk score ${e.risk_score}/100.`
+    });
+  }
+  if (e.drift_score && e.drift_score >= 30) {
+    findings.push({
+      color: e.drift_score >= 60 ? "danger" : "warning",
+      scoreLabel: "Drift " + e.drift_score,
+      text: e.drift_reason || `Goal drift detected with score ${e.drift_score}/100.`
+    });
+  }
+  const severity     = (br && br.severity)         || "unknown";
+  const financial    = (br && br.financial_impact) || "unknown";
+  const reversibility= (br && br.reversibility)    || "unknown";
+  const regFlags     = (br && br.regulatory_flags) || [];
+  findings.push({
+    color: severity === "critical" ? "danger" : severity === "high" ? "warning" : "neutral",
+    scoreLabel: "Blast: " + severity,
+    text: `Financial impact: ${financial}. ` +
+          `Reversibility: ${String(reversibility).replace(/_/g, " ")}.` +
+          (regFlags.length ? ` Regulatory flags: ${regFlags.join(", ")}.` : "")
+  });
+  if (findings.length === 1) {
+    // Only blast — surface a neutral note explaining why it was escalated.
+    findings.unshift({
+      color: "neutral",
+      scoreLabel: null,
+      text: "No specific risk signals detected. Escalated due to a policy rule or risk-score threshold."
+    });
+  }
+  return findings;
+}
+
+/* Full rich card — used both in the Escalations tab and (compact-styled)
+   in the Overview right stack. */
+function renderEscv2Card(e, opts) {
+  const id  = e.id || "";
+  const br  = blastObj(e.blast_radius) || {};
+  const sev = br.severity === "critical" ? "severity-critical"
+            : br.severity === "high"     ? "severity-high" : "";
+  const findings = buildEscFindings(e, br);
+  const checks   = buildEscSuggestion(e, br);
+
+  const findingsHtml = findings.map(f => `
+    <div class="escv2-finding">
+      <div class="escv2-finding-dot escv2-dot-${f.color}"></div>
+      <div class="escv2-finding-text">${escHtml(f.text)}</div>
+      ${f.scoreLabel
+        ? `<span class="escv2-score-badge escv2-score-${f.color}">${escHtml(f.scoreLabel)}</span>`
+        : ""}
+    </div>`).join("");
+
+  const checksHtml = checks.map(c =>
+    `<div class="escv2-check"><span class="escv2-check-arrow">→</span><span>${escHtml(c)}</span></div>`
+  ).join("");
+
+  // Impact chips (only show populated ones)
+  const impactChips = [];
+  if (br.financial_impact && br.financial_impact !== "unknown" && br.financial_impact !== "$0") {
+    const cls = br.severity === "critical" ? "red" : br.severity === "high" ? "amber" : "";
+    impactChips.push(`<div class="escv2-impact-chip">
+      <div class="escv2-impact-label">Financial impact</div>
+      <div class="escv2-impact-val ${cls}">${escHtml(br.financial_impact)}</div>
+    </div>`);
+  }
+  if (br.reversibility) {
+    const cls = br.reversibility === "irreversible" ? "red"
+              : br.reversibility === "partially_reversible" ? "amber" : "";
+    impactChips.push(`<div class="escv2-impact-chip">
+      <div class="escv2-impact-label">Reversibility</div>
+      <div class="escv2-impact-val ${cls}">${escHtml(String(br.reversibility).replace(/_/g, " "))}</div>
+    </div>`);
+  }
+  if (br.regulatory_flags && br.regulatory_flags.length) {
+    impactChips.push(`<div class="escv2-impact-chip">
+      <div class="escv2-impact-label">Regulatory</div>
+      <div class="escv2-impact-val amber">${escHtml(br.regulatory_flags.join(" · "))}</div>
+    </div>`);
+  }
+  const impactRow = impactChips.length
+    ? `<div class="escv2-impact-row">${impactChips.join("")}</div>` : "";
+
+  const pendingNote = (opts && opts.pendingCount != null)
+    ? `${opts.pendingCount} pending · auto-rejects if no decision`
+    : `Auto-rejects if no decision`;
+
+  return `<div class="esc-card-v2 ${sev}" id="esc-${escHtml(id)}">
+    <div class="escv2-header">
+      <div class="escv2-header-left">
+        <div class="escv2-tool">${escHtml(e.tool_name || "")}</div>
+        <div class="escv2-meta">${escHtml(e.agent_id || "")} · ${escHtml(timeAgo(e.created_at))}</div>
+      </div>
+      <div class="escv2-risk-circle">
+        <div class="escv2-risk-num">${e.risk_score != null ? e.risk_score : "—"}</div>
+        <div class="escv2-risk-lbl">risk</div>
+      </div>
+    </div>
+
+    ${e.original_task ? `
+      <div class="escv2-section-label">Original task</div>
+      <div class="escv2-task">${escHtml(e.original_task)}</div>` : ""}
+
+    <div class="escv2-section-label">What AgentGate detected</div>
+    <div class="escv2-findings">${findingsHtml}</div>
+
+    <div class="escv2-suggestion">
+      <div class="escv2-suggestion-title">Before you decide — verify these</div>
+      <div class="escv2-checks">${checksHtml}</div>
+    </div>
+
+    ${impactRow}
+
+    <div class="escv2-footer">
+      <div class="escv2-footer-note">${escHtml(pendingNote)}</div>
+      <div class="escv2-footer-btns">
+        <button class="btn-escv2-reject"  onclick="resolveEsc('${escHtml(id)}','reject')">Reject</button>
+        <button class="btn-escv2-approve" onclick="resolveEsc('${escHtml(id)}','approve')">Approve</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+/* Overview mini card — uses the same data sources, more compact. */
+function renderEscalationCard() {
+  const card = $("esc-card");
+  const link = $("esc-count-link");
+  if (pendingEscs.length === 0) {
+    link.textContent = "0 pending";
+    card.innerHTML = '<div class="esc-empty">✓ No pending escalations</div>';
+    return;
+  }
+  link.textContent = pendingEscs.length + " pending";
+  const e  = pendingEscs[0];
+  const br = blastObj(e.blast_radius) || {};
+  const id = e.id || "";
+  const findings = buildEscFindings(e, br);
+  // Top non-blast finding for the one-sentence reason line.
+  const topFinding = findings.find(f => f.color !== "neutral") || findings[0];
+  const checks = buildEscSuggestion(e, br);
+  const topCheck = checks[0];
+
+  const reasonHtml = topFinding
+    ? `<div class="mini-reason">${escHtml(topFinding.text)}</div>` : "";
+  const checkHtml = topCheck
+    ? `<div class="mini-check"><span class="arrow">→</span><span>${escHtml(topCheck)}</span></div>` : "";
+  const taskHtml = e.original_task
+    ? `<div class="mini-task">${escHtml(e.original_task)}</div>` : "";
+
+  card.innerHTML = `<div class="esc-mini-v2">
+    <div class="escv2-header" style="padding:0 0 8px">
+      <div class="escv2-header-left">
+        <div class="escv2-tool">${escHtml(e.tool_name || "")}</div>
+        <div class="escv2-meta">${escHtml(describeAgent(e.agent_id))}</div>
+      </div>
+      <span class="risk-chip">Risk ${e.risk_score != null ? e.risk_score : "—"}</span>
+    </div>
+    ${taskHtml}
+    ${reasonHtml}
+    ${checkHtml}
+    <div class="esc-actions">
+      <button class="btn btn-approve" onclick="resolveEsc('${escHtml(id)}','approve')">Approve</button>
+      <button class="btn btn-reject"  onclick="resolveEsc('${escHtml(id)}','reject')">Reject</button>
+    </div>
+  </div>`;
+}
+
+function renderLearningCard() {
+  const wrap = $("learning");
+  const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
+  const recent = learningChanges.filter(c => (c.applied_at || "") >= weekAgo);
+  if (!recent.length) {
+    wrap.classList.add("hidden");
+    return;
+  }
+  wrap.classList.remove("hidden");
+
+  const items = recent.slice(0, 3).map(c => {
+    const tool = c.tool_name || "policy";
+    const before = c.before_value ?? "—";
+    const after = c.after_value ?? "—";
+    let action = (c.action || "auto-tuned").replace(/_/g, " ");
+    let text;
+    if (action.includes("threshold") || action.includes("raise")) {
+      text = `${tool} threshold ${before} → ${after}`;
+    } else if (action.includes("rule") || action.includes("add policy")) {
+      text = `New policy on ${tool}`;
+    } else {
+      text = `${tool}: ${action} (${before} → ${after})`;
+    }
+    return `<div class="learning-row"><span class="plus">+</span><span>${escHtml(text)}</span></div>`;
+  }).join("");
+
+  $("learning-items").innerHTML = items;
+  $("learning-foot").innerHTML =
+    `${recent.length} polic${recent.length === 1 ? "y" : "ies"} auto-tuned · 0 manual edits · ` +
+    `<a class="panel-link" onclick="switchTabV2('learning')">see learning tab →</a>`;
+}
+
+function renderAgentList(filtered) {
+  const wrap = $("agent-list");
+  const ids = Object.keys(agentHealth);
+  if (!ids.length) {
+    wrap.innerHTML = '<div class="fm-empty">No agents observed yet</div>';
+    return;
+  }
+  ids.sort((a, b) => (agentHealth[a].health_score ?? 100) - (agentHealth[b].health_score ?? 100));
+
+  // Per-agent decision tallies from the active time window.
+  const byAgent = {};
+  for (const d of filtered) {
+    (byAgent[d.agent_id] = byAgent[d.agent_id] || []).push(d);
+  }
+
+  wrap.innerHTML = ids.map(id => {
+    const a = agentHealth[id];
+    const decs = byAgent[id] || [];
+    const total = decs.length;
+    const blocked = decs.filter(d => d.outcome === "blocked").length;
+    const escalated = decs.filter(d => (d.outcome || "").startsWith("escalat")).length;
+
+    const score = a.health_score;
+    const status = a.health_status || "Unknown";
+    let variant = "muted", color = "var(--color-text-tertiary)";
+    if (status === "Unknown") {
+      // keep muted
+    } else if (score >= 90) { variant = "good"; color = "var(--color-text-success)"; }
+    else if (score >= 70)   { variant = "warn"; color = "var(--color-text-warning)"; }
+    else                    { variant = "bad";  color = "var(--color-text-danger)"; }
+
+    const barWidth = score != null ? Math.max(2, score) : 0;
+    const pillText = status === "Unknown" ? "Unknown" : `${status} · ${score}%`;
+
+    return `<div class="agent-row">
+      <div class="avatar">${escHtml(initialsFor(id))}</div>
+      <div class="agent-body">
+        <div class="agent-name">${escHtml(id)}</div>
+        <div class="agent-desc">${escHtml(describeAgent(id))}</div>
+        <div class="agent-bar"><div style="width:${barWidth}%;background:${color}"></div></div>
+      </div>
+      <div class="agent-stats">
+        <div class="agent-stat"><div class="n">${total}</div><div class="l">Actions</div></div>
+        <div class="agent-stat ${blocked > 0 ? "danger" : ""}"><div class="n">${blocked}</div><div class="l">Blocked</div></div>
+        <div class="agent-stat ${escalated > 0 ? "warning" : ""}"><div class="n">${escalated}</div><div class="l">Escalated</div></div>
+      </div>
+      <span class="health-pill ${variant}">${escHtml(pillText)}</span>
+    </div>`;
+  }).join("");
+}
+
+/* ── Escalation approve/reject ─────────────────────────────────────────── */
+async function resolveEsc(id, action) {
+  const r = await fetch(BASE + "/escalations/" + id + "/" + action, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ reason: "" }),
+  });
+  if (r.ok) {
+    toast("Decision recorded");
+    await loadEscalations();
+  } else {
+    toast("Failed to record decision");
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Plain-English helpers (ported verbatim from v1 — needed by audit/feed)
+   ───────────────────────────────────────────────────────────────────────── */
+function fmt$(n) {
+  if (n === null || n === undefined || isNaN(n)) return "—";
+  return "$" + Number(n).toLocaleString("en-US",
+    { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function outcomeLabel(outcome) {
+  const o = (outcome || "").toLowerCase();
+  if (o === "escalation_approved") return "Approved";
+  if (o === "escalation_rejected") return "Rejected";
+  if (o === "failed_open")         return "Failed open";
+  if (!o) return "—";
+  return o.charAt(0).toUpperCase() + o.slice(1);
+}
+function explainDecision(d) {
+  const taskQuoted = d.original_task
+    ? '"' + (d.original_task.length > 50 ? d.original_task.substring(0,50) + "…" : d.original_task) + '"'
+    : "an unspecified task";
+  if (d.attack_type === "goal_hijacking")
+    return "Hidden instruction tried to redirect agent away from " + taskQuoted + ".";
+  if (d.attack_type === "excessive_agency")
+    return "Agent tried a disproportionate action for " + taskQuoted + ".";
+  if (d.attack_type === "data_exfiltration")
+    return "Agent attempted to send data to an external destination.";
+  if (d.attack_type === "privilege_escalation")
+    return "Agent attempted an action beyond its authorization level.";
+  if ((d.drift_score || 0) > 50)
+    return "Agent drifted off task — " + (d.drift_reason || "tool did not match the stated goal") + ".";
+  if ((d.loop_score || 0) > 70)
+    return "Retry storm — " + (d.loop_reason || "same failing tool called repeatedly") + ".";
+  if (d.policy_matched && d.outcome === "blocked")
+    return "Blocked by rule: " + d.policy_matched.replace(/_/g, " ") + ".";
+  if (d.outcome === "escalated")
+    return "Escalated for human review — " + (d.reason || "requires approval") + ".";
+  if (d.outcome === "allowed")
+    return "Passed all checks — " + (d.reason || "action permitted") + ".";
+  return d.reason || "Decision recorded.";
+}
+function failureModeFor(d) {
+  if (d.attack_type === "goal_hijacking")     return { key: "injection", label: "Injection",     cls: "injection" };
+  if (d.attack_type === "data_exfiltration")  return { key: "data",      label: "Data leak",     cls: "data" };
+  if ((d.drift_score || 0) > 50)              return { key: "drift",     label: "Drift",         cls: "drift" };
+  if (d.attack_type === "excessive_agency")   return { key: "excess",    label: "Excess agency", cls: "excess" };
+  if (d.attack_type === "privilege_escalation") return { key: "injection", label: "Privilege",  cls: "injection" };
+  if ((d.loop_score || 0) > 85)               return { key: "loop",      label: "Storm",         cls: "loop" };
+  if ((d.loop_score || 0) > 70)               return { key: "loop",      label: "Loop",          cls: "loop" };
+  if (d.outcome === "blocked" && d.policy_matched) return { key: "policy", label: "Policy",    cls: "policy" };
+  return null;
+}
+function formatArgsList(argsRaw) {
+  let args = argsRaw;
+  if (typeof args === "string") {
+    try { args = JSON.parse(args); } catch { return escHtml(args); }
+  }
+  if (!args || typeof args !== "object") return '<span class="muted tiny">No arguments</span>';
+  const currencyKeys = new Set(["amount","total","price","cost","balance","limit","fee","value"]);
+  return Object.entries(args).map(([k, v]) => {
+    let display;
+    if (typeof v === "boolean") display = v ? "Yes" : "No";
+    else if (currencyKeys.has(k.toLowerCase()) && typeof v === "number") display = fmt$(v);
+    else if (typeof v === "object") display = JSON.stringify(v);
+    else display = String(v);
+    if (display.length > 80) display = display.substring(0, 80) + "…";
+    return '<div><span class="k">' + escHtml(k) + ':</span><span class="v">' + escHtml(display) + '</span></div>';
+  }).join("");
+}
+
+/* ── Pipeline trace (audit detail) ─────────────────────────────────────── */
+function getPipelineStates(d) {
+  const br = blastObj(d.blast_radius) || {};
+  const blastFail     = br.severity === "critical" && d.outcome !== "allowed";
+  const policyFail    = !!(d.policy_matched && d.outcome === "blocked" && !((d.injection_score || 0) >= 70));
+  const riskFail      = (d.risk_score || 0) >= 80 && d.outcome === "blocked";
+  const injectionFail = (d.injection_score || 0) >= 70 && d.outcome === "blocked";
+  const driftFail     = (d.drift_score || 0) >= 60 && (d.outcome === "blocked" || d.outcome === "escalated");
+  const loopFail      = (d.loop_score || 0) >= 70 && (d.outcome === "blocked" || d.outcome === "escalated");
+  const order = ["blast","policy","risk","injection","drift","loop"];
+  const flags = {blast:blastFail, policy:policyFail, risk:riskFail, injection:injectionFail, drift:driftFail, loop:loopFail};
+  let firstFail = null;
+  for (const k of order) { if (flags[k]) { firstFail = k; break; } }
+  const stateFor = (n) => {
+    if (flags[n]) return "fail";
+    if (firstFail && order.indexOf(n) > order.indexOf(firstFail)) return "skip";
+    return "pass";
+  };
+  let outcomeState = "pass";
+  if (d.outcome === "blocked") outcomeState = "fail";
+  else if (d.outcome === "escalated" || d.outcome === "escalation_rejected") outcomeState = "warn";
+  return {
+    blast: stateFor("blast"), policy: stateFor("policy"),
+    risk: stateFor("risk"), injection: stateFor("injection"),
+    drift: stateFor("drift"), loop: stateFor("loop"),
+    outcome: outcomeState,
+  };
+}
+function nodeMetric(name, d, state) {
+  const br = blastObj(d.blast_radius) || {};
+  if (state === "skip") return "not reached";
+  switch (name) {
+    case "blast": {
+      const sev = br.severity || "low";
+      const fin = br.financial_impact && br.financial_impact !== "unknown" ? br.financial_impact : "$0";
+      return fin + " · " + sev;
+    }
+    case "policy": return d.policy_matched ? d.policy_matched : "no match";
+    case "risk": {
+      const r = d.risk_score || 0;
+      if (r === 0) return "0%";
+      if (r >= 80) return r + "% — high";
+      if (r >= 50) return r + "% — medium";
+      return r + "% — low";
+    }
+    case "injection": {
+      const i = d.injection_score || 0;
+      if (state === "fail") return i + "% — " + (d.attack_type || "injection");
+      return i + "%";
+    }
+    case "drift": {
+      const v = d.drift_score || 0;
+      if (state === "fail") return v + "% — off-task";
+      return v + "%";
+    }
+    case "loop": {
+      const v = d.loop_score || 0;
+      if (state === "fail") return v + "% — retry storm";
+      return v + "%";
+    }
+    case "outcome":
+      if (d.outcome === "blocked") return "blocked";
+      if (d.outcome === "escalated") return "escalated";
+      if (d.outcome === "escalation_approved") return "approved";
+      if (d.outcome === "escalation_rejected") return "rejected";
+      if (d.outcome === "failed_open") return "failed open";
+      return "allowed";
+  }
+  return "";
+}
+function renderPipelineHtml(d) {
+  const s = getPipelineStates(d);
+  const nodes = [
+    {key:"blast",     label:"Blast radius", state: s.blast},
+    {key:"policy",    label:"Policy",       state: s.policy},
+    {key:"risk",      label:"Risk",         state: s.risk},
+    {key:"injection", label:"Injection",    state: s.injection},
+    {key:"drift",     label:"Drift",        state: s.drift},
+    {key:"loop",      label:"Loop",         state: s.loop},
+  ];
+  const failIdx = nodes.findIndex(n => n.state === "fail");
+  const parts = [];
+  nodes.forEach((n, i) => {
+    parts.push('<div class="pipe-node ' + n.state + '">' +
+      '<div class="name">' + escHtml(n.label) + '</div>' +
+      '<div class="metric">' + escHtml(nodeMetric(n.key, d, n.state)) + '</div>' +
+      '</div>');
+    let arrow = "pass";
+    if (failIdx >= 0 && i === failIdx) arrow = "fail";
+    else if (failIdx >= 0 && i > failIdx) arrow = "skip";
+    parts.push('<div class="pipe-arrow ' + arrow + '">→</div>');
+  });
+  parts.push('<div class="pipe-node ' + s.outcome + '">' +
+    '<div class="name">Decision</div>' +
+    '<div class="metric">' + escHtml(nodeMetric("outcome", d, s.outcome)) + '</div>' +
+    '</div>');
+  return '<div class="pipeline">' + parts.join("") + '</div>';
+}
+function renderTraceBody(d) {
+  let whyClass = "pass", whyLbl = "Decision";
+  if (d.outcome === "blocked") { whyClass = "fail"; whyLbl = "Why it was blocked"; }
+  else if (d.outcome === "escalated" || d.outcome === "escalation_rejected") { whyClass = "warn"; whyLbl = "Why it was escalated"; }
+  else if (d.outcome === "escalation_approved") { whyLbl = "Approved after review"; }
+  return renderPipelineHtml(d) +
+    '<div class="why ' + whyClass + '">' +
+      '<span class="lbl">' + escHtml(whyLbl) + '</span>' +
+      '<div class="text">' + escHtml(explainDecision(d)) + '</div>' +
+    '</div>' +
+    '<div class="args-block">' +
+      '<span class="lbl">Arguments</span>' +
+      '<div class="kv-list">' + formatArgsList(d.args) + '</div>' +
+    '</div>';
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Decision feed tab (v2-only)
+   ───────────────────────────────────────────────────────────────────────── */
+let feedFilter = "all";
+function setFeedFilter(f) {
+  feedFilter = f;
+  document.querySelectorAll('[data-feed-filter]').forEach(b =>
+    b.classList.toggle("active", b.dataset.feedFilter === f));
+  renderDecisionFeed();
+}
+function renderDecisionFeed() {
+  const list = $("feed-list");
+  let rows = filterByTimeRange(allDecisions, timeRange);
+  if (feedFilter === "blocked")  rows = rows.filter(d => d.outcome === "blocked");
+  else if (feedFilter === "escalated") rows = rows.filter(d => (d.outcome || "").startsWith("escalat"));
+  else if (feedFilter === "allowed")   rows = rows.filter(d => d.outcome === "allowed");
+  rows = rows.slice(0, 50);
+  if (!rows.length) {
+    list.innerHTML = '<div class="empty">No decisions match this filter</div>';
+    return;
+  }
+  list.innerHTML = rows.map(d => {
+    const fm = failureModeFor(d);
+    const taskHtml = d.original_task
+      ? '<div class="feed-task">' + escHtml(d.original_task) + '</div>'
+      : "";
+    const reason = d.reason || d.injection_reason || "—";
+    const scores = [];
+    if ((d.risk_score || 0) > 0) {
+      const cls = d.risk_score >= 70 ? "bad" : d.risk_score >= 50 ? "warn" : "";
+      scores.push(`<span class="score-chip ${cls}">Risk ${d.risk_score}</span>`);
+    }
+    if ((d.injection_score || 0) > 0) {
+      const cls = d.injection_score >= 70 ? "bad" : d.injection_score >= 50 ? "warn" : "";
+      scores.push(`<span class="score-chip ${cls}">Injection ${d.injection_score}</span>`);
+    }
+    if ((d.drift_score || 0) > 0) {
+      const cls = d.drift_score >= 70 ? "bad" : d.drift_score >= 50 ? "warn" : "";
+      scores.push(`<span class="score-chip ${cls}">Drift ${d.drift_score}</span>`);
+    }
+    return `<div class="feed-row">
+      <div class="feed-head">
+        <span class="pill ${escHtml(d.outcome || "allowed")}">${escHtml(outcomeLabel(d.outcome))}</span>
+        <span class="feed-tool">${escHtml(d.tool_name || "")} <span class="muted tiny">· ${escHtml(d.agent_id || "")}</span></span>
+        <span class="feed-time">${escHtml(timeAgo(d.decided_at))}</span>
+      </div>
+      <div class="feed-body">
+        ${taskHtml}
+        <div class="feed-reason">${escHtml(reason.length > 200 ? reason.slice(0,200) + "…" : reason)}</div>
+        <div class="feed-scores">${scores.join("")}</div>
+      </div>
+      ${fm ? `<div class="feed-foot"><span class="fm-tag ${fm.cls}">${escHtml(fm.label)}</span></div>` : ""}
+    </div>`;
+  }).join("");
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Failure Modes tab (ported from v1)
+   ───────────────────────────────────────────────────────────────────────── */
+let fmStatusFilter = "all";
+let fmLayerFilter  = "all";
+let fmRoadmapOpen  = {};
+let fmStatsError   = false;
+function setFmStatus(s) {
+  fmStatusFilter = s;
+  document.querySelectorAll('[data-fm-status]').forEach(b =>
+    b.classList.toggle("active", b.dataset.fmStatus === s));
+  renderFmContent();
+}
+function setFmLayer(l) {
+  fmLayerFilter = l;
+  document.querySelectorAll('[data-fm-layer]').forEach(b =>
+    b.classList.toggle("active", b.dataset.fmLayer === l));
+  renderFmContent();
+}
+function fmTimeAgo(iso) { return timeAgo(iso); }
+function buildSparkline(data, width) {
+  const h = 28;
+  const n = data.length;
+  const gap = 2;
+  const bw = Math.max(2, Math.floor((width - gap * (n - 1)) / n));
+  const mx = Math.max(...data, 1);
+  // Read CSS variables at render time so dark/light mode both work.
+  const root = getComputedStyle(document.documentElement);
+  const fillOn  = root.getPropertyValue("--color-text-success").trim() || "#22C55E";
+  const fillOff = root.getPropertyValue("--color-border-tertiary").trim() || "#1E1E1E";
+  const bars = data.map((v, i) => {
+    const bh = v === 0 ? 2 : Math.max(3, Math.floor(v / mx * h));
+    const x = i * (bw + gap);
+    const y = h - bh;
+    const fill = v === 0 ? fillOff : fillOn;
+    return `<rect x="${x}" y="${y}" width="${bw}" height="${bh}" fill="${fill}" rx="1"/>`;
+  }).join("");
+  return `<svg class="fm-spark" width="100%" height="${h}" viewBox="0 0 ${width} ${h}" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">${bars}</svg>`;
+}
+function renderFmSummary() {
+  const wrap = $("fm-summary-chips");
+  if (!fmCatalog) { wrap.innerHTML = ""; return; }
+  const s = fmCatalog.summary || {};
+  wrap.innerHTML =
+    `<div class="fm-chip green"><span class="fm-chip-dot"></span>${(s.built || 0)} detecting now</div>` +
+    `<div class="fm-chip amber"><span class="fm-chip-dot"></span>${(s.coming_soon || 0)} coming soon</div>` +
+    `<div class="fm-chip muted"><span class="fm-chip-dot"></span>${(s.roadmap || 0)} on roadmap</div>`;
+}
+function fmModeMatchesFilters(m) {
+  if (fmStatusFilter !== "all" && m.status !== fmStatusFilter) return false;
+  if (fmLayerFilter  !== "all" && m.detection_layer !== fmLayerFilter) return false;
+  return true;
+}
+function renderFmContent() {
+  const wrap = $("fm-content");
+  const banner = $("fm-stats-banner");
+  if (!wrap) return;
+  if (!fmCatalog) {
+    wrap.innerHTML = '<div class="fm-error">Loading failure modes…</div>';
+    if (banner) banner.innerHTML = "";
+    return;
+  }
+  if (banner) {
+    banner.innerHTML = fmStatsError ? '<div class="fm-stats-banner">Stats unavailable — retrying</div>' : "";
+  }
+  let visibleTotal = 0;
+  for (const cat of fmCatalog.categories) {
+    for (const m of cat.modes) if (fmModeMatchesFilters(m)) visibleTotal++;
+  }
+  $("fm-showing").textContent = `Showing ${visibleTotal} of ${fmCatalog.summary.total} failure modes`;
+  renderFmSummary();
+  const sections = fmCatalog.categories.map(cat => {
+    const visible = cat.modes.filter(fmModeMatchesFilters);
+    if (!visible.length) return "";
+    const built  = visible.filter(m => m.status === "built");
+    const coming = visible.filter(m => m.status === "coming_soon");
+    const road   = visible.filter(m => m.status === "roadmap");
+    const builtHtml = built.length
+      ? `<div class="fm-built-grid">${built.map(renderFmBuiltCard).join("")}</div>` : "";
+    const comingHtml = coming.length
+      ? `<div style="margin-top:8px">${coming.map(m => renderFmSecondaryRow(m, false)).join("")}</div>` : "";
+    const open = fmRoadmapOpen[cat.id];
+    const roadHtml = road.length
+      ? `<div class="fm-roadmap-wrap">
+          <button class="fm-roadmap-toggle ${open ? "open" : ""}" onclick="toggleFmRoadmap('${escHtml(cat.id)}')">
+            <span class="arrow">›</span> ${road.length} more planned
+          </button>
+          <div class="fm-roadmap-list ${open ? "open" : ""}">
+            ${road.map(m => renderFmSecondaryRow(m, true)).join("")}
+          </div>
+        </div>` : "";
+    const counts = `<div class="fm-cat-counts">
+        <span class="c-built">${cat.modes.filter(m => m.status === "built").length} detecting</span><span>·</span>
+        <span class="c-coming">${cat.modes.filter(m => m.status === "coming_soon").length} coming</span><span>·</span>
+        <span class="c-road">${cat.modes.filter(m => m.status === "roadmap").length} roadmap</span>
+      </div>`;
+    return `<div class="fm-cat-section">
+      <div class="fm-cat-head">
+        <div class="fm-cat-label">${escHtml(cat.label)}</div>
+        <div class="fm-cat-desc">${escHtml(cat.description)}</div>
+        ${counts}
+      </div>${builtHtml}${comingHtml}${roadHtml}
+    </div>`;
+  }).join("");
+  wrap.innerHTML = sections.trim() ? sections : '<div class="empty">No failure modes match these filters</div>';
+}
+function renderFmBuiltCard(m) {
+  const stats = (fmStats && fmStats[m.id]) || null;
+  const total = stats ? stats.total : 0;
+  const today = stats ? stats.today : 0;
+  const week  = stats ? stats.this_week : 0;
+  const last  = stats ? stats.last_triggered : null;
+  const top   = stats ? stats.top_tool : null;
+  const fp    = stats ? stats.false_positive_rate : null;
+  const sparkData = (stats && stats.sparkline) || [0,0,0,0,0,0,0];
+  const haveStats = !fmStatsError && stats;
+  const statsBlock = !haveStats
+    ? '<div class="fm-empty-stats">Stats unavailable</div>'
+    : total === 0
+      ? '<div class="fm-empty-stats">Not triggered yet</div>'
+      : `<div class="fm-stat-grid">
+          <div class="fm-stat"><div class="n">${today}</div><div class="l">Today</div></div>
+          <div class="fm-stat"><div class="n">${week}</div><div class="l">This week</div></div>
+          <div class="fm-stat"><div class="n">${total}</div><div class="l">All time</div></div>
+          <div class="fm-stat"><div class="n">${escHtml(fmTimeAgo(last))}</div><div class="l">Last seen</div></div>
+        </div>`;
+  const allZero = sparkData.every(v => v === 0);
+  const sparkBlock = allZero
+    ? '<div class="fm-spark-empty">No detections in 7 days</div>'
+    : buildSparkline(sparkData, 240);
+  const footParts = [];
+  if (top) footParts.push(`<div>Most common: ${escHtml(top)}</div>`);
+  if (fp != null) footParts.push(`<div title="Based on human escalation reviews">Human override rate: ${Math.round(fp * 100)}%</div>`);
+  const footBlock = footParts.length ? `<div class="fm-foot">${footParts.join("")}</div>` : "";
+  return `<div class="fm-card">
+    <div class="fm-card-top">
+      <div class="fm-card-name">${escHtml(m.name)}</div>
+      <span class="fm-status-pill">Detecting now</span>
+    </div>
+    <div class="fm-card-desc">${escHtml(m.plain_english)}</div>
+    <span class="fm-layer-pill">${escHtml(m.detection_layer)}</span>
+    <div class="fm-card-divider"></div>
+    ${statsBlock}${sparkBlock}${footBlock}
+  </div>`;
+}
+function renderFmSecondaryRow(m, isRoadmap) {
+  const cls = isRoadmap ? "road" : "coming";
+  const label = isRoadmap ? "Roadmap" : "Coming soon";
+  return `<div class="fm-row-secondary">
+    <span class="fm-row-dot ${cls}"></span>
+    <span class="fm-row-name ${isRoadmap ? "road" : ""}">${escHtml(m.name)}</span>
+    <span class="fm-layer-pill">${escHtml(m.detection_layer)}</span>
+    <span class="fm-row-status ${cls}">${label}</span>
+  </div>`;
+}
+function toggleFmRoadmap(catId) {
+  fmRoadmapOpen[catId] = !fmRoadmapOpen[catId];
+  renderFmContent();
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Escalations tab (ported)
+   ───────────────────────────────────────────────────────────────────────── */
+let resolvedEscs = [];
+let reslistOpen = false;
+async function loadResolvedEscalations() {
+  const r = await safeJson(BASE + "/escalations?limit=200");
+  resolvedEscs = ((r && r.escalations) || [])
+    .filter(e => e.status !== "pending").slice(0, 10);
+}
+function renderEscTab() {
+  const wrap = $("esc-full");
+  if (!wrap) return;
+
+  const pendingCount = pendingEscs.length;
+  const header =
+    `<div class="escv2-divider" style="margin-bottom:14px">
+      <span class="escv2-divider-label">Pending · ${pendingCount} awaiting</span>
+      <div class="escv2-divider-line"></div>
+    </div>`;
+
+  let pendingHtml;
+  if (pendingCount === 0) {
+    pendingHtml = `<div class="esc-card-v2" style="padding:36px 18px;text-align:center;color:var(--color-text-tertiary)">
+      ✓ No pending escalations
+    </div>`;
+  } else {
+    pendingHtml = pendingEscs
+      .map(e => renderEscv2Card(e, { pendingCount }))
+      .join("");
+  }
+  wrap.innerHTML = header + pendingHtml;
+
+  // Resolved section is rendered into the existing #resolved-list mount;
+  // the surrounding card with the toggle button stays as-is.
+  const reslist = $("resolved-list");
+  if (!reslist) return;
+  if (resolvedEscs.length === 0) {
+    reslist.innerHTML = '<div class="empty">No resolved escalations yet</div>';
+  } else {
+    reslist.innerHTML = resolvedEscs.map(e => {
+      const status = e.status === "approved" ? "approved" : "rejected";
+      const icon = status === "approved" ? "✓" : "✕";
+      const argText = (() => {
+        if (!e.args) return "";
+        try {
+          const a = typeof e.args === "string" ? JSON.parse(e.args) : e.args;
+          if (a && typeof a.amount === "number") return " · $" + a.amount.toLocaleString();
+          if (a && a.amount) return " · " + a.amount;
+        } catch {}
+        return "";
+      })();
+      return `<div class="escv2-resolved-card">
+        <div class="escv2-resolved-icon ${status}">${icon}</div>
+        <div class="escv2-resolved-body">
+          <div class="escv2-resolved-tool">${escHtml(e.tool_name || "")}${escHtml(argText)}</div>
+          <div class="escv2-resolved-detail">${escHtml(e.agent_id || "")} · ${escHtml(timeAgo(e.decided_at || e.created_at))}${e.decision ? " · " + escHtml(e.decision) : ""}</div>
+        </div>
+        <span class="escv2-resolved-badge ${status}">${status === "approved" ? "Approved" : "Rejected"}</span>
+      </div>`;
+    }).join("");
+  }
+  $("resolved-toggle").textContent =
+    (reslistOpen ? "Hide" : "Show") + " " + resolvedEscs.length + " resolved escalations";
+}
+function toggleResolved() {
+  reslistOpen = !reslistOpen;
+  $("resolved-list").classList.toggle("open", reslistOpen);
+  $("resolved-toggle").textContent =
+    (reslistOpen ? "Hide" : "Show") + " " + resolvedEscs.length + " resolved escalations";
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Audit log tab (ported)
+   ───────────────────────────────────────────────────────────────────────── */
+let auditCache = {};
+async function loadAudit() { await renderAudit(); }
+async function renderAudit() {
+  const agentSel = $("a-agent").value;
+  const outcomeSel = $("a-outcome").value;
+  const fmSel = $("a-failure").value;
+  const search = ($("a-search").value || "").toLowerCase().trim();
+  const params = new URLSearchParams();
+  if (agentSel) params.set("agent_id", agentSel);
+  if (outcomeSel) params.set("outcome", outcomeSel);
+  params.set("limit", "200");
+  const since = rangeCutoffISO(timeRange);
+  if (since) params.set("since", since);
+  const r = await safeJson(BASE + "/audit?" + params.toString());
+  let entries = (r && r.entries) || [];
+  if (fmSel) entries = entries.filter(d => {
+    const fm = failureModeFor(d);
+    return fm && fm.key === fmSel;
+  });
+  if (search) entries = entries.filter(d => (d.tool_name || "").toLowerCase().includes(search));
+  populateAgentSelect();
+  auditCache = {};
+  for (const d of entries) if (d.call_id) auditCache[d.call_id] = d;
+  $("a-count").textContent = entries.length + " of " + ((r && r.entries && r.entries.length) || 0) + " decisions";
+  const list = $("audit-list");
+  if (!entries.length) {
+    list.innerHTML = '<div class="empty">No matching decisions</div>';
+    return;
+  }
+  list.innerHTML = entries.map(d => {
+    const fm = failureModeFor(d);
+    const cid = d.call_id || "";
+    const reasonShort = (d.reason || "").length > 80 ? (d.reason || "").slice(0, 80) + "…" : (d.reason || "");
+    const tags = fm ? `<span class="fm-tag ${fm.cls}">${escHtml(fm.label)}</span>` : "";
+    return `<div class="audit-item" id="aud-${escHtml(cid)}">
+      <div class="audit-row" onclick="toggleAudit('${escHtml(cid)}')">
+        <span class="pill ${escHtml(d.outcome || "allowed")}">${escHtml(outcomeLabel(d.outcome))}</span>
+        ${tags}
+        <span class="audit-tool">${escHtml(d.tool_name || "")} <span class="agent">· ${escHtml(d.agent_id || "")}</span></span>
+        <span class="audit-reason">— ${escHtml(reasonShort)}</span>
+        <span class="audit-time" title="${escHtml(d.decided_at || "")}">${escHtml(timeAgo(d.decided_at))}</span>
+        <span class="chev">›</span>
+      </div>
+      <div class="audit-detail" id="auddet-${escHtml(cid)}"></div>
+    </div>`;
+  }).join("");
+}
+function toggleAudit(cid) {
+  const item = $("aud-" + cid);
+  const det = $("auddet-" + cid);
+  if (!item || !det) return;
+  const open = item.classList.contains("open");
+  if (open) {
+    item.classList.remove("open");
+  } else {
+    const d = auditCache[cid];
+    if (d) det.innerHTML = renderTraceBody(d);
+    item.classList.add("open");
+  }
+}
+function populateAgentSelect() {
+  const sel = $("a-agent");
+  if (!sel) return;
+  const have = new Set(Array.from(sel.options).map(o => o.value));
+  for (const id of Object.keys(agentHealth)) {
+    if (!have.has(id)) {
+      const opt = document.createElement("option");
+      opt.value = id; opt.textContent = id;
+      sel.appendChild(opt);
+    }
+  }
+}
+function exportCsv() { window.location = BASE + "/audit/export"; }
+function filterAuditByAgent(id) {
+  switchTabV2("audit");
+  const sel = $("a-agent");
+  if (!Array.from(sel.options).some(o => o.value === id)) {
+    const opt = document.createElement("option");
+    opt.value = id; opt.textContent = id;
+    sel.appendChild(opt);
+  }
+  sel.value = id;
+  renderAudit();
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Learning + Patterns + Agents (ported)
+   ───────────────────────────────────────────────────────────────────────── */
+const PATTERN_LABELS = {
+  over_escalation:    "Over-escalation detected",
+  threshold_too_low:  "Threshold too conservative",
+  repeated_block:     "Repeated policy violation",
+  false_positive:     "Possible false positive",
+  prompt_improvement: "Agent needs clearer instructions",
+  policy_drift:       "Policy change made things worse",
+};
+let patternsCache = null;
+async function loadPatternsAndChanges() {
+  const ps = await safeJson(BASE + "/patterns");
+  patternsCache = (ps && ps.patterns) || [];
+  await loadLearning(); // refreshes learningChanges
+  renderPatterns(patternsCache);
+  renderChanges(learningChanges);
+  // Policy editor reuses the same pattern list
+  renderPatterns(patternsCache, "patterns-list-policy");
+}
+function renderPatterns(patterns, mountId) {
+  const wrap = $(mountId || "patterns-list");
+  if (!wrap) return;
+  if (!patterns.length) {
+    wrap.innerHTML = '<div class="empty card">No patterns detected yet — needs more decision history</div>';
+    return;
+  }
+  wrap.innerHTML = patterns.map(p => {
+    const pct = Math.round((p.confidence || 0) * 100);
+    let confClass = "low", confLabel = "Building confidence — " + pct + "%";
+    if (pct >= 90) { confClass = "high"; confLabel = pct + "% confident — safe to apply"; }
+    else if (pct >= 70) { confClass = "mid"; confLabel = pct + "% confident — moderate"; }
+    const label = PATTERN_LABELS[p.pattern_type] || p.pattern_type;
+    const applyBtn = p.auto_applicable
+      ? `<button class="btn btn-approve" onclick='applyPattern(${JSON.stringify(p).replace(/'/g, "&#39;")})' title="Apply this improvement to the live agent policy">Apply</button>`
+      : `<span class="muted tiny">Manual review required</span>`;
+    return `<div class="card pattern-card">
+      <div class="pattern-head">
+        <div class="pattern-type">${escHtml(label)} <span class="muted tiny">· ${escHtml(p.tool_name || "")}</span></div>
+        <div class="pattern-conf ${confClass}">${escHtml(confLabel)}</div>
+      </div>
+      <div class="pattern-desc">${escHtml(p.description || "")}</div>
+      <div class="pattern-suggestion">${escHtml(p.suggestion || "")}</div>
+      <div class="esc-actions">${applyBtn}</div>
+    </div>`;
+  }).join("");
+}
+async function applyPattern(p) {
+  const r = await fetch(BASE + "/patterns/apply", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(p),
+  });
+  if (r.ok) { toast("Pattern applied"); loadPatternsAndChanges(); }
+  else      { toast("Apply failed"); }
+}
+function renderChanges(changes) {
+  const wrap = $("changes-list");
+  if (!wrap) return;
+  if (!changes.length) {
+    wrap.innerHTML = '<div class="empty">No policy changes yet</div>';
+    return;
+  }
+  wrap.innerHTML = changes.map(c => `
+    <div style="padding:12px 16px;border-top:0.5px solid var(--color-border-tertiary);font-size:12px;display:grid;grid-template-columns:90px 1fr 2fr 2fr;gap:12px">
+      <div class="muted tiny">${escHtml(timeAgo(c.applied_at))}</div>
+      <div>${escHtml(c.tool_name || "—")}</div>
+      <div class="muted">${escHtml(c.action || "")}</div>
+      <div class="muted tiny">${escHtml(c.before_value || "—")} → ${escHtml(c.after_value || "—")}</div>
+    </div>`).join("");
+}
+const ISSUE_LABELS = {
+  injection:           "Injection attempt detected",
+  goal_hijacking:      "Injection attempt detected",
+  data_exfiltration:   "Data leak attempt detected",
+  privilege_escalation:"Privilege escalation attempt",
+  excessive_agency:    "Disproportionate action blocked",
+  drift:               "Agent went off-task",
+  loop:                "Retry storm detected",
+  high_risk:           "High-risk action flagged",
+  risk:                "High-risk action flagged",
+  anomaly:             "Anomalous session behavior",
+};
+function bucketFromAgent(a) {
+  if (!a) return "caution";
+  const s = (a.health_status || "").toLowerCase();
+  if (s === "healthy" || s === "caution" || s === "degraded" || s === "critical") return s;
+  if (a.health_score == null) return "caution";
+  if (a.health_score >= 90) return "healthy";
+  if (a.health_score >= 70) return "caution";
+  if (a.health_score >= 40) return "degraded";
+  return "critical";
+}
+function labelFromAgent(a) {
+  if (a && a.health_status) return a.health_status;
+  return "Unknown";
+}
+function renderAgentCards() {
+  const wrap = $("agent-cards");
+  if (!wrap) return;
+  const ids = Object.keys(agentHealth);
+  if (ids.length === 0) {
+    wrap.innerHTML = '<div class="empty card">No agent data yet</div>';
+    return;
+  }
+  ids.sort((a, b) => (agentHealth[a].health_score ?? 100) - (agentHealth[b].health_score ?? 100));
+  const filtered = filterByTimeRange(allDecisions, timeRange);
+  wrap.innerHTML = ids.map(id => {
+    const a = agentHealth[id];
+    const decs = filtered.filter(d => d.agent_id === id);
+    const total = decs.length;
+    const allowed = decs.filter(d => d.outcome === "allowed").length;
+    const blocked = decs.filter(d => d.outcome === "blocked").length;
+    const escalated = decs.filter(d => (d.outcome || "").startsWith("escalat")).length;
+    const score = a.health_score;
+    const bucket = bucketFromAgent(a);
+    const initials = initialsFor(id);
+    const issuesHtml = (a.active_issues && a.active_issues.length)
+      ? a.active_issues.map(i => {
+          const lbl = ISSUE_LABELS[i.type] || ISSUE_LABELS[i.attack_type] || i.description || "Issue detected";
+          let cls = "issue";
+          if (i.type === "injection" || i.type === "data_exfiltration") cls = "issue danger";
+          else if (i.type === "anomaly") cls = "issue info";
+          else if (i.type === "loop") cls = "issue purple";
+          return `<div class="${cls}">
+            <div class="desc">${escHtml(lbl)}</div>
+            <div class="when">${(i.occurrences || 1)} event${(i.occurrences || 1) === 1 ? "" : "s"} · first seen ${escHtml(timeAgo(i.first_seen))}</div>
+          </div>`;
+        }).join("")
+      : '<div class="issue-empty">Operating normally</div>';
+    return `<div class="card agent-card">
+      <div class="agent-card-head">
+        <div class="left">
+          <div class="avatar lg">${escHtml(initials)}</div>
+          <div>
+            <div class="name">${escHtml(id)}</div>
+            <div class="desc">${escHtml(describeAgent(id))}</div>
+          </div>
+        </div>
+        <div class="right">
+          <div class="score">${score != null ? score + "%" : "—"}</div>
+          <span class="health-badge ${bucket}">${escHtml(labelFromAgent(a))}</span>
+        </div>
+      </div>
+      <div class="agent-card-grid">
+        <div>
+          <div class="section-sublabel">Activity · ${escHtml(RANGE_LABEL[timeRange])}</div>
+          <div class="activity-grid">
+            <div class="activity-stat"><div class="n">${total}</div><div class="l">Actions</div></div>
+            <div class="activity-stat"><div class="n">${allowed}</div><div class="l">Allowed</div></div>
+            <div class="activity-stat ${blocked > 0 ? "danger" : ""}"><div class="n">${blocked}</div><div class="l">Blocked</div></div>
+            <div class="activity-stat ${escalated > 0 ? "warning" : ""}"><div class="n">${escalated}</div><div class="l">Escalated</div></div>
+          </div>
+        </div>
+        <div>
+          <div class="section-sublabel">Active issues</div>
+          <div class="issue-list">${issuesHtml}</div>
+        </div>
+      </div>
+      <div class="agent-card-foot">
+        <a href="#" onclick="event.preventDefault();filterAuditByAgent('${escHtml(id)}')">View in audit log →</a>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Tab switching (replaces switchPage)
+   ───────────────────────────────────────────────────────────────────────── */
+const TAB_META = {
+  "overview":      { title: "Overview",         sub: "How are your agents doing?",                  showTime: true  },
+  "feed":          { title: "Decision feed",    sub: "Every agent action, evaluated in real time",  showTime: true  },
+  "failure-modes": { title: "Failure modes",    sub: "47 failure modes across 9 categories",        showTime: false },
+  "escalations":   { title: "Escalations",      sub: "Actions awaiting human review",               showTime: false },
+  "audit":         { title: "Audit log",        sub: "Complete decision history",                   showTime: true  },
+  "learning":      { title: "Learning loop",    sub: "How your agent improves over time",           showTime: false },
+  "policy":        { title: "Policy editor",    sub: "Rules governing agent behavior",              showTime: false },
+  "agents":        { title: "Agents",           sub: "Per-agent health and reliability",            showTime: true  },
+  "eval":          { title: "Eval dataset",     sub: "Export labeled decisions",                    showTime: false },
+  "compliance":    { title: "Compliance report",sub: "EU AI Act-ready audit bundle",                showTime: false },
+};
+function switchTabV2(tabName) {
+  if (!TAB_META[tabName]) tabName = "overview";
+  activePage = tabName;
+  // Hide all content; show target
+  document.querySelectorAll(".v2-content").forEach(el => el.classList.remove("active"));
+  const target = $("content-" + tabName);
+  if (target) target.classList.add("active");
+  // Sidebar active state
+  document.querySelectorAll(".sb-item").forEach(el =>
+    el.classList.toggle("active", el.dataset.tab === tabName));
+  // Topbar title/sub
+  const meta = TAB_META[tabName];
+  $("tb-title").textContent = meta.title;
+  $("tb-sub").textContent = meta.sub;
+  // Show/hide time filter — only tabs with time-based data display it.
+  const tf = $("time-filter");
+  if (tf) tf.style.visibility = meta.showTime ? "visible" : "hidden";
+  // Load data for this tab
+  if (tabName === "overview")          renderV2Overview();
+  else if (tabName === "feed")         renderDecisionFeed();
+  else if (tabName === "failure-modes"){ loadFmCatalog().then(loadFmStats); }
+  else if (tabName === "escalations")  { loadEscalations().then(() => { loadResolvedEscalations().then(renderEscTab); }); }
+  else if (tabName === "audit")        loadAudit();
+  else if (tabName === "learning")     loadPatternsAndChanges();
+  else if (tabName === "policy")       loadPatternsAndChanges();
+  else if (tabName === "agents")       renderAgentCards();
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   WebSocket — copied pattern from v1
+   ───────────────────────────────────────────────────────────────────────── */
+let ws = null;
+function connectWs() {
+  try { ws = new WebSocket(WS_BASE + "/ws/feed"); }
+  catch { return setTimeout(connectWs, 3000); }
+  ws.onopen = () => updateLiveStatus(true);
+  ws.onmessage = (ev) => {
+    let msg; try { msg = JSON.parse(ev.data); } catch { return; }
+    if (msg.type === "initial") {
+      allDecisions = (msg.decisions || []).slice(0, 200);
+    } else if (msg.type === "decision") {
+      allDecisions.unshift(msg.decision);
+      if (allDecisions.length > 200) allDecisions.pop();
+    } else return;
+    // Always keep overview synced; refresh the active tab's specific render if applicable.
+    renderV2Overview();
+    if (activePage === "feed") renderDecisionFeed();
+  };
+  ws.onclose = () => { updateLiveStatus(false); setTimeout(connectWs, 3000); };
+  ws.onerror = () => { try { ws.close(); } catch {} };
+}
+
+/* Sidebar clicks are handled by inline onclick="switchTabV2(...)" attributes
+   on each .sb-item, so no additional delegation is needed here. */
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Boot
+   ───────────────────────────────────────────────────────────────────────── */
+async function boot() {
+  await Promise.all([
+    loadAgentHealth(),
+    loadEscalations(),
+    loadFmCatalog(),
+    loadFmStats(),
+    loadLearning(),
+  ]);
+  connectWs();
+  if (refreshTimer) clearInterval(refreshTimer);
+  refreshTimer = setInterval(() => {
+    loadAgentHealth();
+    loadEscalations();
+    loadFmStats();
+    loadLearning();
+  }, 30000);
+}
+boot();
+</script>
+
+</body>
+</html>
