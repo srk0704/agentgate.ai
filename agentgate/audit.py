@@ -564,18 +564,26 @@ class AuditLogger:
                 blocked = d["blocked"] or 0
                 escalated = d["escalated"] or 0
                 avg_rel = d["avg_rel"]
-                health_score = round(avg_rel) if avg_rel is not None else 100
-                if health_score >= 90:
-                    status = "Healthy"
-                elif health_score >= 70:
-                    status = "Caution"
-                elif health_score >= 40:
-                    status = "Degraded"
+                if avg_rel is None:
+                    # No reliability scores recorded — don't pretend the agent
+                    # is Healthy. Surface as Unknown so monitoring can flag it.
+                    health_score = None
+                    status = "Unknown"
                 else:
-                    status = "Critical"
+                    health_score = round(avg_rel)
+                    if health_score >= 90:
+                        status = "Healthy"
+                    elif health_score >= 70:
+                        status = "Caution"
+                    elif health_score >= 40:
+                        status = "Degraded"
+                    else:
+                        status = "Critical"
                 agents[aid] = {
                     "agent_id": aid,
-                    "health_score": health_score,
+                    # 0 keeps the sort stable when status is Unknown;
+                    # the status field is the load-bearing signal for the UI.
+                    "health_score": health_score if health_score is not None else 0,
                     "health_status": status,
                     "decisions_today": total,
                     "intervention_rate": round((blocked + escalated) / total, 3) if total else 0.0,
@@ -625,6 +633,9 @@ class AuditLogger:
         # the score band fired on noise that already aged out of the recent window.
         # Promote to Healthy so the pill matches the "Operating normally" detail.
         for a in agents.values():
+            if a["health_status"] == "Unknown":
+                # Don't promote Unknown agents — they have no reliability data.
+                continue
             if a["health_status"] == "Caution" and not a["active_issues"]:
                 a["health_status"] = "Healthy"
 

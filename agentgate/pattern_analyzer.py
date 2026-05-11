@@ -589,17 +589,27 @@ class PatternAnalyzer:
         """Find agents with consistent goal drift — system-prompt fix is suggested."""
         async with aiosqlite.connect(self.db_path) as db:
             db.row_factory = aiosqlite.Row
+            # The correlated subquery returns the most-frequent drift_reason
+            # per agent (true mode), not MAX-on-text which is lexicographic.
+            since_arg = f"-{lookback_hours} hours"
             async with db.execute(
-                """SELECT agent_id,
+                """SELECT a.agent_id,
                           COUNT(*) AS count,
-                          AVG(drift_score) AS avg_drift,
-                          MAX(drift_reason) AS common_reason
-                   FROM audit_log
-                   WHERE drift_score > 50
-                     AND decided_at > datetime('now', ?)
-                   GROUP BY agent_id
+                          AVG(a.drift_score) AS avg_drift,
+                          (SELECT drift_reason
+                             FROM audit_log a2
+                             WHERE a2.agent_id = a.agent_id
+                               AND a2.drift_score > 50
+                               AND a2.decided_at > datetime('now', ?)
+                             GROUP BY drift_reason
+                             ORDER BY COUNT(*) DESC
+                             LIMIT 1) AS common_reason
+                   FROM audit_log a
+                   WHERE a.drift_score > 50
+                     AND a.decided_at > datetime('now', ?)
+                   GROUP BY a.agent_id
                    HAVING count >= 3""",
-                (f"-{lookback_hours} hours",),
+                (since_arg, since_arg),
             ) as cur:
                 rows = await cur.fetchall()
 

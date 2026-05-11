@@ -135,15 +135,24 @@ class EscalationQueue:
             _decisions[escalation_id] = asyncio.Event()
 
         try:
-            await asyncio.wait_for(
-                _decisions[escalation_id].wait(),
-                timeout=timeout_sec,
-            )
-            return _approved.get(escalation_id, False)
-        except asyncio.TimeoutError:
-            logger.warning("Escalation timeout: %s — auto-rejecting", escalation_id)
-            await cls._record_decision(escalation_id, False, "Timeout")
-            return False
+            try:
+                await asyncio.wait_for(
+                    _decisions[escalation_id].wait(),
+                    timeout=timeout_sec,
+                )
+                # Read the verdict from the DB — the source of truth. Reading
+                # `_approved` here would race with approve()/reject(), which
+                # pop the dict immediately after set() to prevent leaks.
+                row = await cls.get_by_id(escalation_id)
+                return bool(row and row.get("status") == "approved")
+            except asyncio.TimeoutError:
+                logger.warning("Escalation timeout: %s — auto-rejecting", escalation_id)
+                await cls._record_decision(escalation_id, False, "Timeout")
+                return False
+        finally:
+            # Always clean up in-memory state — this caller will never wait again.
+            _decisions.pop(escalation_id, None)
+            _approved.pop(escalation_id, None)
 
     @classmethod
     async def approve(cls, escalation_id: str) -> None:
@@ -152,6 +161,12 @@ class EscalationQueue:
         _approved[escalation_id] = True
         if escalation_id in _decisions:
             _decisions[escalation_id].set()
+        # Clean up in-memory state after the event fires. The DB is the source
+        # of truth for cross-process correctness — in-memory state is only
+        # needed to wake up wait_for_decision in this process, which now
+        # reads its verdict from the DB after waking.
+        _decisions.pop(escalation_id, None)
+        _approved.pop(escalation_id, None)
 
     @classmethod
     async def reject(cls, escalation_id: str) -> None:
@@ -160,6 +175,8 @@ class EscalationQueue:
         _approved[escalation_id] = False
         if escalation_id in _decisions:
             _decisions[escalation_id].set()
+        _decisions.pop(escalation_id, None)
+        _approved.pop(escalation_id, None)
 
     @classmethod
     async def _record_decision(

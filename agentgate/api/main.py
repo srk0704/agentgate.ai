@@ -290,15 +290,26 @@ async def health_agent_loops() -> dict:
     try:
         async with aiosqlite.connect(db_path) as db:
             db.row_factory = aiosqlite.Row
+            # MAX(loop_score) is correct (max of integers = worst loop seen).
+            # MAX(loop_reason) was lexicographic — we want the most frequent
+            # reason instead, via a correlated subquery.
             async with db.execute(
-                """SELECT agent_id, session_id,
-                          MAX(loop_score) AS loop_score,
-                          MAX(loop_reason) AS reason,
-                          MIN(decided_at) AS first_detected
-                   FROM audit_log
-                   WHERE loop_score > 50
-                     AND decided_at > datetime('now', '-1 hour')
-                   GROUP BY agent_id, session_id
+                """SELECT a.agent_id, a.session_id,
+                          MAX(a.loop_score) AS loop_score,
+                          (SELECT loop_reason
+                             FROM audit_log a2
+                             WHERE a2.agent_id = a.agent_id
+                               AND a2.session_id IS a.session_id
+                               AND a2.loop_score > 50
+                               AND a2.decided_at > datetime('now', '-1 hour')
+                             GROUP BY loop_reason
+                             ORDER BY COUNT(*) DESC
+                             LIMIT 1) AS reason,
+                          MIN(a.decided_at) AS first_detected
+                   FROM audit_log a
+                   WHERE a.loop_score > 50
+                     AND a.decided_at > datetime('now', '-1 hour')
+                   GROUP BY a.agent_id, a.session_id
                    ORDER BY loop_score DESC""",
             ) as cur:
                 rows = [dict(r) for r in await cur.fetchall()]

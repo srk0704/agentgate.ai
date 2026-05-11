@@ -57,7 +57,11 @@ class AnomalyScorer:
             return await self._compute(tool_call)
         except Exception as e:
             logger.warning("AnomalyScorer error: %s — skipping", e)
-            return 0, "scorer unavailable"
+            return 0, (
+                f"Anomaly check unavailable for "
+                f"'{tool_call.tool_name}' — an internal "
+                f"error occurred."
+            )
 
     async def _compute(self, tool_call: ToolCall) -> tuple[int, str]:
         stats = await self._tracker.get_session_stats(
@@ -90,30 +94,46 @@ class AnomalyScorer:
         tool_freq: dict[str, int],
         threshold: int,
     ) -> tuple[int, str]:
-        """Flag if the same tool is called more than threshold times in 60 seconds."""
+        """Flag if a tool is being called at an unusually high rate.
+
+        Two different windows are at play and the reason strings call them
+        out explicitly:
+          - `tool_freq[tool_name]` is the count over the last ~5 minutes
+            (the session-stats window passed into get_session_stats).
+          - `calls_60s` is the count over the last 60 seconds across all
+            tools for this agent (true per-minute velocity).
+        """
         if tool_name in _BENIGN_TOOLS:
-            return 0, "benign read-only tool — velocity not scored"
+            return 0, (
+                f"Benign read-only tool '{tool_name}' — velocity not scored."
+            )
         same_tool_count = tool_freq.get(tool_name, 0)
 
         if same_tool_count > threshold * 2:
             score = min(95, 60 + (same_tool_count - threshold) * 5)
             return score, (
-                f"velocity: '{tool_name}' called {same_tool_count} times — "
-                f"threshold {threshold}/min"
+                f"High velocity: '{tool_name}' called {same_tool_count} times "
+                f"in the last 5 minutes. Normal rate is under {threshold} "
+                f"per minute. Review whether this burst is intentional."
             )
         if same_tool_count > threshold:
             score = min(75, 40 + (same_tool_count - threshold) * 5)
             return score, (
-                f"velocity: '{tool_name}' called {same_tool_count} times in window "
-                f"(threshold {threshold})"
+                f"Elevated velocity: '{tool_name}' called {same_tool_count} "
+                f"times in the last 5 minutes (threshold {threshold} per "
+                f"minute). Watch for further escalation."
             )
         if calls_60s > threshold:
             score = min(70, 30 + (calls_60s - threshold) * 4)
             return score, (
-                f"velocity: {calls_60s} calls in last 60s across all tools "
-                f"(threshold {threshold})"
+                f"High velocity: {calls_60s} total calls in the last "
+                f"60 seconds for this agent. Normal rate is under "
+                f"{threshold} per minute across all tools."
             )
-        return 0, "velocity normal"
+        return 0, (
+            f"Velocity normal for '{tool_name}' — call rate within "
+            f"expected bounds."
+        )
 
     def _scope_drift_score(
         self,
@@ -124,25 +144,37 @@ class AnomalyScorer:
         """
         Flag if an agent is calling many different tools relative to the session size.
         High tool diversity in a short session suggests scope creep or hijacking.
+
+        All counts here cover the last 5 minutes — the session-stats window
+        used by get_session_stats. The reason strings name the window so
+        reviewers don't have to guess.
         """
         if call_count < 3:
-            return 0, "too few calls to assess scope"
+            return 0, (
+                f"Too few calls in the last 5 minutes ({call_count}) "
+                f"to assess session scope."
+            )
 
         diversity_ratio = unique_tools / call_count
 
-        # High diversity in a small session = suspicious
         if unique_tools >= 8 and call_count <= 15:
             return 65, (
-                f"scope drift: {unique_tools} unique tools in {call_count} calls — "
-                "unusually broad tool usage"
+                f"Session scope: {unique_tools} different tools called across "
+                f"{call_count} total calls in the last 5 minutes. "
+                f"Unusually broad tool usage may indicate the agent is off-task."
             )
         if unique_tools >= 6 and call_count <= 10:
             return 50, (
-                f"scope drift: {unique_tools} unique tools in {call_count} calls"
+                f"Session scope: {unique_tools} different tools called across "
+                f"{call_count} total calls in the last 5 minutes."
             )
         if diversity_ratio > 0.9 and call_count >= 5:
             return 40, (
-                f"scope drift: {unique_tools}/{call_count} unique tools ratio {diversity_ratio:.1f} "
-                "— agent exploring broadly"
+                f"Session scope: {unique_tools} unique of {call_count} total "
+                f"calls in the last 5 minutes (ratio {diversity_ratio:.1f}) — "
+                f"agent is exploring broadly."
             )
-        return 0, "scope normal"
+        return 0, (
+            f"Session scope normal — {unique_tools} unique tools across "
+            f"{call_count} calls in the last 5 minutes."
+        )
