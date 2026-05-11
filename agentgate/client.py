@@ -64,7 +64,7 @@ class GatewayClient:
         db_path: str,
         risk_scorer: RiskScorer | None = None,
         fail_open: bool = True,
-        timeout_ms: float = 5000.0,
+        timeout_ms: float = 10000.0,
         escalation_timeout_sec: float = 300.0,
         compliance_mode: bool = False,
     ):
@@ -143,7 +143,7 @@ class GatewayClient:
             policy_path=os.getenv("AGENTGATE_POLICY_PATH", "./policies.yaml"),
             db_path=os.getenv("AGENTGATE_DB_PATH", "./agentgate.db"),
             fail_open=os.getenv("AGENTGATE_FAIL_OPEN", "true").lower() == "true",
-            timeout_ms=float(os.getenv("AGENTGATE_TIMEOUT_MS", "5000")),
+            timeout_ms=float(os.getenv("AGENTGATE_TIMEOUT_MS", "10000")),
             escalation_timeout_sec=float(os.getenv("AGENTGATE_ESCALATION_TIMEOUT_SEC", "300")),
             compliance_mode=os.getenv("AGENTGATE_COMPLIANCE_MODE", "false").lower() == "true",
         )
@@ -154,7 +154,7 @@ class GatewayClient:
         policies: list,
         db_path: str = ":memory:",
         fail_open: bool = True,
-        timeout_ms: float = 5000.0,
+        timeout_ms: float = 10000.0,
         escalation_timeout_sec: float = 300.0,
         compliance_mode: bool = False,
     ) -> "GatewayClient":
@@ -260,6 +260,12 @@ class GatewayClient:
             # Still run injection scoring on policy blocks to surface injection attacks
             # embedded in content that also violated a policy rule (see DECISION_PRECEDENCE.md).
             inj_score, inj_reason, attack_type = await self._run_injection_only(tool_call)
+            # session_calls is NOT recorded on this path. AnomalyScorer (inside the
+            # asyncio.gather below) records session calls, and policy blocks return
+            # before gather runs. Policy-blocked calls therefore appear in audit_log
+            # but not session_calls — intentional, keeps the hot policy-check path
+            # synchronous. Do not add session_tracker.record() here without weighing
+            # the performance cost on every policy hit.
             return Decision(
                 outcome=DecisionOutcome.BLOCKED,
                 tool_call=tool_call,
@@ -299,6 +305,34 @@ class GatewayClient:
                 timeout=self.timeout_ms / 1000,
             )
         except asyncio.TimeoutError:
+            # Blast radius is computed synchronously before the timeout window —
+            # always available here.
+            br_severity = (
+                blast_radius.get("severity", "low") if blast_radius else "low"
+            )
+            is_critical = br_severity in ("critical", "high")
+
+            if is_critical:
+                # Never fail open on high/critical blast-radius actions.
+                # A scoring timeout on a $50k payment is not a reason to allow it.
+                logger.warning(
+                    "AgentGate timeout for tool=%s call_id=%s — "
+                    "BLOCKING due to high/critical blast radius (severity=%s)",
+                    tool_call.tool_name,
+                    tool_call.call_id,
+                    br_severity,
+                )
+                return Decision(
+                    outcome=DecisionOutcome.BLOCKED,
+                    tool_call=tool_call,
+                    reason=(
+                        f"Scoring timeout — blocked by default due to "
+                        f"{br_severity} blast radius. Manual review required "
+                        f"before retrying."
+                    ),
+                    blast_radius=blast_radius,
+                )
+
             logger.warning(
                 "AgentGate timeout for tool=%s call_id=%s — failing %s",
                 tool_call.tool_name,
