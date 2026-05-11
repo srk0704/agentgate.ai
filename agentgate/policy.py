@@ -172,10 +172,19 @@ class PolicyEvaluator:
         # Check conditions
         for condition in policy.get("conditions", []):
             value = self._resolve_field(condition["field"], tool_call)
+            if value is None:
+                # Field not present on this tool call — treat condition as
+                # not matched rather than crashing on a None comparison.
+                return False
             op_fn = OPS.get(condition["op"])
             if op_fn is None:
                 continue
-            if not op_fn(value, condition.get("value") or condition.get("values")):
+            target = (
+                condition["value"]
+                if "value" in condition
+                else condition.get("values")
+            )
+            if not op_fn(value, target):
                 return False
 
         return True

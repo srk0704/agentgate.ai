@@ -136,8 +136,11 @@ class LoopDetector:
         try:
             async with aiosqlite.connect(self.db_path) as db:
                 async with db.execute(
+                    # DESC + reversed in Python below — gives the most recent 20
+                    # calls in oldest-first order. ASC LIMIT 20 would frozen-pick
+                    # the FIRST 20 calls of a long session and miss recent loops.
                     f"SELECT tool_name FROM session_calls WHERE {where} "
-                    f"ORDER BY called_at ASC LIMIT 20",
+                    f"ORDER BY called_at DESC LIMIT 20",
                     params,
                 ) as cur:
                     rows = await cur.fetchall()
@@ -146,6 +149,7 @@ class LoopDetector:
             return 0, "sequence loop scorer unavailable"
 
         names = [r[0] for r in rows]
+        names = list(reversed(names))
         # Include the current call so a fresh repeat is visible.
         names.append(tool_call.tool_name)
 

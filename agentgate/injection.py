@@ -118,7 +118,7 @@ Respond with ONLY a JSON object:
             raw = raw.rsplit("```", 1)[0].strip()
 
         data = json.loads(raw)
-        score = int(data["score"])
+        score = max(0, min(100, int(data["score"])))
         reason = data.get("reason", "")
         attack_type = data.get("attack_type", "none")
 

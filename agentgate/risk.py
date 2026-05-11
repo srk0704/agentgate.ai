@@ -117,7 +117,9 @@ Respond with ONLY a JSON object:
             raw = raw.split("\n", 1)[-1]
             raw = raw.rsplit("```", 1)[0].strip()
         data = json.loads(raw)
-        return int(data["score"]), data.get("reason", "")
+        raw_score = int(data["score"])
+        score = max(0, min(100, raw_score))
+        return score, data.get("reason", "")
 
     def _heuristic_score(self, tool_call: ToolCall) -> tuple[int, str]:
         """Fallback when LLM is unavailable."""

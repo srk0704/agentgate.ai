@@ -228,13 +228,16 @@ FAILURE_MODES = [
 DETECTOR_WIRING = {
     "goal_drift": {
         "table": "audit_log",
-        "where": "drift_score > 0 AND drift_score IS NOT NULL",
+        # Match the gateway's drift_escalate threshold so mild structural
+        # mismatches (score 30 from uncategorized tools etc.) don't inflate
+        # the "goal_drift detected" count.
+        "where": "drift_score >= 60 AND drift_score IS NOT NULL",
         "time_field": "decided_at",
     },
     "excessive_agency": {
         "table": "audit_log",
         "where": (
-            "attack_type = 'goal_hijacking' "
+            "attack_type = 'excessive_agency' "
             "AND injection_score >= 70 "
             "AND outcome = 'blocked'"
         ),

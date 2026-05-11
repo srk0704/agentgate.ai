@@ -158,8 +158,12 @@ class PatternAnalyzer:
         if not values:
             return None
 
-        idx = int(len(values) * 0.90)
-        p90 = values[min(idx, len(values) - 1)]
+        # statistics.quantiles needs at least 2 values; for N=1, use the value itself.
+        if len(values) == 1:
+            p90 = values[0]
+        else:
+            import statistics
+            p90 = statistics.quantiles(values, n=10)[8]
 
         # Round up to the nearest clean breakpoint
         if p90 < 100:
@@ -212,7 +216,11 @@ class PatternAnalyzer:
             approval_rate = approved / total if total > 0 else 0
             pct = round(approval_rate * 100)
 
-            if approval_rate >= 0.5 or avg_risk < 60:
+            # Require approval_rate >= 0.5 BEFORE raising a threshold.
+            # avg_risk < 80 is an additional confidence boost — it cannot
+            # trigger a raise on its own (would otherwise raise on tools
+            # humans are actively rejecting with low average risk).
+            if approval_rate >= 0.5 and avg_risk < 80:
                 confidence = _confidence_from_n(total)
                 impact = "high" if approval_rate > 0.8 else "medium"
 

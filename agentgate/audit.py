@@ -3,7 +3,7 @@ import csv
 import io
 import json
 import logging
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 import aiosqlite
@@ -251,7 +251,8 @@ class AuditLogger:
         """Return dashboard stats. If `since` is None, defaults to start of today."""
         await self._ensure_init()
         # If caller didn't pin a window, the legacy "today" cutoff still applies.
-        cutoff = since if since else date.today().isoformat()
+        # Use UTC to stay consistent with decided_at (which is datetime.utcnow()).
+        cutoff = since if since else datetime.now(timezone.utc).date().isoformat()
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute(
                 "SELECT COUNT(*) FROM audit_log WHERE decided_at >= ?", (cutoff,)

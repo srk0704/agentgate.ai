@@ -175,6 +175,15 @@ class DriftDetector:
                 f"original task's expected action category ({expected_label})."
             )
 
+        # Without a tool category we cannot make a structural mismatch claim.
+        # Returning 30 here would flood the audit log with false positives for
+        # every uncategorized tool (e.g. approve_expense). Return 0 instead.
+        if tool_cat is None:
+            return 0, (
+                f"Tool category for '{tool_call.tool_name}' is unknown — "
+                f"structural drift check skipped. No drift signal detected."
+            )
+
         # Severe mismatches first.
         if tool_cat == "destructive" and expected == {"read"}:
             return 85, (
@@ -290,14 +299,17 @@ class DriftDetector:
         return summary[:100]
 
     async def _semantic_drift(self, tool_call: ToolCall) -> tuple[int, str]:
+        UNAVAILABLE_REASON = (
+            "Semantic drift check unavailable — structural signal used instead."
+        )
         try:
             from anthropic import AsyncAnthropic
         except Exception:
-            return 0, "llm_unavailable"
+            return 0, UNAVAILABLE_REASON
 
         api_key = os.getenv("ANTHROPIC_API_KEY")
         if not api_key:
-            return 0, "llm_unavailable"
+            return 0, UNAVAILABLE_REASON
 
         args_summary = self._build_args_summary(tool_call)
         prompt = (
@@ -328,8 +340,8 @@ class DriftDetector:
                     text = text[4:].lstrip()
             data = json.loads(text)
             score = int(data.get("score", 0))
-            reason = str(data.get("reason", "semantic drift"))[:200]
-            return max(0, min(100, score)), f"semantic: {reason}"
+            reason = str(data.get("reason", "Semantic drift detected."))[:200]
+            return max(0, min(100, score)), reason
         except (asyncio.TimeoutError, json.JSONDecodeError, ValueError, Exception) as e:
             logger.debug("semantic_drift error (ignored): %s", e)
-            return 0, "llm_unavailable"
+            return 0, UNAVAILABLE_REASON

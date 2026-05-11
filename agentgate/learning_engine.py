@@ -62,8 +62,10 @@ class LearningEngine:
 
         policies = self.gateway._policy_evaluator._loader._policies
         actual_current_value: float | None = None
-        updated = False
+        target_condition: dict | None = None
 
+        # First pass: locate the condition and read its current value WITHOUT
+        # mutating. Mutation happens only after the equality guard below.
         for policy in policies:
             if (
                 policy.get("match", {}).get("tool") == tool_name
@@ -72,20 +74,21 @@ class LearningEngine:
                 for condition in policy.get("conditions", []):
                     if condition.get("op") in ("gte", "gt"):
                         actual_current_value = condition.get("value")
-                        condition["value"] = suggested_value
-                        updated = True
+                        target_condition = condition
                         break
-            if updated:
+            if target_condition is not None:
                 break
 
-        if not updated:
+        if target_condition is None:
             return ApplyResult(
                 success=False,
                 description=f"No escalate policy with gte/gt condition found for {tool_name}",
             )
 
         # Skip if nothing would actually change — prevents zero-delta rows
-        # from accumulating in policy_changes across re-runs.
+        # from accumulating in policy_changes across re-runs. Crucially,
+        # this check runs BEFORE the in-memory mutation so a redundant
+        # int → float type-coercion never sneaks into the live policy dict.
         if (
             actual_current_value is not None
             and float(suggested_value) == float(actual_current_value)
@@ -97,6 +100,9 @@ class LearningEngine:
                     f"at {actual_current_value} — no change needed"
                 ),
             )
+
+        # Mutation is committed only after the guard passes.
+        target_condition["value"] = suggested_value
 
         # Capture metrics from the last 7 days before this change
         from agentgate.audit import AuditLogger

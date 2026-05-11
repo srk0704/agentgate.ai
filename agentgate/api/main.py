@@ -52,6 +52,14 @@ async def _startup() -> None:
     db_path = os.getenv("AGENTGATE_DB_PATH", "./agentgate.db")
     EscalationQueue.configure(db_path)
 
+    api_key = os.getenv("AGENTGATE_API_KEY")
+    if not api_key:
+        logger.warning(
+            "⚠ AGENTGATE_API_KEY is not set. "
+            "All API endpoints are publicly accessible. "
+            "Set this variable before production deployment."
+        )
+
 
 def _audit() -> AuditLogger:
     db_path = os.getenv("AGENTGATE_DB_PATH", "./agentgate.db")
