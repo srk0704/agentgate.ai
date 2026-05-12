@@ -216,7 +216,7 @@ strong { font-weight: 600; color: var(--color-text-primary); }
 .sb-health-name {
   font-size: 11px; color: var(--color-text-tertiary);
   margin-bottom: 6px;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  white-space: normal; word-break: break-word; overflow: visible;
 }
 .sb-health-bar {
   height: 2px; width: 100%;
@@ -393,7 +393,7 @@ strong { font-weight: 600; color: var(--color-text-primary); }
 .fm-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
 .fm-name {
   flex: 1; min-width: 0;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  white-space: normal; word-break: break-word; overflow: visible;
 }
 .fm-bar {
   width: 80px; height: 2px;
@@ -550,7 +550,7 @@ strong { font-weight: 600; color: var(--color-text-primary); }
 .agent-name { font-size: 13px; font-weight: 500; }
 .agent-desc {
   font-size: 11px; color: var(--color-text-tertiary);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  white-space: normal; word-break: break-word; overflow: visible;
 }
 .agent-bar {
   height: 2px; width: 100%;
@@ -750,7 +750,12 @@ strong { font-weight: 600; color: var(--color-text-primary); }
   padding: 8px 10px;
   background: var(--color-background-secondary);
   border-radius: 8px;
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  line-height: 1.55;
 }
+.tool-mono { word-break: break-word; }
 .task-block.task-empty { color: var(--color-text-tertiary); font-style: normal; }
 .tool-mono {
   font-family: var(--font-mono);
@@ -758,10 +763,26 @@ strong { font-weight: 600; color: var(--color-text-primary); }
   margin-bottom: 4px;
 }
 .kv-list { font-size: 12px; line-height: 1.7; }
-.kv-list .k { color: var(--color-text-tertiary); margin-right: 8px; }
+.kv-list .k {
+  color: var(--color-text-tertiary);
+  margin-right: 8px;
+  white-space: nowrap;        /* the key label stays on one line; */
+  flex-shrink: 0;             /* the long value next to it does the wrapping */
+}
+.kv-list > div {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  flex-wrap: wrap;            /* if value pushes past width, it wraps below the key */
+}
 .kv-list .v {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;    /* hard-break tokens with no spaces (URLs, JSON blobs) */
+  flex: 1 1 0;
+  min-width: 0;
 }
 .note-input {
   flex: 1; min-width: 180px;
@@ -818,10 +839,10 @@ strong { font-weight: 600; color: var(--color-text-primary); }
 .audit-item { border-bottom: 0.5px solid var(--color-border-tertiary); }
 .audit-item:last-child { border-bottom: none; }
 .audit-row {
-  display: flex; align-items: center; gap: 12px;
+  display: flex; align-items: flex-start; gap: 12px;
   padding: 12px 16px;
   cursor: pointer;
-  white-space: nowrap; min-width: 0;
+  white-space: normal; min-width: 0;
 }
 .audit-row:hover { background: var(--color-background-secondary); }
 .audit-tool {
@@ -832,7 +853,8 @@ strong { font-weight: 600; color: var(--color-text-primary); }
 .audit-reason {
   font-size: 12px; color: var(--color-text-tertiary);
   flex: 1 1 auto; min-width: 0;
-  overflow: hidden; text-overflow: ellipsis;
+  white-space: normal; word-break: break-word; overflow: visible;
+  line-height: 1.5;
 }
 .audit-time {
   font-size: 11px; color: var(--color-text-tertiary);
@@ -912,13 +934,21 @@ strong { font-weight: 600; color: var(--color-text-primary); }
   color: var(--color-text-tertiary);
   margin-bottom: 4px;
 }
-.why .text { font-size: 12px; }
+.why .text {
+  font-size: 12px;
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  line-height: 1.55;
+}
 .args-block {
   margin-top: 12px;
   padding: 10px 12px;
   background: var(--color-background-primary);
   border: 0.5px solid var(--color-border-tertiary);
   border-radius: 8px;
+  overflow: visible;
+  word-break: break-word;
 }
 .args-block .lbl {
   display: block;
@@ -1137,56 +1167,6 @@ strong { font-weight: 600; color: var(--color-text-primary); }
   background: var(--color-background-secondary);
   padding: 8px 10px; border-radius: 8px;
   margin-bottom: 8px;
-}
-
-/* Decision feed cards */
-.feed-row {
-  background: var(--color-background-primary);
-  border: 0.5px solid var(--color-border-tertiary);
-  border-radius: var(--border-radius-md);
-  margin-bottom: 8px;
-  overflow: hidden;
-}
-.feed-head {
-  display: flex; align-items: center; gap: 10px;
-  padding: 12px 14px 6px;
-}
-.feed-tool { font-size: 13px; font-weight: 500; flex: 1; min-width: 0;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.feed-time {
-  font-size: 11px; color: var(--color-text-tertiary);
-  font-variant-numeric: tabular-nums;
-}
-.feed-body { padding: 0 14px 12px; }
-.feed-task {
-  font-size: 12px; font-style: italic;
-  color: var(--color-text-tertiary);
-  background: var(--color-background-secondary);
-  border-left: 2px solid var(--color-border-secondary);
-  padding: 6px 8px; border-radius: 5px;
-  margin-bottom: 8px;
-}
-.feed-reason {
-  font-size: 12px;
-  color: var(--color-text-secondary);
-  line-height: 1.5;
-  margin-bottom: 8px;
-}
-.feed-scores { display: flex; flex-wrap: wrap; gap: 6px; }
-.score-chip {
-  padding: 2px 8px; border-radius: 8px;
-  font-size: 11px;
-  background: var(--color-background-secondary);
-  color: var(--color-text-tertiary);
-}
-.score-chip.warn { background: var(--color-background-warning); color: var(--color-text-warning); }
-.score-chip.bad  { background: var(--color-background-danger);  color: var(--color-text-danger); }
-.feed-foot {
-  padding: 8px 14px;
-  border-top: 0.5px solid var(--color-border-tertiary);
-  background: var(--color-background-secondary);
-  display: flex; align-items: center; gap: 8px;
 }
 
 /* ── Escalation v2 (rich) cards ────────────────────────────────────────── */
@@ -1546,13 +1526,13 @@ strong { font-weight: 600; color: var(--color-text-primary); }
 .fmv2-sparkline-wrap{position:relative;width:100%;height:36px;margin-bottom:8px}
 .fmv2-ac-footer{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .fmv2-layer-tag{font-size:10px;color:var(--color-text-tertiary);padding:2px 6px;border-radius:4px;background:var(--color-background-secondary)}
-.fmv2-trigger{font-size:11px;color:var(--color-text-tertiary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fmv2-trigger{font-size:11px;color:var(--color-text-tertiary);white-space:normal;word-break:break-word;overflow:visible}
 .fmv2-mon-list{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:10px;overflow:hidden}
 .fmv2-mon-row{display:flex;align-items:center;gap:12px;padding:10px 14px;border-bottom:0.5px solid var(--color-border-tertiary)}
 .fmv2-mon-row:last-child{border-bottom:none}
 .fmv2-mon-dot{width:7px;height:7px;border-radius:50%;background:var(--color-border-secondary);flex-shrink:0}
 .fmv2-mon-name{font-size:13px;font-weight:500;flex-shrink:0;min-width:160px}
-.fmv2-mon-desc{font-size:12px;color:var(--color-text-tertiary);flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fmv2-mon-desc{font-size:12px;color:var(--color-text-tertiary);flex:1;min-width:0;white-space:normal;word-break:break-word;overflow:visible;line-height:1.45}
 .fmv2-mon-layer{font-size:10px;color:var(--color-text-tertiary);padding:2px 6px;border-radius:4px;background:var(--color-background-secondary);flex-shrink:0}
 .fmv2-mon-zero{font-size:11px;color:var(--color-text-tertiary);width:60px;text-align:right;flex-shrink:0}
 .fmv2-coming-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
@@ -1589,6 +1569,601 @@ strong { font-weight: 600; color: var(--color-text-primary); }
   z-index: 1000;
 }
 .toast.show { opacity: 1; transform: translateY(0); }
+
+/* ── Agents tab v2 ────────────────────────────────────────────────── */
+.agv2-page { padding: 24px; display: flex; flex-direction: column; gap: 20px; }
+
+.agv2-hero-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0,1fr));
+  gap: 10px;
+}
+.agv2-hero-card {
+  background: var(--color-background-primary);
+  border: 0.5px solid var(--color-border-tertiary);
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+.agv2-hero-num {
+  font-size: 26px;
+  font-weight: 500;
+  line-height: 1;
+  margin-bottom: 3px;
+}
+.agv2-hero-lbl {
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+}
+
+.agv2-section-hdr {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.agv2-sh-label {
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  color: var(--color-text-tertiary);
+  white-space: nowrap;
+}
+.agv2-sh-line {
+  flex: 1;
+  height: 0.5px;
+  background: var(--color-border-tertiary);
+}
+.agv2-sh-count {
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  white-space: nowrap;
+}
+
+.agv2-agent-card {
+  background: var(--color-background-primary);
+  border: 0.5px solid var(--color-border-tertiary);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.agv2-agent-card.agv2-warn {
+  border-left: 3px solid var(--color-text-warning);
+  border-radius: 0 12px 12px 0;
+}
+.agv2-agent-card.agv2-danger {
+  border-left: 3px solid var(--color-text-danger);
+  border-radius: 0 12px 12px 0;
+}
+
+.agv2-agent-top {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 18px 12px;
+}
+.agv2-health-ring {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: 2.5px solid var(--color-border-tertiary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+.agv2-ring-num {
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1;
+}
+.agv2-ring-lbl {
+  font-size: 8px;
+  color: var(--color-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  margin-top: 1px;
+}
+.agv2-agent-info {}
+.agv2-agent-name {
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 2px;
+}
+.agv2-agent-meta {
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+}
+.agv2-agent-top-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+.agv2-status-badge {
+  font-size: 10px;
+  font-weight: 500;
+  padding: 3px 10px;
+  border-radius: 10px;
+}
+.agv2-badge-healthy {
+  background: var(--color-background-success);
+  color: var(--color-text-success);
+}
+.agv2-badge-caution {
+  background: var(--color-background-warning);
+  color: var(--color-text-warning);
+}
+.agv2-badge-degraded {
+  background: var(--color-background-danger);
+  color: var(--color-text-danger);
+}
+.agv2-badge-critical {
+  background: var(--color-background-danger);
+  color: var(--color-text-danger);
+}
+.agv2-badge-unknown {
+  background: var(--color-background-secondary);
+  color: var(--color-text-tertiary);
+}
+.agv2-stats-row {
+  display: flex;
+  gap: 16px;
+}
+.agv2-stat {
+  text-align: right;
+}
+.agv2-stat-val {
+  font-size: 13px;
+  font-weight: 500;
+}
+.agv2-stat-lbl {
+  font-size: 10px;
+  color: var(--color-text-tertiary);
+}
+
+.agv2-issues-section {
+  padding: 0 18px 14px;
+  border-top: 0.5px solid var(--color-border-tertiary);
+  margin-top: 4px;
+  padding-top: 12px;
+}
+.agv2-issues-label {
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--color-text-tertiary);
+  margin-bottom: 8px;
+}
+.agv2-issue-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 0.5px solid var(--color-border-tertiary);
+}
+.agv2-issue-row:last-child { border-bottom: none; }
+.agv2-issue-icon {
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.agv2-icon-risk {
+  background: var(--color-background-danger);
+  color: var(--color-text-danger);
+}
+.agv2-icon-injection {
+  background: var(--color-background-danger);
+  color: var(--color-text-danger);
+}
+.agv2-icon-anomaly {
+  background: var(--color-background-warning);
+  color: var(--color-text-warning);
+}
+.agv2-icon-default {
+  background: var(--color-background-secondary);
+  color: var(--color-text-secondary);
+}
+.agv2-issue-body { flex: 1; min-width: 0; }
+.agv2-issue-title {
+  font-size: 12px;
+  font-weight: 500;
+  margin-bottom: 2px;
+}
+.agv2-issue-desc {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  line-height: 1.45;
+  white-space: normal;
+  word-break: break-word;
+}
+.agv2-issue-time {
+  font-size: 10px;
+  color: var(--color-text-tertiary);
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.agv2-no-issues {
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+  padding: 8px 0;
+  font-style: italic;
+}
+
+.agv2-healthy-list {
+  background: var(--color-background-primary);
+  border: 0.5px solid var(--color-border-tertiary);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.agv2-healthy-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 16px;
+  border-bottom: 0.5px solid var(--color-border-tertiary);
+}
+.agv2-healthy-row:last-child { border-bottom: none; }
+.agv2-healthy-av {
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  background: var(--color-background-success);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--color-text-success);
+  flex-shrink: 0;
+}
+.agv2-healthy-av.caution {
+  background: var(--color-background-warning);
+  color: var(--color-text-warning);
+}
+.agv2-healthy-body { flex: 1; min-width: 0; }
+.agv2-healthy-name {
+  font-size: 13px;
+  font-weight: 500;
+}
+.agv2-healthy-sub {
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  margin-top: 1px;
+}
+.agv2-healthy-right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-shrink: 0;
+}
+.agv2-hstat { text-align: right; }
+.agv2-hstat-val { font-size: 12px; font-weight: 500; }
+.agv2-hstat-lbl {
+  font-size: 10px;
+  color: var(--color-text-tertiary);
+}
+.agv2-empty-state {
+  padding: 24px;
+  text-align: center;
+  color: var(--color-text-tertiary);
+  font-size: 13px;
+}
+
+/* ── Audit log tab v2 ─────────────────────────────────────────────── */
+.auv2-page { padding: 24px; display: flex; flex-direction: column; gap: 10px; }
+
+.auv2-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.auv2-filter-group {
+  display: flex;
+  border: 0.5px solid var(--color-border-tertiary);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.auv2-fg-btn {
+  padding: 5px 12px;
+  font-size: 12px;
+  border: none;
+  border-right: 0.5px solid var(--color-border-tertiary);
+  background: var(--color-background-primary);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  font-family: inherit;
+}
+.auv2-fg-btn:last-child { border-right: none; }
+.auv2-fg-btn.on {
+  background: var(--color-text-primary);
+  color: var(--color-background-primary);
+}
+.auv2-count {
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+  margin-left: auto;
+}
+
+.auv2-day-div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+}
+.auv2-dd-line {
+  flex: 1;
+  height: 0.5px;
+  background: var(--color-border-tertiary);
+}
+.auv2-dd-lbl {
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  white-space: nowrap;
+}
+
+.auv2-card {
+  background: var(--color-background-primary);
+  border: 0.5px solid var(--color-border-tertiary);
+  border-radius: 10px;
+  overflow: hidden;
+  cursor: pointer;
+}
+.auv2-card:hover {
+  border-color: var(--color-border-secondary);
+}
+.auv2-inner { display: flex; }
+
+.auv2-stripe { width: 3px; flex-shrink: 0; }
+.auv2-stripe-blocked { background: var(--color-text-danger); }
+.auv2-stripe-allowed { background: var(--color-text-success); }
+.auv2-stripe-escalated { background: var(--color-text-warning); }
+.auv2-stripe-escalation_approved { background: var(--color-text-success); }
+.auv2-stripe-escalation_rejected { background: var(--color-text-danger); }
+.auv2-stripe-failed_open { background: var(--color-text-tertiary); }
+
+.auv2-body {
+  flex: 1;
+  padding: 12px 14px;
+  min-width: 0;
+}
+
+.auv2-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+.auv2-pill {
+  font-size: 10px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 8px;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.auv2-pill-blocked {
+  background: var(--color-background-danger);
+  color: var(--color-text-danger);
+}
+.auv2-pill-allowed {
+  background: var(--color-background-success);
+  color: var(--color-text-success);
+}
+.auv2-pill-escalated {
+  background: var(--color-background-warning);
+  color: var(--color-text-warning);
+}
+.auv2-pill-escalation_approved {
+  background: var(--color-background-success);
+  color: var(--color-text-success);
+}
+.auv2-pill-escalation_rejected {
+  background: var(--color-background-danger);
+  color: var(--color-text-danger);
+}
+.auv2-pill-failed_open {
+  background: var(--color-background-secondary);
+  color: var(--color-text-tertiary);
+}
+.auv2-tool {
+  font-size: 13px;
+  font-weight: 500;
+}
+.auv2-sep {
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+}
+.auv2-agent {
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+}
+.auv2-time {
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.auv2-tags {
+  display: flex;
+  gap: 5px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+.auv2-tag {
+  font-size: 10px;
+  font-weight: 500;
+  padding: 2px 7px;
+  border-radius: 5px;
+  background: var(--color-background-secondary);
+  color: var(--color-text-secondary);
+}
+.auv2-tag-danger {
+  background: var(--color-background-danger);
+  color: var(--color-text-danger);
+}
+.auv2-tag-warning {
+  background: var(--color-background-warning);
+  color: var(--color-text-warning);
+}
+
+.auv2-task {
+  font-size: 12px;
+  font-style: italic;
+  color: var(--color-text-secondary);
+  margin-bottom: 8px;
+  padding: 6px 10px;
+  background: var(--color-background-secondary);
+  border-radius: 6px;
+  border-left: 2px solid var(--color-border-secondary);
+  white-space: normal;
+  word-break: break-word;
+  line-height: 1.45;
+}
+
+.auv2-reason {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  margin-bottom: 8px;
+}
+
+.auv2-scores {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.auv2-chip {
+  font-size: 11px;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: var(--color-background-secondary);
+  color: var(--color-text-secondary);
+}
+.auv2-chip-hot {
+  background: var(--color-background-danger);
+  color: var(--color-text-danger);
+}
+.auv2-chip-warm {
+  background: var(--color-background-warning);
+  color: var(--color-text-warning);
+}
+
+.auv2-trace {
+  border-top: 0.5px solid var(--color-border-tertiary);
+  padding: 12px 14px;
+  background: var(--color-background-secondary);
+  display: none;
+}
+.auv2-trace.open { display: block; }
+.auv2-trace-label {
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--color-text-tertiary);
+  margin-bottom: 8px;
+}
+.auv2-pipeline {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+  gap: 2px;
+}
+.auv2-p-step {
+  display: flex;
+  align-items: center;
+}
+.auv2-p-box {
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 5px;
+  background: var(--color-background-primary);
+  border: 0.5px solid var(--color-border-tertiary);
+  white-space: nowrap;
+}
+.auv2-p-box.fired {
+  border-color: var(--color-border-danger);
+  color: var(--color-text-danger);
+  background: var(--color-background-danger);
+}
+.auv2-p-box.ok {
+  border-color: var(--color-border-success);
+  color: var(--color-text-success);
+}
+.auv2-p-box.warm {
+  border-color: var(--color-border-warning);
+  color: var(--color-text-warning);
+  background: var(--color-background-warning);
+}
+.auv2-p-box.skip {
+  color: var(--color-text-tertiary);
+  border-style: dashed;
+  opacity: 0.6;
+}
+.auv2-p-arrow {
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  padding: 0 3px;
+}
+.auv2-args-label {
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--color-text-tertiary);
+  margin-bottom: 6px;
+}
+.auv2-arg-row {
+  display: flex;
+  gap: 12px;
+  font-size: 12px;
+  padding: 4px 0;
+  border-bottom: 0.5px solid var(--color-border-tertiary);
+}
+.auv2-arg-row:last-child { border-bottom: none; }
+.auv2-arg-key {
+  color: var(--color-text-tertiary);
+  flex-shrink: 0;
+  min-width: 100px;
+  font-family: monospace;
+  font-size: 11px;
+}
+.auv2-arg-val {
+  color: var(--color-text-primary);
+  word-break: break-word;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  flex: 1;
+}
+
+.auv2-load-more {
+  text-align: center;
+  padding: 12px;
+  font-size: 12px;
+  color: var(--color-text-info);
+  cursor: pointer;
+  background: var(--color-background-primary);
+  border: 0.5px solid var(--color-border-tertiary);
+  border-radius: 8px;
+}
+.auv2-load-more:hover {
+  background: var(--color-background-secondary);
+}
 </style>
 </head>
 <body>
@@ -1617,7 +2192,6 @@ strong { font-weight: 600; color: var(--color-text-primary); }
     </div>
     <div class="sb-group">
       <div class="sb-group-label">Monitor</div>
-      <div class="sb-item" data-tab="feed"           onclick="switchTabV2('feed')"><span class="sb-icon">◈</span>Decision feed</div>
       <div class="sb-item" data-tab="failure-modes" onclick="switchTabV2('failure-modes')"><span class="sb-icon">⊡</span>Failure modes</div>
       <div class="sb-item" data-tab="escalations"   onclick="switchTabV2('escalations')"><span class="sb-icon">△</span>Escalations<span class="sb-badge red" id="nav-esc-badge" style="display:none">0</span></div>
       <div class="sb-item" data-tab="audit"         onclick="switchTabV2('audit')"><span class="sb-icon">≡</span>Audit log</div>
@@ -1625,7 +2199,6 @@ strong { font-weight: 600; color: var(--color-text-primary); }
     <div class="sb-group">
       <div class="sb-group-label">Improve</div>
       <div class="sb-item" data-tab="learning" onclick="switchTabV2('learning')"><span class="sb-icon">⟳</span>Learning loop<span class="sb-badge green" id="nav-learning-badge" style="display:none">0</span></div>
-      <div class="sb-item" data-tab="policy"   onclick="switchTabV2('policy')"><span class="sb-icon">◎</span>Policy editor</div>
       <div class="sb-item" data-tab="agents"   onclick="switchTabV2('agents')"><span class="sb-icon">⬡</span>Agents</div>
     </div>
     <div class="sb-group">
@@ -1728,19 +2301,6 @@ strong { font-weight: 600; color: var(--color-text-primary); }
     </section>
   </div>
 
-  <!-- DECISION FEED ─────────────────────────────────────────────────── -->
-  <div class="content v2-content" id="content-feed">
-    <div class="top-row">
-      <div class="section-label">Decision feed</div>
-      <div class="time-filter" id="feed-filterbar">
-        <button class="tf-btn active" data-feed-filter="all"        onclick="setFeedFilter('all')">All</button>
-        <button class="tf-btn"        data-feed-filter="blocked"    onclick="setFeedFilter('blocked')">Blocked</button>
-        <button class="tf-btn"        data-feed-filter="escalated"  onclick="setFeedFilter('escalated')">Escalated</button>
-        <button class="tf-btn"        data-feed-filter="allowed"    onclick="setFeedFilter('allowed')">Allowed</button>
-      </div>
-    </div>
-    <div id="feed-list"><div class="empty">Loading…</div></div>
-  </div>
 
   <!-- FAILURE MODES ─────────────────────────────────────────────────── -->
   <div class="content v2-content" id="content-failure-modes">
@@ -1787,30 +2347,17 @@ strong { font-weight: 600; color: var(--color-text-primary); }
 
   <!-- AUDIT LOG ─────────────────────────────────────────────────────── -->
   <div class="content v2-content" id="content-audit">
-    <div class="card">
-      <div class="filterbar">
-        <select id="a-agent" onchange="renderAudit()"><option value="">All agents</option></select>
-        <select id="a-outcome" onchange="renderAudit()">
-          <option value="">All outcomes</option>
-          <option value="allowed">Allowed</option>
-          <option value="blocked">Blocked</option>
-          <option value="escalated">Escalated</option>
-        </select>
-        <select id="a-failure" onchange="renderAudit()">
-          <option value="">All failure modes</option>
-          <option value="injection">Injection</option>
-          <option value="drift">Drift</option>
-          <option value="loop">Loop</option>
-          <option value="policy">Policy</option>
-          <option value="excess">Excess agency</option>
-        </select>
-        <input id="a-search" type="text" placeholder="Search by tool name" oninput="renderAudit()" />
-        <div class="right">
-          <span class="count" id="a-count">— decisions</span>
-          <button class="btn-secondary" onclick="exportCsv()">Export CSV</button>
+    <div class="auv2-page">
+      <div class="auv2-filter-bar">
+        <div class="auv2-filter-group">
+          <button class="auv2-fg-btn on" onclick="auv2SetFilter('all')">All</button>
+          <button class="auv2-fg-btn" onclick="auv2SetFilter('blocked')">Blocked</button>
+          <button class="auv2-fg-btn" onclick="auv2SetFilter('escalated')">Escalated</button>
+          <button class="auv2-fg-btn" onclick="auv2SetFilter('allowed')">Allowed</button>
         </div>
+        <span class="auv2-count" id="auv2-count"></span>
       </div>
-      <div id="audit-list"><div class="empty">No decisions yet</div></div>
+      <div id="auv2-list"></div>
     </div>
   </div>
 
@@ -1825,16 +2372,23 @@ strong { font-weight: 600; color: var(--color-text-primary); }
     </div>
   </div>
 
-  <!-- POLICY EDITOR ─────────────────────────────────────────────────── -->
-  <div class="content v2-content" id="content-policy">
-    <div class="section-label">Detected patterns &amp; suggested actions</div>
-    <div id="patterns-list-policy"><div class="empty card">Loading patterns…</div></div>
-  </div>
-
   <!-- AGENTS ────────────────────────────────────────────────────────── -->
   <div class="content v2-content" id="content-agents">
-    <div class="section-label">All agents</div>
-    <div id="agent-cards"><div class="empty card">No agent data yet</div></div>
+    <div class="agv2-page">
+      <div class="agv2-hero-row" id="agv2-hero"></div>
+      <div class="agv2-section-hdr">
+        <span class="agv2-sh-label">Needs attention</span>
+        <div class="agv2-sh-line"></div>
+        <span class="agv2-sh-count" id="agv2-attn-count"></span>
+      </div>
+      <div id="agv2-attention-list"></div>
+      <div class="agv2-section-hdr">
+        <span class="agv2-sh-label">Healthy</span>
+        <div class="agv2-sh-line"></div>
+        <span class="agv2-sh-count" id="agv2-healthy-count"></span>
+      </div>
+      <div class="agv2-healthy-list" id="agv2-healthy-list"></div>
+    </div>
   </div>
 
   <!-- EVAL DATASET ──────────────────────────────────────────────────── -->
@@ -1906,16 +2460,14 @@ function filterByTimeRange(decisions, range) {
 }
 function setTimeRange(range) {
   timeRange = range;
-  // Only update the topbar time-range buttons (not the feed-filter buttons,
-  // which also use .tf-btn but live in their own .time-filter container).
+  // Only update the topbar time-range buttons.
   document.querySelectorAll('#time-filter .tf-btn').forEach(b =>
     b.classList.toggle("active", b.dataset.range === range));
   loadFmStats();
   // Re-render whichever tab is currently active so its numbers refresh.
   renderV2Overview();
-  if (activePage === "feed")         renderDecisionFeed();
-  else if (activePage === "audit")   loadAudit();
-  else if (activePage === "agents")  renderAgentCards();
+  if (activePage === "audit")        renderAuditV2();
+  else if (activePage === "agents")  renderAgentsV2();
 }
 
 /* ── Utilities ─────────────────────────────────────────────────────────── */
@@ -2643,7 +3195,7 @@ async function resolveEsc(id, action) {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
-   Plain-English helpers (ported verbatim from v1 — needed by audit/feed)
+   Plain-English helpers (ported verbatim from v1 — needed by audit)
    ───────────────────────────────────────────────────────────────────────── */
 function fmt$(n) {
   if (n === null || n === undefined || isNaN(n)) return "—";
@@ -2659,9 +3211,7 @@ function outcomeLabel(outcome) {
   return o.charAt(0).toUpperCase() + o.slice(1);
 }
 function explainDecision(d) {
-  const taskQuoted = d.original_task
-    ? '"' + (d.original_task.length > 50 ? d.original_task.substring(0,50) + "…" : d.original_task) + '"'
-    : "an unspecified task";
+  const taskQuoted = d.original_task ? '"' + d.original_task + '"' : "an unspecified task";
   if (d.attack_type === "goal_hijacking")
     return "Hidden instruction tried to redirect agent away from " + taskQuoted + ".";
   if (d.attack_type === "excessive_agency")
@@ -2706,7 +3256,6 @@ function formatArgsList(argsRaw) {
     else if (currencyKeys.has(k.toLowerCase()) && typeof v === "number") display = fmt$(v);
     else if (typeof v === "object") display = JSON.stringify(v);
     else display = String(v);
-    if (display.length > 80) display = display.substring(0, 80) + "…";
     return '<div><span class="k">' + escHtml(k) + ':</span><span class="v">' + escHtml(display) + '</span></div>';
   }).join("");
 }
@@ -2823,62 +3372,6 @@ function renderTraceBody(d) {
       '<span class="lbl">Arguments</span>' +
       '<div class="kv-list">' + formatArgsList(d.args) + '</div>' +
     '</div>';
-}
-
-/* ─────────────────────────────────────────────────────────────────────────
-   Decision feed tab (v2-only)
-   ───────────────────────────────────────────────────────────────────────── */
-let feedFilter = "all";
-function setFeedFilter(f) {
-  feedFilter = f;
-  document.querySelectorAll('[data-feed-filter]').forEach(b =>
-    b.classList.toggle("active", b.dataset.feedFilter === f));
-  renderDecisionFeed();
-}
-function renderDecisionFeed() {
-  const list = $("feed-list");
-  let rows = filterByTimeRange(allDecisions, timeRange);
-  if (feedFilter === "blocked")  rows = rows.filter(d => d.outcome === "blocked");
-  else if (feedFilter === "escalated") rows = rows.filter(d => (d.outcome || "").startsWith("escalat"));
-  else if (feedFilter === "allowed")   rows = rows.filter(d => d.outcome === "allowed");
-  rows = rows.slice(0, 50);
-  if (!rows.length) {
-    list.innerHTML = '<div class="empty">No decisions match this filter</div>';
-    return;
-  }
-  list.innerHTML = rows.map(d => {
-    const fm = failureModeFor(d);
-    const taskHtml = d.original_task
-      ? '<div class="feed-task">' + escHtml(d.original_task) + '</div>'
-      : "";
-    const reason = d.reason || d.injection_reason || "—";
-    const scores = [];
-    if ((d.risk_score || 0) > 0) {
-      const cls = d.risk_score >= 70 ? "bad" : d.risk_score >= 50 ? "warn" : "";
-      scores.push(`<span class="score-chip ${cls}">Risk ${d.risk_score}</span>`);
-    }
-    if ((d.injection_score || 0) > 0) {
-      const cls = d.injection_score >= 70 ? "bad" : d.injection_score >= 50 ? "warn" : "";
-      scores.push(`<span class="score-chip ${cls}">Injection ${d.injection_score}</span>`);
-    }
-    if ((d.drift_score || 0) > 0) {
-      const cls = d.drift_score >= 70 ? "bad" : d.drift_score >= 50 ? "warn" : "";
-      scores.push(`<span class="score-chip ${cls}">Drift ${d.drift_score}</span>`);
-    }
-    return `<div class="feed-row">
-      <div class="feed-head">
-        <span class="pill ${escHtml(d.outcome || "allowed")}">${escHtml(outcomeLabel(d.outcome))}</span>
-        <span class="feed-tool">${escHtml(d.tool_name || "")} <span class="muted tiny">· ${escHtml(d.agent_id || "")}</span></span>
-        <span class="feed-time">${escHtml(timeAgo(d.decided_at))}</span>
-      </div>
-      <div class="feed-body">
-        ${taskHtml}
-        <div class="feed-reason">${escHtml(reason.length > 200 ? reason.slice(0,200) + "…" : reason)}</div>
-        <div class="feed-scores">${scores.join("")}</div>
-      </div>
-      ${fm ? `<div class="feed-foot"><span class="fm-tag ${fm.cls}">${escHtml(fm.label)}</span></div>` : ""}
-    </div>`;
-  }).join("");
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -3207,91 +3700,339 @@ function toggleResolved() {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
-   Audit log tab (ported)
+   Audit log tab v2 — cards, inline trace, reads from allDecisions
    ───────────────────────────────────────────────────────────────────────── */
-let auditCache = {};
-async function loadAudit() { await renderAudit(); }
-async function renderAudit() {
-  const agentSel = $("a-agent").value;
-  const outcomeSel = $("a-outcome").value;
-  const fmSel = $("a-failure").value;
-  const search = ($("a-search").value || "").toLowerCase().trim();
-  const params = new URLSearchParams();
-  if (agentSel) params.set("agent_id", agentSel);
-  if (outcomeSel) params.set("outcome", outcomeSel);
-  params.set("limit", "200");
-  const since = rangeCutoffISO(timeRange);
-  if (since) params.set("since", since);
-  const r = await safeJson(BASE + "/audit?" + params.toString());
-  let entries = (r && r.entries) || [];
-  if (fmSel) entries = entries.filter(d => {
-    const fm = failureModeFor(d);
-    return fm && fm.key === fmSel;
+let auv2Filter = "all";
+let auv2Expanded = new Set();
+
+function auv2SetFilter(f) {
+  auv2Filter = f;
+  document.querySelectorAll(".auv2-fg-btn").forEach(b => {
+    const onclickAttr = b.getAttribute("onclick") || "";
+    b.classList.toggle("on", onclickAttr.includes("'" + f + "'"));
   });
-  if (search) entries = entries.filter(d => (d.tool_name || "").toLowerCase().includes(search));
-  populateAgentSelect();
-  auditCache = {};
-  for (const d of entries) if (d.call_id) auditCache[d.call_id] = d;
-  $("a-count").textContent = entries.length + " of " + ((r && r.entries && r.entries.length) || 0) + " decisions";
-  const list = $("audit-list");
-  if (!entries.length) {
-    list.innerHTML = '<div class="empty">No matching decisions</div>';
-    return;
-  }
-  list.innerHTML = entries.map(d => {
-    const fm = failureModeFor(d);
-    const cid = d.call_id || "";
-    const reasonShort = (d.reason || "").length > 80 ? (d.reason || "").slice(0, 80) + "…" : (d.reason || "");
-    const tags = fm ? `<span class="fm-tag ${fm.cls}">${escHtml(fm.label)}</span>` : "";
-    return `<div class="audit-item" id="aud-${escHtml(cid)}">
-      <div class="audit-row" onclick="toggleAudit('${escHtml(cid)}')">
-        <span class="pill ${escHtml(d.outcome || "allowed")}">${escHtml(outcomeLabel(d.outcome))}</span>
-        ${tags}
-        <span class="audit-tool">${escHtml(d.tool_name || "")} <span class="agent">· ${escHtml(d.agent_id || "")}</span></span>
-        <span class="audit-reason">— ${escHtml(reasonShort)}</span>
-        <span class="audit-time" title="${escHtml(d.decided_at || "")}">${escHtml(timeAgo(d.decided_at))}</span>
-        <span class="chev">›</span>
-      </div>
-      <div class="audit-detail" id="auddet-${escHtml(cid)}"></div>
-    </div>`;
-  }).join("");
+  renderAuditV2();
 }
-function toggleAudit(cid) {
-  const item = $("aud-" + cid);
-  const det = $("auddet-" + cid);
-  if (!item || !det) return;
-  const open = item.classList.contains("open");
-  if (open) {
-    item.classList.remove("open");
+
+function auv2ToggleCard(callId) {
+  if (auv2Expanded.has(callId)) {
+    auv2Expanded.delete(callId);
   } else {
-    const d = auditCache[cid];
-    if (d) det.innerHTML = renderTraceBody(d);
-    item.classList.add("open");
+    auv2Expanded.add(callId);
   }
+  const trace = document.getElementById("auv2-trace-" + callId);
+  if (trace) trace.classList.toggle("open");
+  const chevron = document.getElementById("auv2-chev-" + callId);
+  if (chevron) chevron.textContent = auv2Expanded.has(callId) ? "▲" : "▼";
 }
-function populateAgentSelect() {
-  const sel = $("a-agent");
-  if (!sel) return;
-  const have = new Set(Array.from(sel.options).map(o => o.value));
-  for (const id of Object.keys(agentHealth)) {
-    if (!have.has(id)) {
-      const opt = document.createElement("option");
-      opt.value = id; opt.textContent = id;
-      sel.appendChild(opt);
+
+function auv2StripeClass(outcome) {
+  const o = (outcome || "").toLowerCase().replace(" ", "_");
+  return "auv2-stripe-" + o;
+}
+
+function auv2PillClass(outcome) {
+  const o = (outcome || "").toLowerCase().replace(" ", "_");
+  return "auv2-pill-" + o;
+}
+
+function auv2PillLabel(outcome) {
+  const map = {
+    blocked: "Blocked",
+    allowed: "Allowed",
+    escalated: "Escalated",
+    escalation_approved: "Approved",
+    escalation_rejected: "Rejected",
+    failed_open: "Failed open"
+  };
+  return map[outcome] || outcome;
+}
+
+function auv2Tags(d) {
+  const tags = [];
+  if (d.attack_type === "goal_hijacking" ||
+      d.attack_type === "prompt_injection" ||
+      (d.injection_score && d.injection_score >= 70)) {
+    tags.push({
+      label: d.attack_type === "goal_hijacking" ? "Goal hijacking" : "Prompt injection",
+      cls: "auv2-tag-danger"
+    });
+  }
+  if (d.attack_type === "excessive_agency") {
+    tags.push({ label: "Excessive agency", cls: "auv2-tag-danger" });
+  }
+  if (d.drift_score && d.drift_score >= 60) {
+    tags.push({ label: "Goal drift", cls: "auv2-tag-warning" });
+  }
+  const br = blastObj(d.blast_radius);
+  if (br && (br.severity === "critical" || br.severity === "high")) {
+    tags.push({ label: "High blast radius", cls: "auv2-tag-warning" });
+  }
+  if (d.policy_matched) {
+    tags.push({ label: "Policy: " + d.policy_matched, cls: "auv2-tag" });
+  }
+  return tags;
+}
+
+function auv2ScoreChips(d) {
+  const chips = [];
+  if (d.risk_score != null && d.risk_score > 0) {
+    const cls = d.risk_score >= 70 ? "auv2-chip-hot"
+              : d.risk_score >= 50 ? "auv2-chip-warm" : "auv2-chip";
+    chips.push({ label: "Risk " + d.risk_score, cls });
+  }
+  if (d.injection_score != null && d.injection_score > 0) {
+    const cls = d.injection_score >= 70 ? "auv2-chip-hot"
+              : d.injection_score >= 50 ? "auv2-chip-warm" : "auv2-chip";
+    chips.push({ label: "Injection " + d.injection_score, cls });
+  }
+  if (d.drift_score != null && d.drift_score > 0) {
+    chips.push({
+      label: "Drift " + d.drift_score,
+      cls: d.drift_score >= 60 ? "auv2-chip-warm" : "auv2-chip"
+    });
+  }
+  const br = blastObj(d.blast_radius);
+  if (br && br.severity && br.severity !== "low") {
+    chips.push({
+      label: "Blast: " + br.severity,
+      cls: br.severity === "critical" ? "auv2-chip-hot"
+         : br.severity === "high" ? "auv2-chip-warm" : "auv2-chip"
+    });
+  }
+  if (d.reliability_score != null) {
+    chips.push({ label: "Reliability " + d.reliability_score, cls: "auv2-chip" });
+  }
+  return chips;
+}
+
+function auv2BuildPipeline(d) {
+  const steps = [];
+  const br = blastObj(d.blast_radius);
+  const brSev = br ? br.severity : null;
+
+  steps.push({
+    label: "Blast: " + (brSev || "low"),
+    state: (brSev === "critical" || brSev === "high") ? "fired" : "ok"
+  });
+
+  steps.push({
+    label: d.policy_matched ? "Policy: " + d.policy_matched : "Policy: no match",
+    state: d.policy_matched ? "fired" : "ok"
+  });
+
+  if (d.risk_score != null) {
+    steps.push({
+      label: "Risk: " + d.risk_score,
+      state: d.risk_score >= 70 ? "fired" : d.risk_score >= 50 ? "warm" : "ok"
+    });
+  } else {
+    steps.push({ label: "Risk: —", state: "skip" });
+  }
+
+  if (d.injection_score != null) {
+    steps.push({
+      label: "Injection: " + d.injection_score,
+      state: d.injection_score >= 70 ? "fired" : d.injection_score >= 50 ? "warm" : "ok"
+    });
+  } else {
+    steps.push({ label: "Injection: —", state: "skip" });
+  }
+
+  if (d.drift_score != null) {
+    steps.push({
+      label: "Drift: " + d.drift_score,
+      state: d.drift_score >= 60 ? "fired" : "ok"
+    });
+  } else {
+    steps.push({ label: "Drift: —", state: "skip" });
+  }
+
+  if (d.loop_score != null && d.loop_score > 0) {
+    steps.push({
+      label: "Loop: " + d.loop_score,
+      state: d.loop_score >= 70 ? "fired" : "ok"
+    });
+  } else {
+    steps.push({ label: "Loop: —", state: "skip" });
+  }
+
+  steps.push({
+    label: "→ " + auv2PillLabel(d.outcome),
+    state: (d.outcome === "blocked" || d.outcome === "escalation_rejected") ? "fired" : "ok"
+  });
+
+  return steps.map((s, i) => `
+    <div class="auv2-p-step">
+      <div class="auv2-p-box ${s.state}">${escHtml(s.label)}</div>
+      ${i < steps.length - 1 ? '<div class="auv2-p-arrow">→</div>' : ""}
+    </div>`).join("");
+}
+
+function auv2BuildArgs(d) {
+  let args = {};
+  try {
+    args = typeof d.args === "string" ? JSON.parse(d.args) : (d.args || {});
+  } catch(e) { args = {}; }
+
+  const rows = Object.entries(args);
+  if (!rows.length) return "";
+
+  return `
+    <div class="auv2-args-label">Arguments</div>
+    ${rows.map(([k, v]) => `
+      <div class="auv2-arg-row">
+        <span class="auv2-arg-key">${escHtml(k)}</span>
+        <span class="auv2-arg-val">${escHtml(typeof v === "object" ? JSON.stringify(v) : String(v))}</span>
+      </div>`).join("")}`;
+}
+
+function auv2BuildCard(d) {
+  const outcome = (d.outcome || "allowed").toLowerCase();
+  const stripeClass = auv2StripeClass(outcome);
+  const pillClass = auv2PillClass(outcome);
+  const pillLabel = auv2PillLabel(outcome);
+  const callId = d.call_id || d.id || "";
+  const tool = d.tool_name || "unknown";
+  const agent = d.agent_id || "";
+  const when = d.decided_at ? timeAgo(d.decided_at) : "";
+
+  const tags = auv2Tags(d);
+  const tagsHtml = tags.length
+    ? `<div class="auv2-tags">${tags.map(t =>
+        `<span class="auv2-tag ${t.cls}">${escHtml(t.label)}</span>`).join("")}</div>`
+    : "";
+
+  const taskHtml = d.original_task
+    ? `<div class="auv2-task">"${escHtml(d.original_task)}"</div>`
+    : "";
+
+  const reasonText =
+    (d.injection_reason && d.injection_score >= 50) ? d.injection_reason :
+    (d.risk_reason && d.risk_score >= 50) ? d.risk_reason :
+    (d.drift_reason && d.drift_score >= 60) ? d.drift_reason :
+    (d.reason || "");
+
+  const reasonHtml = reasonText
+    ? `<div class="auv2-reason">${escHtml(reasonText)}</div>`
+    : "";
+
+  const chips = auv2ScoreChips(d);
+  const chipsHtml = chips.length
+    ? `<div class="auv2-scores">${chips.map(c =>
+        `<span class="auv2-chip ${c.cls}">${escHtml(c.label)}</span>`).join("")}</div>`
+    : "";
+
+  const pipelineHtml = auv2BuildPipeline(d);
+  const argsHtml = auv2BuildArgs(d);
+
+  const isExpanded = auv2Expanded.has(callId);
+  const safeId = escHtml(callId);
+
+  return `
+    <div class="auv2-card" onclick="auv2ToggleCard('${safeId}')">
+      <div class="auv2-inner">
+        <div class="auv2-stripe ${stripeClass}"></div>
+        <div class="auv2-body">
+          <div class="auv2-top">
+            <span class="auv2-pill ${pillClass}">${escHtml(pillLabel)}</span>
+            <span class="auv2-tool">${escHtml(tool)}</span>
+            <span class="auv2-sep">·</span>
+            <span class="auv2-agent">${escHtml(agent)}</span>
+            <span class="auv2-time">
+              ${escHtml(when)}
+              <span id="auv2-chev-${safeId}" style="margin-left:6px;font-size:10px;color:var(--color-text-tertiary)">
+                ${isExpanded ? "▲" : "▼"}
+              </span>
+            </span>
+          </div>
+          ${tagsHtml}
+          ${taskHtml}
+          ${reasonHtml}
+          ${chipsHtml}
+        </div>
+      </div>
+      <div class="auv2-trace ${isExpanded ? 'open' : ''}" id="auv2-trace-${safeId}"
+           onclick="event.stopPropagation()">
+        <div class="auv2-trace-label">Decision pipeline</div>
+        <div class="auv2-pipeline">${pipelineHtml}</div>
+        ${argsHtml}
+      </div>
+    </div>`;
+}
+
+function auv2FormatDate(iso) {
+  try {
+    return new Date(iso).toLocaleDateString("en-US", {
+      month: "long", day: "numeric", year: "numeric"
+    });
+  } catch(e) { return iso; }
+}
+
+function renderAuditV2() {
+  let decisions = filterByTimeRange(allDecisions, timeRange);
+
+  if (auv2Filter !== "all") {
+    if (auv2Filter === "escalated") {
+      decisions = decisions.filter(d =>
+        d.outcome === "escalated" ||
+        d.outcome === "escalation_approved" ||
+        d.outcome === "escalation_rejected"
+      );
+    } else if (auv2Filter === "allowed") {
+      decisions = decisions.filter(d =>
+        d.outcome === "allowed" || d.outcome === "escalation_approved"
+      );
+    } else {
+      decisions = decisions.filter(d => d.outcome === auv2Filter);
     }
   }
-}
-function exportCsv() { window.location = BASE + "/audit/export"; }
-function filterAuditByAgent(id) {
-  switchTabV2("audit");
-  const sel = $("a-agent");
-  if (!Array.from(sel.options).some(o => o.value === id)) {
-    const opt = document.createElement("option");
-    opt.value = id; opt.textContent = id;
-    sel.appendChild(opt);
+
+  decisions = [...decisions].sort((a, b) =>
+    (b.decided_at || "").localeCompare(a.decided_at || ""));
+
+  const countEl = $("auv2-count");
+  if (countEl) {
+    countEl.textContent = decisions.length + " decision" +
+      (decisions.length !== 1 ? "s" : "");
   }
-  sel.value = id;
-  renderAudit();
+
+  const list = $("auv2-list");
+  if (!list) return;
+
+  if (!decisions.length) {
+    list.innerHTML =
+      '<div style="text-align:center;padding:32px;' +
+      'color:var(--color-text-tertiary);font-size:13px">' +
+      'No decisions match this filter.</div>';
+    return;
+  }
+
+  const byDay = {};
+  decisions.forEach(d => {
+    const day = (d.decided_at || "").slice(0, 10);
+    if (!byDay[day]) byDay[day] = [];
+    byDay[day].push(d);
+  });
+
+  const today = new Date().toISOString().slice(0, 10);
+  let html = "";
+  Object.entries(byDay)
+    .sort((a, b) => b[0].localeCompare(a[0]))
+    .forEach(([day, items]) => {
+      const label = day === today
+        ? "Today · " + auv2FormatDate(day)
+        : auv2FormatDate(day);
+      html += `
+        <div class="auv2-day-div">
+          <div class="auv2-dd-line"></div>
+          <div class="auv2-dd-lbl">${escHtml(label)}</div>
+          <div class="auv2-dd-line"></div>
+        </div>`;
+      items.forEach(d => { html += auv2BuildCard(d); });
+    });
+
+  list.innerHTML = html;
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -3312,8 +4053,6 @@ async function loadPatternsAndChanges() {
   await loadLearning(); // refreshes learningChanges
   renderPatterns(patternsCache);
   renderChanges(learningChanges);
-  // Policy editor reuses the same pattern list
-  renderPatterns(patternsCache, "patterns-list-policy");
 }
 function renderPatterns(patterns, mountId) {
   const wrap = $(mountId || "patterns-list");
@@ -3392,73 +4131,209 @@ function labelFromAgent(a) {
   if (a && a.health_status) return a.health_status;
   return "Unknown";
 }
-function renderAgentCards() {
-  const wrap = $("agent-cards");
-  if (!wrap) return;
-  const ids = Object.keys(agentHealth);
-  if (ids.length === 0) {
-    wrap.innerHTML = '<div class="empty card">No agent data yet</div>';
+function renderAgentsV2() {
+  const agents = Object.values(agentHealth || {});
+  if (!agents.length) {
+    const hero = $("agv2-hero");
+    if (hero) hero.innerHTML = "";
+    const attn = $("agv2-attention-list");
+    if (attn) attn.innerHTML = '<div class="agv2-empty-state">No agents connected yet.</div>';
+    const hlist = $("agv2-healthy-list");
+    if (hlist) hlist.innerHTML = '<div class="agv2-empty-state">No agents connected yet.</div>';
     return;
   }
-  ids.sort((a, b) => (agentHealth[a].health_score ?? 100) - (agentHealth[b].health_score ?? 100));
-  const filtered = filterByTimeRange(allDecisions, timeRange);
-  wrap.innerHTML = ids.map(id => {
-    const a = agentHealth[id];
-    const decs = filtered.filter(d => d.agent_id === id);
-    const total = decs.length;
-    const allowed = decs.filter(d => d.outcome === "allowed").length;
-    const blocked = decs.filter(d => d.outcome === "blocked").length;
-    const escalated = decs.filter(d => (d.outcome || "").startsWith("escalat")).length;
-    const score = a.health_score;
-    const bucket = bucketFromAgent(a);
-    const initials = initialsFor(id);
-    const issuesHtml = (a.active_issues && a.active_issues.length)
-      ? a.active_issues.map(i => {
-          const lbl = ISSUE_LABELS[i.type] || ISSUE_LABELS[i.attack_type] || i.description || "Issue detected";
-          let cls = "issue";
-          if (i.type === "injection" || i.type === "data_exfiltration") cls = "issue danger";
-          else if (i.type === "anomaly") cls = "issue info";
-          else if (i.type === "loop") cls = "issue purple";
-          return `<div class="${cls}">
-            <div class="desc">${escHtml(lbl)}</div>
-            <div class="when">${(i.occurrences || 1)} event${(i.occurrences || 1) === 1 ? "" : "s"} · first seen ${escHtml(timeAgo(i.first_seen))}</div>
+
+  /* Sort worst first */
+  agents.sort((a, b) => (a.health_score ?? 0) - (b.health_score ?? 0));
+
+  /* Split into attention vs healthy */
+  const needsAttn = agents.filter(a =>
+    a.health_status === "Caution" ||
+    a.health_status === "Degraded" ||
+    a.health_status === "Critical" ||
+    (a.active_issues && a.active_issues.length > 0)
+  );
+  const healthy = agents.filter(a => !needsAttn.includes(a));
+
+  /* Hero stats */
+  const totalDecisions = agents.reduce((s, a) => s + (a.decisions_today || 0), 0);
+  const totalIssues = agents.reduce((s, a) => s + (a.active_issues ? a.active_issues.length : 0), 0);
+
+  /* Compute total protected from allDecisions */
+  const todayFiltered = filterByTimeRange(allDecisions, "today");
+  let protected_ = 0;
+  todayFiltered.forEach(d => {
+    if (d.outcome === "blocked" || d.outcome === "escalated" || d.outcome === "escalation_approved") {
+      const br = blastObj(d.blast_radius);
+      if (br && br.financial_impact && br.financial_impact !== "unknown" && br.financial_impact !== "$0") {
+        const num = parseFloat(br.financial_impact.replace(/[$,]/g, ""));
+        if (!isNaN(num)) protected_ += num;
+      }
+    }
+  });
+
+  $("agv2-hero").innerHTML = `
+    <div class="agv2-hero-card">
+      <div class="agv2-hero-num" style="color:${needsAttn.length > 0 ? 'var(--color-text-warning)' : 'var(--color-text-success)'}">
+        ${needsAttn.length}
+      </div>
+      <div class="agv2-hero-lbl">Needs attention</div>
+    </div>
+    <div class="agv2-hero-card">
+      <div class="agv2-hero-num">${totalDecisions}</div>
+      <div class="agv2-hero-lbl">Decisions today</div>
+    </div>
+    <div class="agv2-hero-card">
+      <div class="agv2-hero-num" style="color:${totalIssues > 0 ? 'var(--color-text-danger)' : 'var(--color-text-success)'}">
+        ${totalIssues}
+      </div>
+      <div class="agv2-hero-lbl">Active issues</div>
+    </div>
+    <div class="agv2-hero-card">
+      <div class="agv2-hero-num" style="color:var(--color-text-success)">
+        ${protected_ > 0 ? "$" + protected_.toLocaleString() : "—"}
+      </div>
+      <div class="agv2-hero-lbl">Protected today</div>
+    </div>
+  `;
+
+  /* Attention count */
+  $("agv2-attn-count").textContent = needsAttn.length + " agent" + (needsAttn.length !== 1 ? "s" : "");
+
+  /* Attention cards */
+  const attnList = $("agv2-attention-list");
+  if (needsAttn.length === 0) {
+    attnList.innerHTML = '<div class="agv2-empty-state">✓ All agents are healthy</div>';
+  } else {
+    attnList.innerHTML = needsAttn.map(a => buildAgentCard(a)).join("");
+  }
+
+  /* Healthy count */
+  $("agv2-healthy-count").textContent = healthy.length + " agent" + (healthy.length !== 1 ? "s" : "");
+
+  /* Healthy list */
+  const healthyList = $("agv2-healthy-list");
+  if (healthy.length === 0) {
+    healthyList.innerHTML = '<div class="agv2-empty-state">No additional agents registered</div>';
+  } else {
+    healthyList.innerHTML = healthy.map(a => buildHealthyRow(a)).join("");
+  }
+}
+
+function buildAgentCard(a) {
+  const score = a.health_score ?? 0;
+  const status = a.health_status || "Unknown";
+  const issues = a.active_issues || [];
+  const decisions = a.decisions_today || 0;
+  const intRate = a.intervention_rate || 0;
+  const blocked = Math.round(decisions * intRate);
+  const lastSeen = a.last_seen ? timeAgo(a.last_seen) : "unknown";
+
+  const borderCls = (status === "Critical" || status === "Degraded") ? "agv2-danger" : "agv2-warn";
+
+  const ringColor =
+    (status === "Critical" || status === "Degraded") ? "var(--color-text-danger)" :
+    status === "Caution" ? "var(--color-text-warning)" :
+    "var(--color-text-success)";
+
+  const badgeCls = "agv2-badge-" + status.toLowerCase().replace(" ", "");
+
+  const issuesHtml = issues.length === 0
+    ? '<div class="agv2-no-issues">No active issues in the last hour</div>'
+    : issues.map(issue => {
+        const type = issue.type || "default";
+        const iconCls =
+          type === "risk" ? "agv2-icon-risk" :
+          type === "injection" ? "agv2-icon-injection" :
+          type === "anomaly" ? "agv2-icon-anomaly" :
+          "agv2-icon-default";
+        const iconChar =
+          type === "risk" ? "↑" :
+          type === "injection" ? "⚠" :
+          type === "anomaly" ? "↗" : "•";
+        const title =
+          type === "risk" ? "High-risk action" :
+          type === "injection" ? "Injection detected" :
+          type === "anomaly" ? "Anomalous behavior" :
+          (issue.type || "Issue");
+        const desc = issue.description || "";
+        const occ = issue.occurrences > 1 ? ` (${issue.occurrences}×)` : "";
+        const when = issue.first_seen ? timeAgo(issue.first_seen) : "";
+        return `
+          <div class="agv2-issue-row">
+            <div class="agv2-issue-icon ${iconCls}">${iconChar}</div>
+            <div class="agv2-issue-body">
+              <div class="agv2-issue-title">${escHtml(title)}${escHtml(occ)}</div>
+              <div class="agv2-issue-desc">${escHtml(desc)}</div>
+            </div>
+            <div class="agv2-issue-time">${escHtml(when)}</div>
           </div>`;
-        }).join("")
-      : '<div class="issue-empty">Operating normally</div>';
-    return `<div class="card agent-card">
-      <div class="agent-card-head">
-        <div class="left">
-          <div class="avatar lg">${escHtml(initials)}</div>
-          <div>
-            <div class="name">${escHtml(id)}</div>
-            <div class="desc">${escHtml(describeAgent(id))}</div>
+      }).join("");
+
+  return `
+    <div class="agv2-agent-card ${borderCls}">
+      <div class="agv2-agent-top">
+        <div class="agv2-health-ring" style="border-color:${ringColor}">
+          <div class="agv2-ring-num" style="color:${ringColor}">${score}</div>
+          <div class="agv2-ring-lbl">health</div>
+        </div>
+        <div class="agv2-agent-info">
+          <div class="agv2-agent-name">${escHtml(a.agent_id || "unknown")}</div>
+          <div class="agv2-agent-meta">Last seen ${escHtml(lastSeen)}</div>
+        </div>
+        <div class="agv2-agent-top-right">
+          <span class="agv2-status-badge ${badgeCls}">${escHtml(status)}</span>
+          <div class="agv2-stats-row">
+            <div class="agv2-stat">
+              <div class="agv2-stat-val">${decisions}</div>
+              <div class="agv2-stat-lbl">Actions</div>
+            </div>
+            <div class="agv2-stat">
+              <div class="agv2-stat-val" style="color:${blocked > 0 ? 'var(--color-text-danger)' : 'var(--color-text-primary)'}">${blocked}</div>
+              <div class="agv2-stat-lbl">Blocked</div>
+            </div>
+            <div class="agv2-stat">
+              <div class="agv2-stat-val">${Math.round(intRate * 100)}%</div>
+              <div class="agv2-stat-lbl">Int. rate</div>
+            </div>
           </div>
         </div>
-        <div class="right">
-          <div class="score">${score != null ? score + "%" : "—"}</div>
-          <span class="health-badge ${bucket}">${escHtml(labelFromAgent(a))}</span>
-        </div>
       </div>
-      <div class="agent-card-grid">
-        <div>
-          <div class="section-sublabel">Activity · ${escHtml(RANGE_LABEL[timeRange])}</div>
-          <div class="activity-grid">
-            <div class="activity-stat"><div class="n">${total}</div><div class="l">Actions</div></div>
-            <div class="activity-stat"><div class="n">${allowed}</div><div class="l">Allowed</div></div>
-            <div class="activity-stat ${blocked > 0 ? "danger" : ""}"><div class="n">${blocked}</div><div class="l">Blocked</div></div>
-            <div class="activity-stat ${escalated > 0 ? "warning" : ""}"><div class="n">${escalated}</div><div class="l">Escalated</div></div>
-          </div>
-        </div>
-        <div>
-          <div class="section-sublabel">Active issues</div>
-          <div class="issue-list">${issuesHtml}</div>
-        </div>
-      </div>
-      <div class="agent-card-foot">
-        <a href="#" onclick="event.preventDefault();filterAuditByAgent('${escHtml(id)}')">View in audit log →</a>
+      <div class="agv2-issues-section">
+        <div class="agv2-issues-label">Active issues</div>
+        ${issuesHtml}
       </div>
     </div>`;
-  }).join("");
+}
+
+function buildHealthyRow(a) {
+  const score = a.health_score ?? 100;
+  const status = a.health_status || "Healthy";
+  const decisions = a.decisions_today || 0;
+  const intRate = a.intervention_rate || 0;
+  const initials = (a.agent_id || "?")
+    .split(/[-_]/)
+    .map(w => w[0] || "")
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+  const avCls = status === "Caution" ? "agv2-healthy-av caution" : "agv2-healthy-av";
+  const badgeCls = "agv2-badge-" + status.toLowerCase();
+  return `
+    <div class="agv2-healthy-row">
+      <div class="${avCls}">${escHtml(initials)}</div>
+      <div class="agv2-healthy-body">
+        <div class="agv2-healthy-name">${escHtml(a.agent_id || "unknown")}</div>
+        <div class="agv2-healthy-sub">${decisions} decisions today · ${Math.round(intRate * 100)}% intervention</div>
+      </div>
+      <div class="agv2-healthy-right">
+        <div class="agv2-hstat">
+          <div class="agv2-hstat-val">${decisions}</div>
+          <div class="agv2-hstat-lbl">Actions</div>
+        </div>
+        <span class="agv2-status-badge ${badgeCls}">${escHtml(status)} · ${score}%</span>
+      </div>
+    </div>`;
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -3466,12 +4341,10 @@ function renderAgentCards() {
    ───────────────────────────────────────────────────────────────────────── */
 const TAB_META = {
   "overview":      { title: "Overview",         sub: "How are your agents doing?",                  showTime: true  },
-  "feed":          { title: "Decision feed",    sub: "Every agent action, evaluated in real time",  showTime: true  },
   "failure-modes": { title: "Failure modes",    sub: "47 failure modes across 9 categories",        showTime: false },
   "escalations":   { title: "Escalations",      sub: "Actions awaiting human review",               showTime: false },
   "audit":         { title: "Audit log",        sub: "Complete decision history",                   showTime: true  },
   "learning":      { title: "Learning loop",    sub: "How your agent improves over time",           showTime: false },
-  "policy":        { title: "Policy editor",    sub: "Rules governing agent behavior",              showTime: false },
   "agents":        { title: "Agents",           sub: "Per-agent health and reliability",            showTime: true  },
   "eval":          { title: "Eval dataset",     sub: "Export labeled decisions",                    showTime: false },
   "compliance":    { title: "Compliance report",sub: "EU AI Act-ready audit bundle",                showTime: false },
@@ -3495,13 +4368,11 @@ function switchTabV2(tabName) {
   if (tf) tf.style.visibility = meta.showTime ? "visible" : "hidden";
   // Load data for this tab
   if (tabName === "overview")          renderV2Overview();
-  else if (tabName === "feed")         renderDecisionFeed();
   else if (tabName === "failure-modes"){ loadFmV2(); }
   else if (tabName === "escalations")  { loadEscalations().then(() => { loadResolvedEscalations().then(renderEscTab); }); }
-  else if (tabName === "audit")        loadAudit();
+  else if (tabName === "audit")        renderAuditV2();
   else if (tabName === "learning")     loadPatternsAndChanges();
-  else if (tabName === "policy")       loadPatternsAndChanges();
-  else if (tabName === "agents")       renderAgentCards();
+  else if (tabName === "agents")       renderAgentsV2();
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -3520,9 +4391,10 @@ function connectWs() {
       allDecisions.unshift(msg.decision);
       if (allDecisions.length > 200) allDecisions.pop();
     } else return;
-    // Always keep overview synced; refresh the active tab's specific render if applicable.
+    // Always keep overview synced.
     renderV2Overview();
-    if (activePage === "feed") renderDecisionFeed();
+    // Keep the audit view live when it's the active tab.
+    if (activePage === "audit") renderAuditV2();
   };
   ws.onclose = () => { updateLiveStatus(false); setTimeout(connectWs, 3000); };
   ws.onerror = () => { try { ws.close(); } catch {} };
