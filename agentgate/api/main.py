@@ -33,6 +33,14 @@ class _ApiKeyMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next):  # type: ignore[override]
         api_key = os.getenv("AGENTGATE_API_KEY")
+        agentgate_env = os.getenv("AGENTGATE_ENV", "production")
+
+        if not api_key and agentgate_env == "production":
+            raise RuntimeError(
+                "AGENTGATE_API_KEY must be set in production. "
+                "Set AGENTGATE_ENV=development to run without auth."
+            )
+
         if api_key and request.url.path not in _AUTH_SKIP:
             provided = request.headers.get("X-API-Key")
             if provided != api_key:

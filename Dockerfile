@@ -21,7 +21,6 @@ RUN mkdir -p /data
 
 ENV AGENTGATE_DB_PATH=/data/agentgate.db
 ENV AGENTGATE_POLICY_PATH=/data/policies.yaml
-ENV AGENTGATE_FAIL_OPEN=true
 
 EXPOSE 8000
 

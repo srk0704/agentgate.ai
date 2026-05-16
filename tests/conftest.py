@@ -22,4 +22,7 @@ def _isolate_test_env(monkeypatch):
     monkeypatch.delenv("AGENTGATE_DB_PATH", raising=False)
     # Strip any auth gating that could 401 the FastAPI TestClient.
     monkeypatch.delenv("AGENTGATE_API_KEY", raising=False)
+    # Tests run in dev mode so the production-only "AGENTGATE_API_KEY required"
+    # guard in the API middleware doesn't 500 the TestClient.
+    monkeypatch.setenv("AGENTGATE_ENV", "development")
     yield
