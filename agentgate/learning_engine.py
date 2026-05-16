@@ -5,8 +5,9 @@ Applies patterns to improve agent behavior, persists changes, and measures impac
 from __future__ import annotations
 import json
 import logging
+import re
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import aiosqlite
 
@@ -14,6 +15,37 @@ from agentgate.client import GatewayClient
 from agentgate.pattern_analyzer import Pattern
 
 logger = logging.getLogger(__name__)
+
+
+# Patterns commonly used to escape a prompt boundary or inject new
+# instructions. We strip them before mixing user-supplied text from
+# audit_log rows (original_task, human_reason) into a system prompt
+# downstream agents will execute against.
+_INJECTION_PATTERNS = [
+    r"ignore\s+previous",
+    r"forget\s+previous",
+    r"new\s+instructions?",
+    r"system\s+override",
+    r"</?\w+>",            # XML / HTML-like tags
+    r"\[INST\]|\[/INST\]", # Llama-style
+    r"<\|im_start\|>|<\|im_end\|>",  # ChatML
+]
+
+
+def _sanitize_for_prompt(text: str, max_len: int = 500) -> str:
+    """Strip content that could escape prompt boundaries or inject instructions.
+
+    Anything stored in audit_log was written by an external caller (the
+    agent's user, an upstream LLM, or a human reviewer). Treat it as
+    untrusted before re-feeding it into a system prompt.
+    """
+    if not text:
+        return ""
+    text = text[:max_len]
+    for pattern in _INJECTION_PATTERNS:
+        text = re.sub(pattern, "[removed]", text, flags=re.IGNORECASE)
+    text = "".join(c for c in text if c.isprintable() or c in "\n\t")
+    return text.strip()
 
 
 @dataclass
@@ -107,7 +139,7 @@ class LearningEngine:
         # Capture metrics from the last 7 days before this change
         from agentgate.audit import AuditLogger
         audit = AuditLogger(self.db_path)
-        since_7d = (datetime.utcnow() - timedelta(days=7)).isoformat()
+        since_7d = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
         metrics_before = await audit.get_tool_metrics(tool_name, since_7d)
 
         # Persist to YAML
@@ -161,7 +193,7 @@ class LearningEngine:
 
         from agentgate.audit import AuditLogger
         audit = AuditLogger(self.db_path)
-        since_7d = (datetime.utcnow() - timedelta(days=7)).isoformat()
+        since_7d = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
         metrics_before = await audit.get_tool_metrics(tool_name or "", since_7d)
 
         change_id = await audit.log_policy_change({
@@ -373,21 +405,31 @@ class LearningEngine:
         """
         Returns base_prompt + learned instructions + few-shot examples.
         Only adds sections if there is content to add.
+
+        User-supplied strings (task, reason) come from audit_log and are
+        untrusted — they get sanitized and fenced in tagged blocks so an
+        injected payload in a past escalation cannot reprogram future
+        agents that consume this prompt.
         """
         parts = [base_prompt]
 
         if self._prompt_additions:
             parts.append("\n\n--- Learned Instructions ---")
             for instruction in self._prompt_additions:
-                parts.append(f"- {instruction}")
+                parts.append(f"- {_sanitize_for_prompt(instruction)}")
 
         if self._injected_examples:
             parts.append("\n\n--- Approved Decision Examples (use as guidance) ---")
             for ex in self._injected_examples[:5]:
+                safe_task = _sanitize_for_prompt(ex.get("task", ""), max_len=100)
+                safe_action = _sanitize_for_prompt(ex.get("action", ""))
+                safe_outcome = _sanitize_for_prompt(ex.get("outcome", ""))
+                safe_reason = _sanitize_for_prompt(ex.get("reason", ""))
                 parts.append(
-                    f"Task: {ex['task'][:100]}\n"
-                    f"Action: {ex['action']}\n"
-                    f"Outcome: {ex['outcome']} — {ex['reason']}"
+                    f"<example_task>{safe_task}</example_task>\n"
+                    f"<example_action>{safe_action}</example_action>\n"
+                    f"<example_outcome>{safe_outcome} — {safe_reason}"
+                    f"</example_outcome>"
                 )
 
         return "\n".join(parts)
