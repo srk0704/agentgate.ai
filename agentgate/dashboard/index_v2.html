@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>AgentGate v2 · Agent reliability infrastructure</title>
 <style>
-/* ── Color tokens — light mode defaults, dark via prefers-color-scheme ─── */
+/* ── Color tokens — light mode only ─────────────────────────────────────── */
 :root {
   --color-background-primary:   #FFFFFF;
   --color-background-secondary: #F7F7F5;
@@ -38,35 +38,6 @@
 
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, monospace;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --color-background-primary:   #0D0D0D;
-    --color-background-secondary: #161616;
-    --color-background-tertiary:  #1E1E1E;
-
-    --color-text-primary:   #FFFFFF;
-    --color-text-secondary: #CCCCCC;
-    --color-text-tertiary:  #6E6E6E;
-
-    --color-text-success: #22C55E;
-    --color-text-warning: #F59E0B;
-    --color-text-danger:  #F87171;
-    --color-text-info:    #60A5FA;
-
-    --color-background-success: rgba(34, 197, 94, 0.12);
-    --color-background-warning: rgba(245, 158, 11, 0.12);
-    --color-background-danger:  rgba(248, 113, 113, 0.12);
-    --color-background-info:    rgba(96, 165, 250, 0.12);
-
-    --color-border-tertiary:  rgba(255, 255, 255, 0.08);
-    --color-border-secondary: rgba(255, 255, 255, 0.14);
-    --color-border-success: rgba(34, 197, 94, 0.30);
-    --color-border-warning: rgba(245, 158, 11, 0.30);
-    --color-border-danger:  rgba(248, 113, 113, 0.30);
-    --color-border-info:    rgba(96, 165, 250, 0.30);
-  }
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -425,15 +396,18 @@ strong { font-weight: 600; color: var(--color-text-primary); }
 .dot-danger    { background: var(--color-text-danger); }
 .dot-warning   { background: var(--color-text-warning); }
 .dot-info      { background: var(--color-text-info); }
+.dot-purple    { background: #8b5cf6; }
 .dot-secondary { background: var(--color-text-secondary); }
 .dot-muted     { background: var(--color-border-tertiary); }
 .fill-danger   { background: var(--color-text-danger); }
 .fill-warning  { background: var(--color-text-warning); }
 .fill-info     { background: var(--color-text-info); }
+.fill-purple   { background: #8b5cf6; }
 .fill-secondary{ background: var(--color-text-secondary); }
 .txt-danger    { color: var(--color-text-danger); }
 .txt-warning   { color: var(--color-text-warning); }
 .txt-info      { color: var(--color-text-info); }
+.txt-purple    { color: #8b5cf6; }
 .txt-secondary { color: var(--color-text-secondary); }
 
 /* Needs review card */
@@ -1494,7 +1468,7 @@ strong { font-weight: 600; color: var(--color-text-primary); }
 }
 
 /* ── Failure-modes v2 (3-zone) ─────────────────────────────────────────── */
-.fmv2-page{padding:24px;display:flex;flex-direction:column;gap:24px}
+.fmv2-page{padding:24px;display:flex;flex-direction:column;gap:20px}
 .fmv2-summary-bar{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
 .fmv2-sum-card{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:10px;padding:14px 16px;display:flex;align-items:center;gap:14px}
 .fmv2-sum-num{font-size:28px;font-weight:500;line-height:1;flex-shrink:0}
@@ -1505,7 +1479,7 @@ strong { font-weight: 600; color: var(--color-text-primary); }
 .fmv2-zone-label{font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:.07em;color:var(--color-text-tertiary);white-space:nowrap}
 .fmv2-zone-line{flex:1;height:0.5px;background:var(--color-border-tertiary)}
 .fmv2-zone-count{font-size:11px;color:var(--color-text-tertiary);white-space:nowrap}
-.fmv2-active-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.fmv2-active-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-auto-rows:min-content;align-items:start;gap:10px}
 @media (max-width: 880px){.fmv2-active-grid{grid-template-columns:1fr}}
 .fmv2-active-card{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-left:3px solid var(--color-text-danger);border-radius:0 10px 10px 0;padding:14px 16px}
 .fmv2-active-card.fmv2-amber{border-left-color:var(--color-text-warning)}
@@ -1966,6 +1940,7 @@ strong { font-weight: 600; color: var(--color-text-primary); }
 .auv2-pill-escalation_approved {
   background: var(--color-background-success);
   color: var(--color-text-success);
+  border: 0.5px solid var(--color-border-success);
 }
 .auv2-pill-escalation_rejected {
   background: var(--color-background-danger);
@@ -2164,6 +2139,323 @@ strong { font-weight: 600; color: var(--color-text-primary); }
 .auv2-load-more:hover {
   background: var(--color-background-secondary);
 }
+
+/* ── Learning loop tab v2 ─────────────────────────────────────────── */
+.llv2-page { padding: 24px; display: flex; flex-direction: column; gap: 20px; }
+
+.llv2-hero {
+  background: var(--color-background-primary);
+  border: 0.5px solid var(--color-border-tertiary);
+  border-radius: 12px;
+  padding: 20px 24px;
+}
+.llv2-hero-label {
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--color-text-tertiary);
+  margin-bottom: 8px;
+}
+.llv2-hero-headline {
+  font-size: 20px;
+  font-weight: 500;
+  line-height: 1.3;
+  margin-bottom: 8px;
+}
+.llv2-hero-body {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  line-height: 1.6;
+  white-space: normal;
+  word-break: break-word;
+}
+.llv2-hero-chips {
+  display: flex;
+  gap: 6px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+.llv2-chip {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+  border: 0.5px solid var(--color-border-tertiary);
+  background: var(--color-background-secondary);
+  color: var(--color-text-secondary);
+}
+.llv2-chip.green {
+  border-color: var(--color-border-success);
+  color: var(--color-text-success);
+  background: var(--color-background-success);
+}
+.llv2-chip.amber {
+  border-color: var(--color-border-warning);
+  color: var(--color-text-warning);
+  background: var(--color-background-warning);
+}
+.llv2-chip-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.llv2-stats-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0,1fr));
+  gap: 10px;
+}
+.llv2-stat {
+  background: var(--color-background-primary);
+  border: 0.5px solid var(--color-border-tertiary);
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+.llv2-stat-num {
+  font-size: 24px;
+  font-weight: 500;
+  line-height: 1;
+  margin-bottom: 3px;
+}
+.llv2-stat-lbl {
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+}
+
+.llv2-sec-hdr {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.llv2-sec-label {
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  color: var(--color-text-tertiary);
+  white-space: nowrap;
+}
+.llv2-sec-line {
+  flex: 1;
+  height: 0.5px;
+  background: var(--color-border-tertiary);
+}
+.llv2-sec-count {
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  white-space: nowrap;
+}
+
+.llv2-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  position: relative;
+}
+.llv2-titem {
+  display: flex;
+  gap: 14px;
+  position: relative;
+}
+.llv2-titem:not(:last-child)::before {
+  content: '';
+  position: absolute;
+  left: 15px;
+  top: 32px;
+  bottom: 0;
+  width: 1px;
+  background: var(--color-border-tertiary);
+  z-index: 0;
+}
+.llv2-ticon {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 1;
+}
+.llv2-icon-up {
+  background: var(--color-background-success);
+  color: var(--color-text-success);
+}
+.llv2-icon-time {
+  background: var(--color-background-info);
+  color: var(--color-text-info);
+}
+.llv2-icon-rule {
+  background: var(--color-background-secondary);
+  color: var(--color-text-secondary);
+}
+.llv2-tbody {
+  flex: 1;
+  padding-bottom: 16px;
+  min-width: 0;
+}
+.llv2-tcard {
+  background: var(--color-background-primary);
+  border: 0.5px solid var(--color-border-tertiary);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+.llv2-tcard-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  gap: 8px;
+}
+.llv2-tcard-title {
+  font-size: 13px;
+  font-weight: 500;
+}
+.llv2-tcard-time {
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  flex-shrink: 0;
+}
+.llv2-tcard-desc {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+  margin-bottom: 8px;
+  white-space: normal;
+  word-break: break-word;
+}
+.llv2-before-after {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+.llv2-before {
+  padding: 3px 8px;
+  border-radius: 5px;
+  background: var(--color-background-secondary);
+  color: var(--color-text-tertiary);
+  word-break: break-word;
+}
+.llv2-arrow {
+  color: var(--color-text-success);
+  font-weight: 500;
+}
+.llv2-after {
+  padding: 3px 8px;
+  border-radius: 5px;
+  background: var(--color-background-success);
+  color: var(--color-text-success);
+  font-weight: 500;
+  word-break: break-word;
+}
+.llv2-tcard-impact {
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  padding-top: 6px;
+  border-top: 0.5px solid var(--color-border-tertiary);
+}
+
+.llv2-pcard {
+  background: var(--color-background-primary);
+  border: 0.5px solid var(--color-border-tertiary);
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-bottom: 8px;
+}
+.llv2-pcard-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  gap: 8px;
+}
+.llv2-pcard-title {
+  font-size: 13px;
+  font-weight: 500;
+}
+.llv2-conf-badge {
+  font-size: 10px;
+  font-weight: 500;
+  padding: 2px 7px;
+  border-radius: 8px;
+  flex-shrink: 0;
+  background: var(--color-background-success);
+  color: var(--color-text-success);
+}
+.llv2-conf-badge.medium {
+  background: var(--color-background-warning);
+  color: var(--color-text-warning);
+}
+.llv2-pcard-desc {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+  margin-bottom: 8px;
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+.llv2-suggestion {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  padding: 8px 10px;
+  background: var(--color-background-secondary);
+  border-radius: 6px;
+  border-left: 2px solid var(--color-text-success);
+  margin-bottom: 10px;
+  line-height: 1.5;
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+.llv2-pcard-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.llv2-evidence {
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  flex: 1;
+  min-width: 0;
+  white-space: normal;
+  word-break: break-word;
+}
+.llv2-apply-btn {
+  font-size: 12px;
+  padding: 5px 14px;
+  border-radius: 6px;
+  border: 0.5px solid var(--color-border-success);
+  color: var(--color-text-success);
+  background: transparent;
+  cursor: pointer;
+  font-family: inherit;
+  flex-shrink: 0;
+}
+.llv2-apply-btn:hover {
+  background: var(--color-background-success);
+}
+.llv2-empty {
+  padding: 24px;
+  text-align: center;
+  color: var(--color-text-tertiary);
+  font-size: 13px;
+  background: var(--color-background-primary);
+  border: 0.5px solid var(--color-border-tertiary);
+  border-radius: 10px;
+}
 </style>
 </head>
 <body>
@@ -2270,7 +2562,7 @@ strong { font-weight: 600; color: var(--color-text-primary); }
       <div class="panel">
         <div class="panel-head">
           <div class="panel-title">What went wrong today</div>
-          <a class="panel-link" onclick="switchTabV2('failure-modes')">See all failure modes →</a>
+          <a class="panel-link" onclick="switchTabV2('failure-modes')" style="cursor:pointer">See all failure modes →</a>
         </div>
         <div id="fm-list"><div class="fm-empty">Loading…</div></div>
       </div>
@@ -2279,7 +2571,7 @@ strong { font-weight: 600; color: var(--color-text-primary); }
         <div class="panel">
           <div class="panel-head">
             <div class="panel-title">Needs your review</div>
-            <span class="panel-link" id="esc-count-link" style="cursor:default">0 pending</span>
+            <span class="panel-link" id="esc-count-link" style="cursor:default" onclick="if (pendingEscs.length > 0) switchTabV2('escalations')">0 pending</span>
           </div>
           <div id="esc-card"><div class="esc-empty">Loading…</div></div>
         </div>
@@ -2295,7 +2587,7 @@ strong { font-weight: 600; color: var(--color-text-primary); }
     <section class="panel">
       <div class="panel-head">
         <div class="panel-title">Agent health</div>
-        <a class="panel-link" onclick="switchTabV2('agents')">See all agents →</a>
+        <a class="panel-link" onclick="switchTabV2('agents')" style="cursor:pointer">See all agents →</a>
       </div>
       <div id="agent-list"><div class="fm-empty">No agents observed yet</div></div>
     </section>
@@ -2363,12 +2655,26 @@ strong { font-weight: 600; color: var(--color-text-primary); }
 
   <!-- LEARNING LOOP ─────────────────────────────────────────────────── -->
   <div class="content v2-content" id="content-learning">
-    <div class="section-label">Detected patterns</div>
-    <div id="patterns-list"><div class="empty card">Loading patterns…</div></div>
-    <div class="section-label" style="margin-top:14px">Policy change history</div>
-    <div class="card">
-      <div class="panel-head"><div class="panel-title">Recent changes</div></div>
-      <div id="changes-list"><div class="empty">No policy changes yet</div></div>
+    <div class="llv2-page">
+      <div class="llv2-hero" id="llv2-hero">
+        <div class="llv2-hero-label">Learning loop · This week</div>
+        <div class="llv2-hero-headline" id="llv2-headline">Analyzing your agent decisions...</div>
+        <div class="llv2-hero-body" id="llv2-body"></div>
+        <div class="llv2-hero-chips" id="llv2-chips"></div>
+      </div>
+      <div class="llv2-stats-row" id="llv2-stats"></div>
+      <div class="llv2-sec-hdr">
+        <span class="llv2-sec-label">Changes applied</span>
+        <div class="llv2-sec-line"></div>
+        <span class="llv2-sec-count" id="llv2-changes-count"></span>
+      </div>
+      <div class="llv2-timeline" id="llv2-timeline"></div>
+      <div class="llv2-sec-hdr">
+        <span class="llv2-sec-label">Patterns detected</span>
+        <div class="llv2-sec-line"></div>
+        <span class="llv2-sec-count" id="llv2-patterns-count"></span>
+      </div>
+      <div id="llv2-patterns"></div>
     </div>
   </div>
 
@@ -2536,9 +2842,11 @@ function modeVariant(modeId) {
   if (!modeId) return "secondary";
   if (modeId === "prompt_injection" || modeId === "goal_hijacking" ||
       modeId === "excessive_agency") return "danger";
-  if (modeId === "policy_violation" || modeId === "high_blast_radius") return "info";
-  if (modeId === "goal_drift" || modeId === "pii_in_output" ||
-      modeId === "data_exfiltration") return "warning";
+  if (modeId === "policy_violation") return "info";
+  if (modeId === "goal_drift" || modeId === "high_blast_radius" ||
+      modeId === "pii_in_output" || modeId === "data_exfiltration") return "warning";
+  if (modeId === "session_anomaly" || modeId === "retry_storm" ||
+      modeId === "sequence_loop") return "purple";
   return "secondary";
 }
 
@@ -3058,10 +3366,12 @@ function renderEscalationCard() {
   const link = $("esc-count-link");
   if (pendingEscs.length === 0) {
     link.textContent = "0 pending";
+    link.style.cursor = "default";
     card.innerHTML = '<div class="esc-empty">✓ No pending escalations</div>';
     return;
   }
   link.textContent = pendingEscs.length + " pending";
+  link.style.cursor = "pointer";
   const e  = pendingEscs[0];
   const br = blastObj(e.blast_radius) || {};
   const id = e.id || "";
@@ -3741,7 +4051,7 @@ function auv2PillLabel(outcome) {
     blocked: "Blocked",
     allowed: "Allowed",
     escalated: "Escalated",
-    escalation_approved: "Approved",
+    escalation_approved: "Human approved",
     escalation_rejected: "Rejected",
     failed_open: "Failed open"
   };
@@ -3776,28 +4086,39 @@ function auv2Tags(d) {
 
 function auv2ScoreChips(d) {
   const chips = [];
+  // On approved/allowed outcomes the underlying scores aren't an alarm —
+  // a human (or policy) already cleared the action. Keep chips neutral
+  // unless the score is unambiguously high (>=75).
+  const outcome = (d.outcome || "").toLowerCase();
+  const benign = outcome === "allowed" || outcome === "escalation_approved";
+  const chipCls = (score, warnAt, hotAt) => {
+    if (benign) return score >= 75 ? "auv2-chip-hot" : "auv2-chip";
+    return score >= hotAt ? "auv2-chip-hot"
+         : score >= warnAt ? "auv2-chip-warm"
+         : "auv2-chip";
+  };
   if (d.risk_score != null && d.risk_score > 0) {
-    const cls = d.risk_score >= 70 ? "auv2-chip-hot"
-              : d.risk_score >= 50 ? "auv2-chip-warm" : "auv2-chip";
-    chips.push({ label: "Risk " + d.risk_score, cls });
+    chips.push({ label: "Risk " + d.risk_score, cls: chipCls(d.risk_score, 50, 70) });
   }
   if (d.injection_score != null && d.injection_score > 0) {
-    const cls = d.injection_score >= 70 ? "auv2-chip-hot"
-              : d.injection_score >= 50 ? "auv2-chip-warm" : "auv2-chip";
-    chips.push({ label: "Injection " + d.injection_score, cls });
+    chips.push({ label: "Injection " + d.injection_score, cls: chipCls(d.injection_score, 50, 70) });
   }
   if (d.drift_score != null && d.drift_score > 0) {
     chips.push({
       label: "Drift " + d.drift_score,
-      cls: d.drift_score >= 60 ? "auv2-chip-warm" : "auv2-chip"
+      cls: benign
+        ? (d.drift_score >= 75 ? "auv2-chip-hot" : "auv2-chip")
+        : (d.drift_score >= 60 ? "auv2-chip-warm" : "auv2-chip")
     });
   }
   const br = blastObj(d.blast_radius);
   if (br && br.severity && br.severity !== "low") {
     chips.push({
       label: "Blast: " + br.severity,
-      cls: br.severity === "critical" ? "auv2-chip-hot"
-         : br.severity === "high" ? "auv2-chip-warm" : "auv2-chip"
+      cls: benign
+        ? (br.severity === "critical" ? "auv2-chip-hot" : "auv2-chip")
+        : (br.severity === "critical" ? "auv2-chip-hot"
+           : br.severity === "high" ? "auv2-chip-warm" : "auv2-chip")
     });
   }
   if (d.reliability_score != null) {
@@ -3914,7 +4235,10 @@ function auv2BuildCard(d) {
     (d.reason || "");
 
   const reasonHtml = reasonText
-    ? `<div class="auv2-reason">${escHtml(reasonText)}</div>`
+    ? `<div class="auv2-reason">${escHtml(reasonText).replace(
+        /^⚠/,
+        '<span style="color:var(--color-text-warning);font-size:14px">⚠</span>'
+      )}</div>`
     : "";
 
   const chips = auv2ScoreChips(d);
@@ -4036,74 +4360,308 @@ function renderAuditV2() {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
-   Learning + Patterns + Agents (ported)
+   Learning loop tab v2 — hero narrative + stats + timeline + patterns
+   loadLearning() (still defined above) refreshes `learningChanges` for the
+   Overview tab; loadLearningV2() is the dedicated loader for this tab.
    ───────────────────────────────────────────────────────────────────────── */
-const PATTERN_LABELS = {
-  over_escalation:    "Over-escalation detected",
-  threshold_too_low:  "Threshold too conservative",
-  repeated_block:     "Repeated policy violation",
-  false_positive:     "Possible false positive",
-  prompt_improvement: "Agent needs clearer instructions",
-  policy_drift:       "Policy change made things worse",
-};
-let patternsCache = null;
-async function loadPatternsAndChanges() {
-  const ps = await safeJson(BASE + "/patterns");
-  patternsCache = (ps && ps.patterns) || [];
-  await loadLearning(); // refreshes learningChanges
-  renderPatterns(patternsCache);
-  renderChanges(learningChanges);
-}
-function renderPatterns(patterns, mountId) {
-  const wrap = $(mountId || "patterns-list");
-  if (!wrap) return;
-  if (!patterns.length) {
-    wrap.innerHTML = '<div class="empty card">No patterns detected yet — needs more decision history</div>';
-    return;
+let llv2PatternsById = {};
+
+async function loadLearningV2() {
+  try {
+    const [changesRes, patternsRes] = await Promise.all([
+      fetch(BASE + "/learning/changes"),
+      fetch(BASE + "/patterns"),
+    ]);
+    const changesData = await changesRes.json();
+    const patternsData = await patternsRes.json();
+    const changes = changesData.changes || [];
+    const patterns = patternsData.patterns || [];
+
+    // Keep the Overview consumers in sync with the latest changes.
+    learningChanges = changes;
+    renderSidebar();
+
+    // Cache patterns by id so applyPattern can POST the full object.
+    llv2PatternsById = {};
+    for (const p of patterns) if (p.id) llv2PatternsById[p.id] = p;
+
+    renderLearningV2(changes, patterns);
+  } catch (e) {
+    console.error("loadLearningV2:", e);
   }
-  wrap.innerHTML = patterns.map(p => {
-    const pct = Math.round((p.confidence || 0) * 100);
-    let confClass = "low", confLabel = "Building confidence — " + pct + "%";
-    if (pct >= 90) { confClass = "high"; confLabel = pct + "% confident — safe to apply"; }
-    else if (pct >= 70) { confClass = "mid"; confLabel = pct + "% confident — moderate"; }
-    const label = PATTERN_LABELS[p.pattern_type] || p.pattern_type;
-    const applyBtn = p.auto_applicable
-      ? `<button class="btn btn-approve" onclick='applyPattern(${JSON.stringify(p).replace(/'/g, "&#39;")})' title="Apply this improvement to the live agent policy">Apply</button>`
-      : `<span class="muted tiny">Manual review required</span>`;
-    return `<div class="card pattern-card">
-      <div class="pattern-head">
-        <div class="pattern-type">${escHtml(label)} <span class="muted tiny">· ${escHtml(p.tool_name || "")}</span></div>
-        <div class="pattern-conf ${confClass}">${escHtml(confLabel)}</div>
+}
+
+function renderLearningV2(changes, patterns) {
+  const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
+  const recentChanges = changes.filter(c => (c.applied_at || "") >= weekAgo);
+  const autoApplicable = patterns.filter(p => p.auto_applicable);
+
+  /* Hero narrative ---------------------------------------------------- */
+  const headline = $("llv2-headline");
+  const body = $("llv2-body");
+  const chips = $("llv2-chips");
+
+  if (recentChanges.length === 0 && patterns.length === 0) {
+    if (headline) headline.textContent = "No changes applied yet.";
+    if (body) body.textContent =
+      "AgentGate is monitoring your agent decisions. " +
+      "Once enough data accumulates, patterns will be detected " +
+      "and improvements suggested here.";
+    if (chips) chips.innerHTML = "";
+  } else {
+    if (headline) {
+      headline.textContent = recentChanges.length > 0
+        ? "Your agent is improving automatically."
+        : "Patterns detected — review suggested changes.";
+    }
+
+    let bodyText = "";
+    if (recentChanges.length > 0) {
+      const c = recentChanges[0];
+      const tool = c.tool_name || "your agent";
+      const action = (c.action || "").replace(/_/g, " ");
+      const before = c.before_value ?? "—";
+      const after = c.after_value ?? "—";
+      bodyText = "AgentGate analyzed decisions this week and applied " +
+        "<strong>" + recentChanges.length + " change" +
+        (recentChanges.length !== 1 ? "s" : "") + "</strong> automatically. ";
+      if (c.action === "raise_threshold") {
+        bodyText += "The escalation threshold for <strong>" + escHtml(tool) +
+          "</strong> was raised from " + escHtml(String(before)) +
+          " to " + escHtml(String(after)) +
+          " based on consistent human approvals — your team will review " +
+          "fewer routine actions going forward.";
+      } else {
+        bodyText += "The most recent change updated <strong>" +
+          escHtml(tool) + "</strong> (" + escHtml(action) + ": " +
+          escHtml(String(before)) + " → " + escHtml(String(after)) + ").";
+      }
+    } else {
+      bodyText = "AgentGate detected <strong>" + patterns.length +
+        " pattern" + (patterns.length !== 1 ? "s" : "") +
+        "</strong> in your agent decisions. Review the suggestions below " +
+        "and apply them to improve reliability.";
+    }
+    if (body) body.innerHTML = bodyText;
+
+    const chipItems = [];
+    if (recentChanges.length > 0) {
+      chipItems.push({
+        label: recentChanges.length + " change" +
+          (recentChanges.length !== 1 ? "s" : "") + " applied",
+        cls: "green",
+      });
+      chipItems.push({ label: "0 manual edits needed", cls: "green" });
+    }
+    if (autoApplicable.length > 0) {
+      chipItems.push({
+        label: autoApplicable.length + " pattern" +
+          (autoApplicable.length !== 1 ? "s" : "") + " pending review",
+        cls: "amber",
+      });
+    }
+    if (chips) {
+      chips.innerHTML = chipItems.map(c =>
+        `<div class="llv2-chip ${c.cls}">
+           <div class="llv2-chip-dot"></div>
+           ${escHtml(c.label)}
+         </div>`).join("");
+    }
+  }
+
+  /* Stats row --------------------------------------------------------- */
+  const statsEl = $("llv2-stats");
+  if (statsEl) {
+    const totalChanges = changes.length;
+    const pending = autoApplicable.length;
+    statsEl.innerHTML = `
+      <div class="llv2-stat">
+        <div class="llv2-stat-num" style="color:${recentChanges.length > 0
+          ? 'var(--color-text-success)' : 'var(--color-text-primary)'}">
+          ${recentChanges.length}
+        </div>
+        <div class="llv2-stat-lbl">Changes this week</div>
       </div>
-      <div class="pattern-desc">${escHtml(p.description || "")}</div>
-      <div class="pattern-suggestion">${escHtml(p.suggestion || "")}</div>
-      <div class="esc-actions">${applyBtn}</div>
-    </div>`;
-  }).join("");
+      <div class="llv2-stat">
+        <div class="llv2-stat-num">${totalChanges}</div>
+        <div class="llv2-stat-lbl">Total changes applied</div>
+      </div>
+      <div class="llv2-stat">
+        <div class="llv2-stat-num" style="color:${pending > 0
+          ? 'var(--color-text-warning)' : 'var(--color-text-primary)'}">
+          ${pending}
+        </div>
+        <div class="llv2-stat-lbl">Patterns pending</div>
+      </div>
+      <div class="llv2-stat">
+        <div class="llv2-stat-num">0</div>
+        <div class="llv2-stat-lbl">Changes reverted</div>
+      </div>`;
+  }
+
+  /* Changes timeline -------------------------------------------------- */
+  const changesCount = $("llv2-changes-count");
+  if (changesCount) {
+    changesCount.textContent = recentChanges.length + " this week";
+  }
+
+  const timeline = $("llv2-timeline");
+  if (timeline) {
+    if (recentChanges.length === 0) {
+      timeline.innerHTML =
+        '<div class="llv2-empty">No changes applied this week yet.</div>';
+    } else {
+      timeline.innerHTML = recentChanges.map(c => {
+        const tool = c.tool_name || "policy";
+        const action = (c.action || "unknown").replace(/_/g, " ");
+        const before = c.before_value ?? "—";
+        const after = c.after_value ?? "—";
+        const when = c.applied_at ? timeAgo(c.applied_at) : "";
+
+        const iconCls =
+          c.action === "raise_threshold" ? "llv2-icon-up" :
+          c.action === "increase_timeout" ? "llv2-icon-time" :
+          "llv2-icon-rule";
+        const iconChar =
+          c.action === "raise_threshold" ? "↑" :
+          c.action === "increase_timeout" ? "⏱" :
+          "+";
+
+        const title =
+          c.action === "raise_threshold"   ? "Threshold raised — " + tool :
+          c.action === "increase_timeout"  ? "Timeout updated — " + tool :
+          c.action === "add_policy_rule"   ? "Policy rule added — " + tool :
+          action + " — " + tool;
+
+        let desc;
+        if (c.metrics_before) {
+          try {
+            const m = typeof c.metrics_before === "string"
+              ? JSON.parse(c.metrics_before)
+              : c.metrics_before;
+            if (c.action === "raise_threshold") {
+              const esc = m.escalation_rate || 0;
+              const total = m.total || 0;
+              desc = "Based on " + total + " decisions with " + esc +
+                "% escalation rate. Threshold raised to p90 of approved amounts.";
+            } else {
+              desc = "Metrics before change: " + JSON.stringify(m);
+            }
+          } catch (e) {
+            desc = "Policy updated automatically based on observed patterns.";
+          }
+        } else {
+          desc = "Policy updated automatically based on observed patterns.";
+        }
+
+        const isThreshold = c.action === "raise_threshold";
+        const isTimeout = c.action === "increase_timeout";
+        const beforeLabel = isThreshold ? "$" + before
+                          : isTimeout ? before + "s"
+                          : String(before);
+        const afterLabel  = isThreshold ? "$" + after
+                          : isTimeout ? after + "s"
+                          : String(after);
+
+        return `
+          <div class="llv2-titem">
+            <div class="llv2-ticon ${iconCls}">${iconChar}</div>
+            <div class="llv2-tbody">
+              <div class="llv2-tcard">
+                <div class="llv2-tcard-top">
+                  <div class="llv2-tcard-title">${escHtml(title)}</div>
+                  <div class="llv2-tcard-time">${escHtml(when)}</div>
+                </div>
+                <div class="llv2-tcard-desc">${escHtml(desc)}</div>
+                <div class="llv2-before-after">
+                  <span class="llv2-before">${escHtml(beforeLabel)}</span>
+                  <span class="llv2-arrow">→</span>
+                  <span class="llv2-after">${escHtml(afterLabel)}</span>
+                </div>
+              </div>
+            </div>
+          </div>`;
+      }).join("");
+    }
+  }
+
+  /* Patterns ---------------------------------------------------------- */
+  const patternsCount = $("llv2-patterns-count");
+  if (patternsCount) {
+    patternsCount.textContent = patterns.length + " detected";
+  }
+
+  const patternsEl = $("llv2-patterns");
+  if (patternsEl) {
+    if (patterns.length === 0) {
+      patternsEl.innerHTML =
+        '<div class="llv2-empty">✓ No patterns detected right now. AgentGate is monitoring.</div>';
+    } else {
+      patternsEl.innerHTML = patterns.map(p => {
+        const conf = Math.round((p.confidence || 0) * 100);
+        const confCls = conf >= 75 ? "" : "medium";
+        const title = p.description
+          ? p.description.split(";")[0].slice(0, 60)
+          : (p.pattern_type || "Pattern").replace(/_/g, " ");
+        const desc = p.description || "";
+        const suggestion = p.suggestion || "";
+        const evidence = p.evidence
+          ? Object.entries(p.evidence)
+              .map(([k, v]) => k.replace(/_/g, " ") + ": " + v).join(" · ")
+          : "";
+        const canApply = p.auto_applicable;
+        const safeId = escHtml(p.id || "");
+
+        return `
+          <div class="llv2-pcard">
+            <div class="llv2-pcard-top">
+              <div class="llv2-pcard-title">${escHtml(title)}</div>
+              <span class="llv2-conf-badge ${confCls}">${conf}% confidence</span>
+            </div>
+            <div class="llv2-pcard-desc">${escHtml(desc)}</div>
+            ${suggestion ? `<div class="llv2-suggestion">${escHtml(suggestion)}</div>` : ""}
+            <div class="llv2-pcard-footer">
+              <span class="llv2-evidence">${escHtml(evidence)}</span>
+              ${canApply ? `<button class="llv2-apply-btn" onclick="applyPattern('${safeId}', this)">Apply suggestion</button>` : ""}
+            </div>
+          </div>`;
+      }).join("");
+    }
+  }
 }
-async function applyPattern(p) {
-  const r = await fetch(BASE + "/patterns/apply", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(p),
-  });
-  if (r.ok) { toast("Pattern applied"); loadPatternsAndChanges(); }
-  else      { toast("Apply failed"); }
-}
-function renderChanges(changes) {
-  const wrap = $("changes-list");
-  if (!wrap) return;
-  if (!changes.length) {
-    wrap.innerHTML = '<div class="empty">No policy changes yet</div>';
+
+/* applyPattern — POSTs the cached pattern object to /patterns/apply.
+   The backend expects the full Pattern shape (id, pattern_type, tool_name,
+   suggested_action, etc.), not just an id. */
+async function applyPattern(patternId, btn) {
+  if (!patternId) return;
+  const pattern = llv2PatternsById[patternId];
+  if (!pattern) {
+    if (btn) { btn.textContent = "Not found"; btn.disabled = true; }
     return;
   }
-  wrap.innerHTML = changes.map(c => `
-    <div style="padding:12px 16px;border-top:0.5px solid var(--color-border-tertiary);font-size:12px;display:grid;grid-template-columns:90px 1fr 2fr 2fr;gap:12px">
-      <div class="muted tiny">${escHtml(timeAgo(c.applied_at))}</div>
-      <div>${escHtml(c.tool_name || "—")}</div>
-      <div class="muted">${escHtml(c.action || "")}</div>
-      <div class="muted tiny">${escHtml(c.before_value || "—")} → ${escHtml(c.after_value || "—")}</div>
-    </div>`).join("");
+  if (btn) { btn.disabled = true; btn.textContent = "Applying..."; }
+  try {
+    const res = await fetch(BASE + "/patterns/apply", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(pattern),
+    });
+    if (res.ok) {
+      if (btn) {
+        btn.textContent = "Applied ✓";
+        btn.style.color = "var(--color-text-success)";
+      }
+      toast("Pattern applied");
+      setTimeout(() => loadLearningV2(), 1000);
+    } else {
+      if (btn) { btn.textContent = "Failed"; btn.disabled = false; }
+      toast("Apply failed");
+    }
+  } catch (e) {
+    if (btn) { btn.textContent = "Error"; btn.disabled = false; }
+    toast("Apply error");
+  }
 }
 const ISSUE_LABELS = {
   injection:           "Injection attempt detected",
@@ -4371,7 +4929,7 @@ function switchTabV2(tabName) {
   else if (tabName === "failure-modes"){ loadFmV2(); }
   else if (tabName === "escalations")  { loadEscalations().then(() => { loadResolvedEscalations().then(renderEscTab); }); }
   else if (tabName === "audit")        renderAuditV2();
-  else if (tabName === "learning")     loadPatternsAndChanges();
+  else if (tabName === "learning")     loadLearningV2();
   else if (tabName === "agents")       renderAgentsV2();
 }
 

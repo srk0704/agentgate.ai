@@ -1,9 +1,10 @@
 from __future__ import annotations
+import json
+import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from typing import Any
-import uuid
 
 
 class Effect(str, Enum):
@@ -94,11 +95,15 @@ class Decision:
         Compute unified reliability score 0-100. Higher = healthier.
 
         Algorithm: collect all non-None component scores (where higher = worse),
-        find the worst, invert it to 100 - worst. Map to a plain-English summary band:
-          90-100 → Healthy
-          70-89  → Caution: elevated <name>
-          40-69  → Degraded: high <name> score
-          0-39   → Critical: <name> detected
+        find the worst, invert it to 100 - worst.
+
+        The summary is a JSON string with four dimensions — overall, safety,
+        consistency, caution — each carrying a 0-100 score and a plain-English
+        label. The "overall" score equals the returned integer score.
+          90-100 → Healthy band
+          70-89  → Caution band
+          40-69  → Degraded band
+          0-39   → Critical band
         """
         scores = {
             "injection": injection_score,
@@ -110,19 +115,84 @@ class Decision:
         active = {k: v for k, v in scores.items() if v is not None and v > 0}
 
         if not active:
-            return (100, "Healthy")
+            return (100, json.dumps({
+                "overall": {"score": 100,
+                            "label": "Agent is operating reliably"},
+                "safety": {"score": 100,
+                           "label": "No injection or drift detected"},
+                "consistency": {"score": 100,
+                                "label": "Behavior is consistent and predictable"},
+                "caution": {"score": 100,
+                            "label": "Actions are within normal risk bounds"},
+            }, separators=(",", ":")))
 
         worst_name = max(active, key=lambda k: active[k])
         worst_score = active[worst_name]
         reliability = max(0, 100 - worst_score)
 
-        if reliability >= 90:
-            summary = "Healthy"
-        elif reliability >= 70:
-            summary = f"Caution: elevated {worst_name}"
-        elif reliability >= 40:
-            summary = f"Degraded: high {worst_name} score"
+        # Dimension 1: Safety — injection + drift (how well is the agent
+        # resisting attacks and staying within its task?).
+        safety_inputs = {k: v for k, v in active.items()
+                         if k in ("injection", "drift")}
+        safety_worst = max(safety_inputs.values()) if safety_inputs else 0
+        safety_score = max(0, 100 - safety_worst)
+        safety_driver = (max(safety_inputs, key=safety_inputs.get)
+                         if safety_inputs else "signal")
+        if safety_score >= 90:
+            safety_label = "No injection or drift detected"
+        elif safety_score >= 70:
+            safety_label = f"Elevated {safety_driver} signal — monitor closely"
+        elif safety_score >= 40:
+            safety_label = f"High {safety_driver} score — review recent actions"
         else:
-            summary = f"Critical: {worst_name} detected"
+            safety_label = f"Critical {safety_driver} detected — immediate review needed"
+
+        # Dimension 2: Consistency — loop + anomaly (is the agent behaving
+        # predictably across calls?).
+        consistency_inputs = {k: v for k, v in active.items()
+                              if k in ("loop", "anomaly")}
+        consistency_worst = (max(consistency_inputs.values())
+                             if consistency_inputs else 0)
+        consistency_score = max(0, 100 - consistency_worst)
+        consistency_driver = (max(consistency_inputs, key=consistency_inputs.get)
+                              if consistency_inputs else "signal")
+        if consistency_score >= 90:
+            consistency_label = "Behavior is consistent and predictable"
+        elif consistency_score >= 70:
+            consistency_label = f"Slight {consistency_driver} pattern — watch for escalation"
+        elif consistency_score >= 40:
+            consistency_label = f"Inconsistent behavior detected via {consistency_driver}"
+        else:
+            consistency_label = f"Severe {consistency_driver} pattern — agent may be stuck"
+
+        # Dimension 3: Caution — risk alone (how risky are the actions being taken?).
+        caution_raw = active.get("risk", 0)
+        caution_score = max(0, 100 - caution_raw)
+        if caution_score >= 90:
+            caution_label = "Actions are within normal risk bounds"
+        elif caution_score >= 70:
+            caution_label = "Moderate risk detected — verify action intent"
+        elif caution_score >= 40:
+            caution_label = "High-risk action taken — human review recommended"
+        else:
+            caution_label = "Critical risk level — action may cause significant harm"
+
+        # Dimension 4: Overall — composite of all signals (same as reliability).
+        if reliability >= 90:
+            overall_label = "Agent is operating reliably"
+        elif reliability >= 70:
+            overall_label = f"Caution: elevated {worst_name} signal"
+        elif reliability >= 40:
+            overall_label = f"Degraded: high {worst_name} score detected"
+        else:
+            overall_label = f"Critical: {worst_name} signal at dangerous level"
+
+        summary = json.dumps({
+            "overall": {"score": reliability, "label": overall_label},
+            "safety": {"score": safety_score, "label": safety_label},
+            "consistency": {"score": consistency_score,
+                            "label": consistency_label},
+            "caution": {"score": caution_score, "label": caution_label},
+        }, separators=(",", ":"))
 
         return (reliability, summary)
