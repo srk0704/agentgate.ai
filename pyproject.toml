@@ -3,7 +3,20 @@ name = "agentgate"
 version = "0.6.0"
 description = "AgentGate: Agent reliability infrastructure — monitoring, control, and continuous improvement for production AI agents"
 authors = ["Siddhant Kumar <sk4975@columbia.edu>"]
-package-mode = false
+license = "MIT"
+readme = "README.md"
+package-mode = true
+packages = [{ include = "agentgate" }]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Software Development :: Libraries",
+    "Topic :: Security",
+]
 
 [tool.poetry.dependencies]
 python = "^3.9"
