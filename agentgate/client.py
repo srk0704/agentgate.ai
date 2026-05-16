@@ -521,6 +521,18 @@ class GatewayClient:
         await self._audit.log_pii_scan(agent_id, tool_name, result)
         return result
 
+    async def close(self) -> None:
+        """Best-effort teardown for tests and short-lived embeds.
+
+        Internal collaborators (AuditLogger, SessionTracker, EscalationQueue)
+        all open aiosqlite connections per-call and close them in ``async
+        with`` blocks, so there's nothing per-instance to drain today. The
+        hook exists so test fixtures can ``await gate.close()`` in their
+        ``yield`` teardown without an AttributeError, and so future
+        connection-pooled scorers have an explicit close path to plug into.
+        """
+        return None
+
     def guarded(self, fn: Callable) -> Callable:
         """
         Decorator for sync or async functions.
