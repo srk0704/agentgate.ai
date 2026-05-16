@@ -46,6 +46,15 @@ class AnomalyScorer:
         # Default 60: matches the canonical "calls per minute" framing used in
         # payment-fraud and API rate-limit literature.
         self._velocity_window_sec = int(os.getenv("AGENTGATE_ANOMALY_VELOCITY_WINDOW_SEC", "60"))
+        # Reject configurations that would silently no-op. The downstream
+        # session-stats query operates in minutes, so a sub-minute window has
+        # no representable value to map to and previously got clamped — which
+        # made the env var look like it worked while doing nothing.
+        if self._velocity_window_sec < 60:
+            raise ValueError(
+                "AGENTGATE_ANOMALY_VELOCITY_WINDOW_SEC must be >= 60, "
+                f"got {self._velocity_window_sec}"
+            )
 
     async def score(self, tool_call: ToolCall) -> tuple[int, str]:
         """
@@ -66,7 +75,7 @@ class AnomalyScorer:
     async def _compute(self, tool_call: ToolCall) -> tuple[int, str]:
         stats = await self._tracker.get_session_stats(
             agent_id=tool_call.agent_id,
-            window_minutes=max(self._velocity_window_sec // 60, 5),
+            window_minutes=max(self._velocity_window_sec // 60, 1),
             session_id=tool_call.session_id,
         )
 
