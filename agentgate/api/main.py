@@ -1,9 +1,13 @@
 from __future__ import annotations
 import asyncio
+import json
 import logging
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
+
+import aiosqlite
 
 from dotenv import load_dotenv
 # override=False so explicit env vars (e.g. set on the uvicorn command line or
@@ -74,6 +78,33 @@ def _audit() -> AuditLogger:
     return AuditLogger(db_path)
 
 
+def _parse_financial_impact(blast_radius_json: str | None) -> float:
+    """Coerce the `financial_impact` field on a stored blast_radius blob.
+
+    The blast-radius estimator writes one of:
+      {"financial_impact": "unknown", ...}
+      {"financial_impact": "$50,000", ...}
+      {"financial_impact": 50000, ...}
+    Returns 0.0 for unknown / missing / unparseable values so callers can
+    safely sum across rows without an extra None check.
+    """
+    if not blast_radius_json:
+        return 0.0
+    try:
+        br = json.loads(blast_radius_json)
+        fi = br.get("financial_impact", 0)
+        if isinstance(fi, (int, float)):
+            return float(fi)
+        if isinstance(fi, str):
+            cleaned = fi.replace("$", "").replace(",", "").strip()
+            if cleaned.lower() in ("unknown", "none", ""):
+                return 0.0
+            return float(cleaned)
+    except Exception:
+        return 0.0
+    return 0.0
+
+
 # ---------------------------------------------------------------------------
 # Dashboard
 # ---------------------------------------------------------------------------
@@ -133,11 +164,35 @@ async def dashboard_stats(since: Optional[str] = Query(default=None)) -> dict:
                 flagged[key] = d
     flagged_sessions = sorted(flagged.values(), key=lambda x: x["anomaly_score"], reverse=True)
 
+    # Financial impact protected today: sum financial_impact across every
+    # escalated decision (pending + resolved). The dashboard's FINANCIAL
+    # PROTECTED card needs a server-computed total so it doesn't depend on
+    # whatever subset of decisions happens to be loaded client-side.
+    today_start = datetime.now(timezone.utc).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    ).isoformat()
+    db_path = os.getenv("AGENTGATE_DB_PATH", "./agentgate.db")
+    financial_protected = 0.0
+    try:
+        async with aiosqlite.connect(db_path) as db:
+            async with db.execute(
+                """SELECT blast_radius FROM audit_log
+                   WHERE decided_at >= ?
+                     AND outcome IN ('escalated', 'escalation_approved',
+                                     'escalation_rejected')""",
+                (today_start,),
+            ) as cursor:
+                rows = await cursor.fetchall()
+        financial_protected = sum(_parse_financial_impact(r[0]) for r in rows)
+    except Exception as e:
+        logger.warning("financial_protected_today query failed: %s", e)
+
     return {
         **stats,
         "recent_decisions": recent,
         "pending_escalations": pending_only,
         "flagged_sessions": flagged_sessions,
+        "financial_protected_today": financial_protected,
     }
 
 

@@ -2778,6 +2778,11 @@ let learningChanges    = [];
 let timeRange          = "today";
 let activePage         = "overview";
 let refreshTimer       = null;
+// Latest payload from /dashboard/stats. The financial_protected_today
+// field is server-computed and authoritative for the FINANCIAL PROTECTED
+// card; the client used to estimate it from whatever decisions happened
+// to be loaded, which under-counted whenever recent() was windowed.
+let serverStats        = null;
 
 const RANGE_LABEL = {
   today:    "today",
@@ -2839,7 +2844,7 @@ function initialsFor(id) {
 function fmtMoneyShort(n) {
   if (!n || n <= 0) return "$0";
   if (n >= 1000000) return "$" + (n / 1000000).toFixed(1) + "M";
-  if (n >= 1000)    return "$" + Math.round(n).toLocaleString();
+  if (n >= 1000)    return "$" + Math.round(n / 1000) + "k";
   return "$" + Math.round(n);
 }
 function blastObj(b) {
@@ -2911,6 +2916,7 @@ async function loadEscalations() {
   // the function on its happy path.
   const since = rangeCutoffISO(timeRange) || new Date(Date.now() - 30 * 86400000).toISOString();
   const s = await safeJson(BASE + "/dashboard/stats?since=" + encodeURIComponent(since));
+  serverStats = s || null;
   pendingEscs = (s && s.pending_escalations) || [];
   renderSidebar();
   renderV2Overview();
@@ -3052,9 +3058,14 @@ function renderHero(filtered) {
   const total = filtered.length;
   const unsafe = blocked + escalated;
   const approved = filtered.filter(d => d.outcome === "escalation_approved").length;
-  const prevented = filtered
-    .filter(d => d.outcome === "blocked" || d.outcome === "escalation_approved")
-    .reduce((s, d) => s + _impactDollars(d), 0);
+  const serverPrevented = serverStats && typeof serverStats.financial_protected_today === "number"
+    ? serverStats.financial_protected_today
+    : null;
+  const prevented = serverPrevented !== null
+    ? serverPrevented
+    : filtered
+        .filter(d => d.outcome === "blocked" || d.outcome === "escalation_approved")
+        .reduce((s, d) => s + _impactDollars(d), 0);
 
   const agentName = (Object.keys(agentHealth)[0]) || "Your agent";
   const avg = _avgHealth();
@@ -3131,9 +3142,17 @@ function renderKpis(filtered) {
   const escalated = filtered.filter(d => (d.outcome || "").startsWith("escalat")).length;
   const total = filtered.length;
   const unsafe = blocked + escalated;
-  const prevented = filtered
-    .filter(d => d.outcome === "blocked" || d.outcome === "escalation_approved")
-    .reduce((s, d) => s + _impactDollars(d), 0);
+  // Prefer the server-computed total (sums across every escalated decision
+  // today, not just the slice loaded into allDecisions). Fall back to the
+  // client estimate until the first /dashboard/stats response lands.
+  const serverPrevented = serverStats && typeof serverStats.financial_protected_today === "number"
+    ? serverStats.financial_protected_today
+    : null;
+  const prevented = serverPrevented !== null
+    ? serverPrevented
+    : filtered
+        .filter(d => d.outcome === "blocked" || d.outcome === "escalation_approved")
+        .reduce((s, d) => s + _impactDollars(d), 0);
 
   const unsafeEl = $("kpi-unsafe");
   unsafeEl.textContent = unsafe;

@@ -1307,6 +1307,9 @@ let activeTab      = "overview";
 let piiFindingsToday = 0;
 let learningChangesCount = 0;
 let timeRange      = "today";
+// Latest /dashboard/stats payload; financial_protected_today is the
+// server-computed total used by the FINANCIAL IMPACT PREVENTED card.
+let serverStats    = null;
 
 const RANGE_LABEL = {
   today:    "today",
@@ -1371,7 +1374,7 @@ function fmt$(n) {
 function fmtMoneyShort(n) {
   if (!n || n <= 0) return "$0";
   if (n >= 1000000) return "$" + (n/1000000).toFixed(1) + "M";
-  if (n >= 1000)    return "$" + Math.round(n).toLocaleString();
+  if (n >= 1000)    return "$" + Math.round(n / 1000) + "k";
   return "$" + Math.round(n);
 }
 function blastObj(b) {
@@ -1653,7 +1656,12 @@ function renderKpis() {
   $("kpi-biz-unsafe-sub").textContent =
     "of " + total + " total call" + (total === 1 ? "" : "s") + " " + lbl;
 
-  const prevented = preventedSum(filtered);
+  // Server-computed financial_protected_today is authoritative (sums every
+  // escalated decision today, not just the slice loaded into allDecisions).
+  const serverPrevented = serverStats && typeof serverStats.financial_protected_today === "number"
+    ? serverStats.financial_protected_today
+    : null;
+  const prevented = serverPrevented !== null ? serverPrevented : preventedSum(filtered);
   $("kpi-biz-financial-value").textContent = prevented > 0 ? fmtMoneyShort(prevented) : "$0";
 
   $("kpi-biz-resolved-value").textContent = approved;
@@ -1859,6 +1867,7 @@ function renderFailureModes() {
    ───────────────────────────────────────────────────────────────────────── */
 async function loadEscalations() {
   const stats = await safeJson(BASE + "/dashboard/stats");
+  serverStats = stats || null;
   if (stats && Array.isArray(stats.pending_escalations)) {
     pendingEscs = stats.pending_escalations;
   }
