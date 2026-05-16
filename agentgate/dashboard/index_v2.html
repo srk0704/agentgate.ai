@@ -2730,6 +2730,40 @@ strong { font-weight: 600; color: var(--color-text-primary); }
 const BASE    = window.location.origin;
 const WS_BASE = BASE.replace(/^http/, "ws");
 
+/* ── API key wiring ───────────────────────────────────────────────────────
+   When AGENTGATE_API_KEY is set on the server, every protected endpoint
+   requires the X-API-Key header. The dashboard stores the operator-entered
+   key in sessionStorage so refreshes keep it but a new tab starts clean.
+   On 401 we prompt for the key and reload so every in-flight loader retries
+   with the new header. */
+let _agApiKey = sessionStorage.getItem("ag_api_key") || "";
+
+function handleAuthError() {
+  const key = prompt(
+    "AgentGate API key required.\n" +
+    "Enter your AGENTGATE_API_KEY:"
+  );
+  if (key) {
+    _agApiKey = key;
+    sessionStorage.setItem("ag_api_key", key);
+    location.reload();
+  }
+}
+
+async function agFetch(url, opts = {}) {
+  const headers = {
+    "Content-Type": "application/json",
+    ...(opts.headers || {}),
+  };
+  if (_agApiKey) headers["X-API-Key"] = _agApiKey;
+  const res = await fetch(url, { ...opts, headers });
+  if (res.status === 401) {
+    handleAuthError();
+    throw new Error("Unauthorized");
+  }
+  return res;
+}
+
 const AGENT_DESCRIPTIONS = {
   "finmate-prod": "Enterprise financial operations · refunds, invoices, budgets",
   "default":      "AI agent",
@@ -2828,7 +2862,7 @@ function toast(msg) {
 }
 async function safeJson(url, opts) {
   try {
-    const r = await fetch(url, opts);
+    const r = await agFetch(url, opts);
     if (!r.ok) return null;
     return await r.json();
   } catch { return null; }
@@ -3491,7 +3525,7 @@ function renderAgentList(filtered) {
 
 /* ── Escalation approve/reject ─────────────────────────────────────────── */
 async function resolveEsc(id, action) {
-  const r = await fetch(BASE + "/escalations/" + id + "/" + action, {
+  const r = await agFetch(BASE + "/escalations/" + id + "/" + action, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ reason: "" }),
@@ -3769,8 +3803,8 @@ function fmv2BuildSparkline(canvasId, data, color) {
 async function loadFmV2() {
   try {
     const [catRes, statsRes] = await Promise.all([
-      fetch(BASE + "/failure-modes"),
-      fetch(BASE + "/failure-modes/stats")  // no since: all-time `total`
+      agFetch(BASE + "/failure-modes"),
+      agFetch(BASE + "/failure-modes/stats")  // no since: all-time `total`
     ]);
     fmCatalog  = await catRes.json();
     fmTabStats = await statsRes.json();
@@ -4369,8 +4403,8 @@ let llv2PatternsById = {};
 async function loadLearningV2() {
   try {
     const [changesRes, patternsRes] = await Promise.all([
-      fetch(BASE + "/learning/changes"),
-      fetch(BASE + "/patterns"),
+      agFetch(BASE + "/learning/changes"),
+      agFetch(BASE + "/patterns"),
     ]);
     const changesData = await changesRes.json();
     const patternsData = await patternsRes.json();
@@ -4642,7 +4676,7 @@ async function applyPattern(patternId, btn) {
   }
   if (btn) { btn.disabled = true; btn.textContent = "Applying..."; }
   try {
-    const res = await fetch(BASE + "/patterns/apply", {
+    const res = await agFetch(BASE + "/patterns/apply", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(pattern),

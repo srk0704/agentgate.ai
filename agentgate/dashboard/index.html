@@ -1237,6 +1237,38 @@ button { font-family: inherit; cursor: pointer; }
    ───────────────────────────────────────────────────────────────────────── */
 const BASE    = window.location.origin;
 const WS_BASE = BASE.replace(/^http/, "ws");
+
+/* ── API key wiring (mirror of v2 dashboard) ─────────────────────────────
+   Operator-entered key kept in sessionStorage so refreshes keep it but a
+   new tab starts clean. On 401 we prompt and reload so every loader picks
+   up the new header. */
+let _agApiKey = sessionStorage.getItem("ag_api_key") || "";
+
+function handleAuthError() {
+  const key = prompt(
+    "AgentGate API key required.\n" +
+    "Enter your AGENTGATE_API_KEY:"
+  );
+  if (key) {
+    _agApiKey = key;
+    sessionStorage.setItem("ag_api_key", key);
+    location.reload();
+  }
+}
+
+async function agFetch(url, opts = {}) {
+  const headers = {
+    "Content-Type": "application/json",
+    ...(opts.headers || {}),
+  };
+  if (_agApiKey) headers["X-API-Key"] = _agApiKey;
+  const res = await fetch(url, { ...opts, headers });
+  if (res.status === 401) {
+    handleAuthError();
+    throw new Error("Unauthorized");
+  }
+  return res;
+}
 const HEADERS = {};
 
 const AGENT_DESCRIPTIONS = {
@@ -1354,7 +1386,7 @@ function toast(msg) {
 }
 async function safeJson(url, opts) {
   try {
-    const r = await fetch(url, opts);
+    const r = await agFetch(url, opts);
     if (!r.ok) return null;
     return await r.json();
   } catch { return null; }
@@ -1989,7 +2021,7 @@ async function resolveEsc(id, action, ev) {
   if (ev) ev.stopPropagation();
   const noteInput = $("note-" + id);
   const note = noteInput ? noteInput.value : "";
-  const r = await fetch(BASE + "/escalations/" + id + "/" + action, {
+  const r = await agFetch(BASE + "/escalations/" + id + "/" + action, {
     method: "POST",
     headers: {...HEADERS, "Content-Type": "application/json"},
     body: JSON.stringify({reason: note}),
@@ -2194,7 +2226,7 @@ function renderPatterns(patterns) {
   }).join("");
 }
 async function applyPattern(p) {
-  const r = await fetch(BASE + "/patterns/apply", {
+  const r = await agFetch(BASE + "/patterns/apply", {
     method: "POST",
     headers: {...HEADERS, "Content-Type": "application/json"},
     body: JSON.stringify(p),
