@@ -18,6 +18,9 @@ policies:
       tool: dangerous_operation
     effect: escalate
     reason: "Dangerous operations require approval"
+  - name: allow_default
+    effect: allow
+    reason: "Permitted by default in test fixture"
 """)
     db_path = str(tmp_path / "test.db")
     EscalationQueue.configure(db_path)

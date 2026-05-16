@@ -51,6 +51,9 @@ policies:
         value: 100
     effect: escalate
     reason: "Refund >= $100 requires approval"
+  - name: allow_default
+    effect: allow
+    reason: "Permitted by default in test fixture"
 """)
     from agentgate.escalation import EscalationQueue
     EscalationQueue.configure(str(tmp_path / "test.db"))
@@ -78,6 +81,9 @@ policies:
         values: [compliance, admin]
     effect: block
     reason: "Export restricted to compliance and admin"
+  - name: allow_default
+    effect: allow
+    reason: "Permitted by default in test fixture"
 """)
     from agentgate.escalation import EscalationQueue
     EscalationQueue.configure(str(tmp_path / "test.db"))
@@ -91,9 +97,15 @@ policies:
 
 @pytest.fixture
 def gate_empty(tmp_path):
-    """Gate with no policies."""
+    """Gate with a permissive default — exercises the no-policy-block path
+    so scoring / blast-radius / injection still runs."""
     p = tmp_path / "p.yaml"
-    p.write_text("policies: []\n")
+    p.write_text("""
+policies:
+  - name: allow_default
+    effect: allow
+    reason: "Permitted by default in test fixture"
+""")
     from agentgate.escalation import EscalationQueue
     EscalationQueue.configure(str(tmp_path / "test.db"))
     EscalationQueue._initialized = False
@@ -233,7 +245,12 @@ async def test_pii_in_output_after_allowed_action(tmp_path):
     Read-only tool → recommendation: redact.
     """
     p = tmp_path / "p.yaml"
-    p.write_text("policies: []\n")
+    p.write_text("""
+policies:
+  - name: allow_default
+    effect: allow
+    reason: "Permitted by default in test fixture"
+""")
     gate = GatewayClient(
         policy_path=str(p),
         db_path=str(tmp_path / "test.db"),

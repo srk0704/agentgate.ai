@@ -180,6 +180,13 @@ class TestGoalDrift:
         """
         relaxed = [p for p in DEFAULT_POLICIES
                    if p["name"] not in ("block_export_customer_data", "block_export_financials")]
+        # Add an explicit allow so the (now default-deny) policy evaluator
+        # doesn't short-circuit before drift scoring runs.
+        relaxed = relaxed + [
+            {"name": "allow_export_customer_data",
+             "match": {"tool": "export_customer_data"},
+             "effect": "allow"},
+        ]
         gate = make_gate(policies=relaxed)
         tc = make_tool_call(
             tool_name="export_customer_data",

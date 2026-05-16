@@ -36,6 +36,7 @@ class PolicyLoader:
         self.path = Path(path)
         self._policies: list[dict] = []
         self._observer: Any = None
+        self._load_failed: bool = False
         self._load()
 
     @classmethod
@@ -45,18 +46,38 @@ class PolicyLoader:
         instance.path = Path(":memory:")
         instance._policies = policies
         instance._observer = None
+        instance._load_failed = False
         return instance
 
     _VALID_EFFECTS = frozenset({"allow", "block", "escalate"})
 
     def _load(self) -> None:
+        # Fail closed on any load error — empty / missing / malformed YAML
+        # must NOT be silently treated as "no policies" because that would let
+        # every request through under the default-deny evaluator below.
         if not self.path.exists():
+            self._load_failed = True
             self._policies = []
+            logger.error(
+                "Policy file not found at %s — all requests will be DENIED "
+                "until policy is in place.",
+                self.path,
+            )
             return
-        with open(self.path) as f:
-            data = yaml.safe_load(f) or {}
-        raw = data.get("policies", [])
-        self._policies = self._validate(raw)
+        try:
+            with open(self.path) as f:
+                data = yaml.safe_load(f) or {}
+            raw = data.get("policies", [])
+            self._policies = self._validate(raw)
+            self._load_failed = False
+        except Exception as e:
+            self._load_failed = True
+            self._policies = []
+            logger.error(
+                "Policy file failed to load: %s — all requests will be "
+                "DENIED until policy is fixed.",
+                e,
+            )
 
     def _validate(self, policies: list) -> list:
         """Validate policies at load time; warn and skip malformed entries."""
@@ -148,6 +169,14 @@ class PolicyEvaluator:
         self._loader = loader
 
     def evaluate(self, tool_call: ToolCall) -> PolicyResult:
+        # Fail-closed: if the policy file failed to load, deny everything.
+        if getattr(self._loader, "_load_failed", False):
+            return PolicyResult(
+                effect=Effect.BLOCK,
+                policy_name=None,
+                reason="Policy file failed to load — denying all requests for safety.",
+            )
+
         for policy in self._loader.policies:
             if self._matches(policy, tool_call):
                 effect = Effect(policy.get("effect", "allow"))
@@ -156,11 +185,11 @@ class PolicyEvaluator:
                     policy_name=policy.get("name"),
                     reason=policy.get("reason", f"Matched policy: {policy.get('name')}"),
                 )
-        # No policy matched — default allow
+        # No policy matched — default DENY (fail-closed).
         return PolicyResult(
-            effect=Effect.ALLOW,
+            effect=Effect.BLOCK,
             policy_name=None,
-            reason="No policy matched",
+            reason="No policy matched — defaulting to deny.",
         )
 
     def _matches(self, policy: dict, tool_call: ToolCall) -> bool:

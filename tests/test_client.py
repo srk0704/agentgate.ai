@@ -18,6 +18,9 @@ policies:
         value: 500
     effect: block
     reason: "Too large"
+  - name: allow_default
+    effect: allow
+    reason: "Permitted by default in test fixture"
 """)
     return GatewayClient(
         policy_path=str(policy_file),

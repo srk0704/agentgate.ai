@@ -65,3 +65,54 @@ policies:
     value: 2000.0
   effect: escalate
   reason: Expenses over $500 require manager approval
+# ---------------------------------------------------------------------------
+# Explicit allow rules for low-risk tools. Required since AgentGate now
+# defaults to deny on no-match (security-by-default). Order matters: the
+# block_/escalate_ rules above run first; matches here only fire when no
+# higher-priority rule short-circuits the evaluation.
+# ---------------------------------------------------------------------------
+- name: allow_small_expense_approval
+  match:
+    tool: approve_expense
+  effect: allow
+  reason: Small expense approval permitted — blast-radius / injection still apply
+- name: allow_process_payment
+  match:
+    tool: process_payment
+  effect: allow
+  reason: Payment tool permitted — blast-radius forces escalation on large amounts
+- name: allow_process_invoice
+  match:
+    tool: process_invoice
+  effect: allow
+  reason: Small invoices permitted — block/escalate rules above gate larger amounts
+- name: allow_reject_expense
+  match:
+    tool: reject_expense
+  effect: allow
+  reason: Expense rejection is a reversible administrative action
+- name: allow_get_account_status
+  match:
+    tool: get_account_status
+  effect: allow
+  reason: Account status lookup is read-only
+- name: allow_get_customer
+  match:
+    tool: get_customer
+  effect: allow
+  reason: Customer lookup is read-only
+- name: allow_get_payment_summary
+  match:
+    tool: get_payment_summary
+  effect: allow
+  reason: Payment summary is read-only
+- name: allow_verify_employee
+  match:
+    tool: verify_employee
+  effect: allow
+  reason: Employee verification is read-only
+- name: allow_issue_refund
+  match:
+    tool: issue_refund
+  effect: allow
+  reason: Refunds permitted — blast-radius / amount-based policies can override
