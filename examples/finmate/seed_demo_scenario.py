@@ -60,7 +60,12 @@ async def main() -> None:
     gate = GatewayClient(
         policy_path=POLICY_PATH,
         db_path=DB_PATH,
-        escalation_timeout_sec=300.0,
+        # Start at 60 so the learning loop's "increase timeout" pattern
+        # (analyzer suggests 300) has room to actually apply — otherwise
+        # the demo's /learning/changes endpoint shows zero history. The
+        # real auto-reject timeout is still driven by the module-level
+        # DEFAULT_ESCALATION_TIMEOUT env var, not this instance attr.
+        escalation_timeout_sec=60.0,
     )
     audit = AuditLogger(DB_PATH)
 

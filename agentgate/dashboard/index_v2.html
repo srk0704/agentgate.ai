@@ -4340,7 +4340,16 @@ function auv2BuildCard(d) {
 
 function auv2FormatDate(iso) {
   try {
-    return new Date(iso).toLocaleDateString("en-US", {
+    // Audit rows store decided_at in UTC; the iso here is the YYYY-MM-DD
+    // *UTC* date. Parsing with `new Date(iso)` lands on UTC midnight and
+    // then toLocaleDateString without an explicit timeZone shifts it into
+    // the host's local zone — which can drift the label by a day. Pin both
+    // the parse and the render to UTC so what the header shows matches the
+    // UTC bucket the audit cards were grouped under.
+    const [year, month, day] = iso.split("-");
+    const d = new Date(Date.UTC(+year, +month - 1, +day));
+    return d.toLocaleDateString("en-US", {
+      timeZone: "UTC",
       month: "long", day: "numeric", year: "numeric"
     });
   } catch(e) { return iso; }
@@ -4392,12 +4401,14 @@ function renderAuditV2() {
     byDay[day].push(d);
   });
 
-  const today = new Date().toISOString().slice(0, 10);
+  // toISOString() is UTC; comparing against the UTC date prefix of the
+  // audit row matches what audit_log actually stored.
+  const todayUTC = new Date().toISOString().slice(0, 10);
   let html = "";
   Object.entries(byDay)
     .sort((a, b) => b[0].localeCompare(a[0]))
     .forEach(([day, items]) => {
-      const label = day === today
+      const label = day === todayUTC
         ? "Today · " + auv2FormatDate(day)
         : auv2FormatDate(day);
       html += `

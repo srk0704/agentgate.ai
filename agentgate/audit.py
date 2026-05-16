@@ -315,11 +315,16 @@ class AuditLogger:
                 avg_row = await cur.fetchone()
             avg_reliability = avg_row[0] if avg_row and avg_row[0] is not None else None  # type: ignore[index]
 
-            # Active agents in last 5 min (proxy for "live agent count")
-            five_min_ago = (datetime.now(timezone.utc) - timedelta(minutes=5)).isoformat()
+            # Active agents today (UTC). The previous 5-minute window
+            # returned 0 the moment activity quieted down for a beat, even
+            # though plenty of agents had run earlier in the day. "Active
+            # today" is the metric the Overview KPI actually wants.
+            today_start = datetime.now(timezone.utc).replace(
+                hour=0, minute=0, second=0, microsecond=0
+            ).isoformat()
             async with db.execute(
                 "SELECT COUNT(DISTINCT agent_id) FROM audit_log WHERE decided_at >= ?",
-                (five_min_ago,),
+                (today_start,),
             ) as cur:
                 active_agents: int = (await cur.fetchone())[0]  # type: ignore[index]
 
@@ -548,7 +553,9 @@ class AuditLogger:
         await self._ensure_init()
         if since is None:
             since = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
-        recent_since = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+        # Match the rollup window: the agents tab and demo flows expect the
+        # day's events to remain visible, not just the last hour.
+        recent_since = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
 
         agents: dict[str, dict[str, Any]] = {}
         async with aiosqlite.connect(self.db_path) as db:
@@ -629,10 +636,46 @@ class AuditLogger:
                     "description": label,
                     "first_seen": ts,
                     "occurrences": 0,
+                    # Keep an attack_type around so callers can group by it
+                    # downstream (the user-facing /health/agents response).
+                    "attack_type": ed.get("attack_type"),
                 })
                 bucket["occurrences"] += 1
                 if ts < bucket["first_seen"]:
                     bucket["first_seen"] = ts
+                # Carry the most recent attack_type seen for this bucket;
+                # the rollup label uses it.
+                if ed.get("attack_type"):
+                    bucket["attack_type"] = ed["attack_type"]
+
+        # Final pass: add a clean "label" with the occurrence count rolled in,
+        # so the dashboard and curl callers don't have to reconstruct it.
+        _ATTACK_LABELS = {
+            "prompt_injection":     "Prompt injection",
+            "goal_hijacking":       "Injection detected",
+            "excessive_agency":     "Excessive agency",
+            "goal_drift":           "Goal drift",
+            "session_anomaly":      "Anomalous behavior",
+            "high_blast_radius":    "High-risk action",
+            "policy_violation":     "Policy violation",
+            "data_exfiltration":    "Data exfiltration",
+            "privilege_escalation": "Privilege escalation",
+            "retry_storm":          "Retry storm",
+            "sequence_loop":        "Sequence loop",
+            "pii_in_output":        "PII in output",
+        }
+        _KIND_LABELS = {
+            "injection": "Injection detected",
+            "risk":      "High-risk action",
+            "anomaly":   "Anomalous behavior",
+        }
+        for buckets in issues_by_agent.values():
+            for bucket in buckets.values():
+                at = bucket.get("attack_type")
+                base = _ATTACK_LABELS.get(at) if at else _KIND_LABELS.get(bucket["type"])
+                if not base:
+                    base = (at or bucket["type"]).replace("_", " ").title()
+                bucket["label"] = f"{base} ({bucket['occurrences']}×)"
 
         for aid, kinds in issues_by_agent.items():
             if aid in agents:
