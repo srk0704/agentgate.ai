@@ -3353,8 +3353,8 @@ function renderEscv2Card(e, opts) {
     <div class="escv2-footer">
       <div class="escv2-footer-note">${escHtml(pendingNote)}</div>
       <div class="escv2-footer-btns">
-        <button class="btn-escv2-reject"  onclick="resolveEsc('${escHtml(id)}','reject')">Reject</button>
-        <button class="btn-escv2-approve" onclick="resolveEsc('${escHtml(id)}','approve')">Approve</button>
+        <button class="btn-escv2-reject"  data-action="resolve-esc" data-esc-id="${escHtml(id)}" data-resolution="reject">Reject</button>
+        <button class="btn-escv2-approve" data-action="resolve-esc" data-esc-id="${escHtml(id)}" data-resolution="approve">Approve</button>
       </div>
     </div>
   </div>`;
@@ -3400,8 +3400,8 @@ function renderEscalationCard() {
     ${reasonHtml}
     ${checkHtml}
     <div class="esc-actions">
-      <button class="btn btn-approve" onclick="resolveEsc('${escHtml(id)}','approve')">Approve</button>
-      <button class="btn btn-reject"  onclick="resolveEsc('${escHtml(id)}','reject')">Reject</button>
+      <button class="btn btn-approve" data-action="resolve-esc" data-esc-id="${escHtml(id)}" data-resolution="approve">Approve</button>
+      <button class="btn btn-reject"  data-action="resolve-esc" data-esc-id="${escHtml(id)}" data-resolution="reject">Reject</button>
     </div>
   </div>`;
 }
@@ -4254,7 +4254,7 @@ function auv2BuildCard(d) {
   const safeId = escHtml(callId);
 
   return `
-    <div class="auv2-card" onclick="auv2ToggleCard('${safeId}')">
+    <div class="auv2-card" data-action="toggle-card" data-call-id="${safeId}">
       <div class="auv2-inner">
         <div class="auv2-stripe ${stripeClass}"></div>
         <div class="auv2-body">
@@ -4622,7 +4622,7 @@ function renderLearningV2(changes, patterns) {
             ${suggestion ? `<div class="llv2-suggestion">${escHtml(suggestion)}</div>` : ""}
             <div class="llv2-pcard-footer">
               <span class="llv2-evidence">${escHtml(evidence)}</span>
-              ${canApply ? `<button class="llv2-apply-btn" onclick="applyPattern('${safeId}', this)">Apply suggestion</button>` : ""}
+              ${canApply ? `<button class="llv2-apply-btn" data-action="apply-pattern" data-pattern-id="${safeId}">Apply suggestion</button>` : ""}
             </div>
           </div>`;
       }).join("");
@@ -4961,10 +4961,41 @@ function connectWs() {
 /* Sidebar clicks are handled by inline onclick="switchTabV2(...)" attributes
    on each .sb-item, so no additional delegation is needed here. */
 
+/* Delegated handlers for server-rendered cards. Inline onclick handlers
+   that interpolated server-supplied IDs were a stored-XSS vector — every
+   such control now carries data-action plus its payload as data-* attrs,
+   and we listen once at the document level. Re-renders cannot duplicate
+   the listener, and unsafe IDs cannot break out of an attribute value. */
+function wireDelegatedHandlers() {
+  document.addEventListener("click", function(e) {
+    const target = e.target.closest("[data-action]");
+    if (!target) return;
+    const action = target.dataset.action;
+
+    if (action === "toggle-card") {
+      const callId = target.dataset.callId;
+      if (callId) auv2ToggleCard(callId);
+      return;
+    }
+    if (action === "apply-pattern") {
+      const patternId = target.dataset.patternId;
+      if (patternId) applyPattern(patternId, target);
+      return;
+    }
+    if (action === "resolve-esc") {
+      const escId = target.dataset.escId;
+      const resolution = target.dataset.resolution;
+      if (escId && resolution) resolveEsc(escId, resolution);
+      return;
+    }
+  });
+}
+
 /* ─────────────────────────────────────────────────────────────────────────
    Boot
    ───────────────────────────────────────────────────────────────────────── */
 async function boot() {
+  wireDelegatedHandlers();
   await Promise.all([
     loadAgentHealth(),
     loadEscalations(),
