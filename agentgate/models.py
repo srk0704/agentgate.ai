@@ -2,7 +2,7 @@ from __future__ import annotations
 import json
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
 
@@ -38,7 +38,7 @@ class ToolCall:
     # AgentGate logs it but does not enforce idempotency.
     idempotency_key: str | None = None
     call_id: str = field(default_factory=lambda: str(uuid.uuid4()))
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 @dataclass
@@ -73,7 +73,7 @@ class Decision:
     reliability_score: int | None = None
     reliability_summary: str | None = None
     latency_ms: float = 0.0
-    decided_at: datetime = field(default_factory=datetime.utcnow)
+    decided_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     @property
     def is_allowed(self) -> bool:

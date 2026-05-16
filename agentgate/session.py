@@ -1,6 +1,6 @@
 from __future__ import annotations
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
 import aiosqlite
@@ -65,7 +65,7 @@ class SessionTracker:
                     tool_call.session_id,
                     tool_call.tool_name,
                     tool_call.original_task,
-                    datetime.utcnow().isoformat(),
+                    datetime.now(timezone.utc).isoformat(),
                 ),
             )
             await db.commit()
@@ -81,7 +81,7 @@ class SessionTracker:
     async def cleanup_old_records(self, days: int = 30) -> int:
         """Delete session records older than `days`. Returns number of rows deleted."""
         await self._ensure_init()
-        cutoff = (datetime.utcnow() - timedelta(days=days)).isoformat()
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
         async with aiosqlite.connect(self.db_path) as db:
             cursor = await db.execute(
                 "DELETE FROM session_calls WHERE called_at < ?", (cutoff,)
@@ -108,8 +108,8 @@ class SessionTracker:
             calls_last_60s   — calls in last 60 seconds (velocity check)
         """
         await self._ensure_init()
-        since = (datetime.utcnow() - timedelta(minutes=window_minutes)).isoformat()
-        since_60s = (datetime.utcnow() - timedelta(seconds=60)).isoformat()
+        since = (datetime.now(timezone.utc) - timedelta(minutes=window_minutes)).isoformat()
+        since_60s = (datetime.now(timezone.utc) - timedelta(seconds=60)).isoformat()
 
         conditions = ["agent_id = ?", "called_at >= ?"]
         params: list = [agent_id, since]

@@ -1,6 +1,6 @@
 """Tests for LoopDetector — retry storms + sequence loops."""
 from __future__ import annotations
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import uuid4
 
 import aiosqlite
@@ -39,7 +39,7 @@ async def _seed_session(db_path: str, agent_id: str, tools: list[str], session_i
     await _create_tables(db_path)
     async with aiosqlite.connect(db_path) as db:
         for i, t in enumerate(tools):
-            ts = datetime.utcnow().isoformat()
+            ts = datetime.now(timezone.utc).isoformat()
             await db.execute(
                 "INSERT INTO session_calls VALUES (?, ?, ?, ?, ?, ?)",
                 (str(uuid4()), agent_id, session_id, t, None, ts),
@@ -60,7 +60,7 @@ async def _seed_output(db_path: str, agent_id: str, tool_name: str, success: boo
                     str(uuid4()), str(uuid4()), agent_id, tool_name, "{}",
                     1 if success else 0, None,
                     "success" if success else "failure", None,
-                    datetime.utcnow().isoformat(),
+                    datetime.now(timezone.utc).isoformat(),
                 ),
             )
         await db.commit()

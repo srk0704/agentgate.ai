@@ -1,6 +1,6 @@
 """Tests for GET /health/agents and the per-agent health computation."""
 from __future__ import annotations
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from fastapi.testclient import TestClient
@@ -40,7 +40,7 @@ async def _seed_decision(
         injection_score=injection,
         anomaly_score=anomaly,
         attack_type=attack_type,
-        decided_at=datetime.utcnow() - timedelta(minutes=minutes_ago),
+        decided_at=datetime.now(timezone.utc) - timedelta(minutes=minutes_ago),
     )
     d.reliability_score, d.reliability_summary = Decision.compute_reliability_score(
         risk_score=risk, injection_score=injection, anomaly_score=anomaly,

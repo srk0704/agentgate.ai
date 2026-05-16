@@ -7,7 +7,7 @@ import json
 import logging
 import math
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from uuid import uuid4
 
@@ -270,7 +270,7 @@ class PatternAnalyzer:
                     confidence=confidence,
                     impact=impact,
                     auto_applicable=True,
-                    created_at=datetime.utcnow().isoformat(),
+                    created_at=datetime.now(timezone.utc).isoformat(),
                 ))
 
         return patterns
@@ -318,7 +318,7 @@ class PatternAnalyzer:
                     confidence=confidence,
                     impact="low",
                     auto_applicable=True,
-                    created_at=datetime.utcnow().isoformat(),
+                    created_at=datetime.now(timezone.utc).isoformat(),
                 ))
         except Exception as e:
             logger.debug("_detect_threshold_too_low error: %s", e)
@@ -372,7 +372,7 @@ class PatternAnalyzer:
                 confidence=confidence,
                 impact="medium",
                 auto_applicable=False,
-                created_at=datetime.utcnow().isoformat(),
+                created_at=datetime.now(timezone.utc).isoformat(),
             ))
 
         return patterns
@@ -424,7 +424,7 @@ class PatternAnalyzer:
                 confidence=confidence,
                 impact="medium",
                 auto_applicable=False,
-                created_at=datetime.utcnow().isoformat(),
+                created_at=datetime.now(timezone.utc).isoformat(),
             ))
 
         return patterns
@@ -496,7 +496,7 @@ class PatternAnalyzer:
                     confidence=confidence,
                     impact="medium",
                     auto_applicable=True,
-                    created_at=datetime.utcnow().isoformat(),
+                    created_at=datetime.now(timezone.utc).isoformat(),
                 ))
         except Exception as e:
             logger.debug("_detect_prompt_improvements error: %s", e)
@@ -578,7 +578,7 @@ class PatternAnalyzer:
                     confidence=confidence,
                     impact="high",
                     auto_applicable=False,
-                    created_at=datetime.utcnow().isoformat(),
+                    created_at=datetime.now(timezone.utc).isoformat(),
                 ))
 
         return patterns
@@ -647,7 +647,7 @@ class PatternAnalyzer:
                 confidence=_confidence_from_n(count),
                 impact="high",
                 auto_applicable=True,
-                created_at=datetime.utcnow().isoformat(),
+                created_at=datetime.now(timezone.utc).isoformat(),
             ))
         return patterns
 
@@ -695,6 +695,6 @@ class PatternAnalyzer:
                 confidence=_confidence_from_n(count),
                 impact="medium",
                 auto_applicable=False,
-                created_at=datetime.utcnow().isoformat(),
+                created_at=datetime.now(timezone.utc).isoformat(),
             ))
         return patterns

@@ -5,7 +5,7 @@ Logs what agents actually return after tool execution.
 from __future__ import annotations
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
 import aiosqlite
@@ -108,7 +108,7 @@ class OutputLogger:
                     financial_impact,
                     tr_score if tr_score > 0 else None,
                     tr_reason if tr_score > 0 else None,
-                    datetime.utcnow().isoformat(),
+                    datetime.now(timezone.utc).isoformat(),
                 ),
             )
             await db.commit()
@@ -154,7 +154,7 @@ class OutputLogger:
     async def get_retry_rate(self, tool_name: str, since_hours: int = 24) -> float:
         """Fraction of calls followed by a retry. Returns 0.0 if no data."""
         await self._ensure_init()
-        since = (datetime.utcnow() - timedelta(hours=since_hours)).isoformat()
+        since = (datetime.now(timezone.utc) - timedelta(hours=since_hours)).isoformat()
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute(
                 """SELECT COUNT(*), SUM(user_retried)
@@ -171,7 +171,7 @@ class OutputLogger:
     async def get_success_rate(self, tool_name: str, since_hours: int = 24) -> float:
         """Fraction of executed calls that succeeded. Returns 1.0 if no data."""
         await self._ensure_init()
-        since = (datetime.utcnow() - timedelta(hours=since_hours)).isoformat()
+        since = (datetime.now(timezone.utc) - timedelta(hours=since_hours)).isoformat()
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute(
                 """SELECT COUNT(*), SUM(success)

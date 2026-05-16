@@ -301,7 +301,7 @@ async def health() -> dict:
 async def health_agent_loops() -> dict:
     """Recent agent sessions stuck in retry storms or sequence loops."""
     import aiosqlite
-    from datetime import datetime
+    from datetime import datetime, timezone
     db_path = os.getenv("AGENTGATE_DB_PATH", "./agentgate.db")
     rows: list[dict] = []
     try:
@@ -335,7 +335,7 @@ async def health_agent_loops() -> dict:
     return {
         "agents_in_loops": rows,
         "total": len(rows),
-        "checked_at": datetime.utcnow().isoformat() + "Z",
+        "checked_at": datetime.now(timezone.utc).isoformat(),
     }
 
 
