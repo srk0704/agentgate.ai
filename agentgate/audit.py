@@ -5,6 +5,7 @@ import json
 import logging
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
+from uuid import uuid4
 
 import aiosqlite
 
@@ -167,55 +168,64 @@ class AuditLogger:
             decision.outcome.value,
             decision.human_decision,
         )
-        async with aiosqlite.connect(self.db_path) as db:
-            await db.execute(
-                """INSERT INTO audit_log
-                (id, call_id, agent_id, session_id, tool_name, args, context, original_task,
-                 idempotency_key, outcome, reason,
-                 risk_score, risk_reason, injection_score, injection_reason, attack_type,
-                 anomaly_score, anomaly_reason, blast_radius,
-                 drift_score, drift_reason, loop_score, loop_reason,
-                 reliability_score, reliability_summary,
-                 human_decision, human_reason,
-                 policy_matched, escalation_id, latency_ms,
-                 oversight_authority, decided_at)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-                (
-                    f"{tc.call_id}-{decision.decided_at.timestamp()}",
-                    tc.call_id,
-                    tc.agent_id,
-                    tc.session_id,
-                    tc.tool_name,
-                    json.dumps(tc.args, default=str),
-                    json.dumps(tc.context, default=str),
-                    tc.original_task,
-                    tc.idempotency_key,
-                    decision.outcome.value,
-                    decision.reason,
-                    decision.risk_score,
-                    decision.risk_reason,
-                    decision.injection_score,
-                    decision.injection_reason,
-                    decision.attack_type,
-                    decision.anomaly_score,
-                    decision.anomaly_reason,
-                    json.dumps(decision.blast_radius) if decision.blast_radius else None,
-                    decision.drift_score,
-                    decision.drift_reason,
-                    decision.loop_score,
-                    decision.loop_reason,
-                    decision.reliability_score,
-                    decision.reliability_summary,
-                    decision.human_decision,
-                    decision.human_reason,
-                    decision.policy_matched,
-                    decision.escalation_id,
-                    decision.latency_ms,
-                    oversight,
-                    decision.decided_at.isoformat(),
-                ),
+        try:
+            async with aiosqlite.connect(self.db_path) as db:
+                await db.execute(
+                    """INSERT INTO audit_log
+                    (id, call_id, agent_id, session_id, tool_name, args, context, original_task,
+                     idempotency_key, outcome, reason,
+                     risk_score, risk_reason, injection_score, injection_reason, attack_type,
+                     anomaly_score, anomaly_reason, blast_radius,
+                     drift_score, drift_reason, loop_score, loop_reason,
+                     reliability_score, reliability_summary,
+                     human_decision, human_reason,
+                     policy_matched, escalation_id, latency_ms,
+                     oversight_authority, decided_at)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    (
+                        str(uuid4()),
+                        tc.call_id,
+                        tc.agent_id,
+                        tc.session_id,
+                        tc.tool_name,
+                        json.dumps(tc.args, default=str),
+                        json.dumps(tc.context, default=str),
+                        tc.original_task,
+                        tc.idempotency_key,
+                        decision.outcome.value,
+                        decision.reason,
+                        decision.risk_score,
+                        decision.risk_reason,
+                        decision.injection_score,
+                        decision.injection_reason,
+                        decision.attack_type,
+                        decision.anomaly_score,
+                        decision.anomaly_reason,
+                        json.dumps(decision.blast_radius) if decision.blast_radius else None,
+                        decision.drift_score,
+                        decision.drift_reason,
+                        decision.loop_score,
+                        decision.loop_reason,
+                        decision.reliability_score,
+                        decision.reliability_summary,
+                        decision.human_decision,
+                        decision.human_reason,
+                        decision.policy_matched,
+                        decision.escalation_id,
+                        decision.latency_ms,
+                        oversight,
+                        decision.decided_at.isoformat(),
+                    ),
+                )
+                await db.commit()
+        except aiosqlite.IntegrityError as e:
+            # uuid4 collision is astronomically improbable, but if it (or any
+            # other UNIQUE constraint) ever fires we want loud failure, not
+            # the silent drop the old PK scheme allowed.
+            logger.error(
+                "Audit log PK collision for call_id=%s: %s", tc.call_id, e
             )
-            await db.commit()
+            raise
         logger.debug(
             "Audit: tool=%s outcome=%s latency=%.1fms",
             tc.tool_name, decision.outcome.value, decision.latency_ms
@@ -251,7 +261,7 @@ class AuditLogger:
         """Return dashboard stats. If `since` is None, defaults to start of today."""
         await self._ensure_init()
         # If caller didn't pin a window, the legacy "today" cutoff still applies.
-        # Use UTC to stay consistent with decided_at (which is datetime.utcnow()).
+        # Use UTC to stay consistent with decided_at (which is datetime.now(timezone.utc)).
         cutoff = since if since else datetime.now(timezone.utc).date().isoformat()
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute(
@@ -306,7 +316,7 @@ class AuditLogger:
             avg_reliability = avg_row[0] if avg_row and avg_row[0] is not None else None  # type: ignore[index]
 
             # Active agents in last 5 min (proxy for "live agent count")
-            five_min_ago = (datetime.utcnow() - timedelta(minutes=5)).isoformat()
+            five_min_ago = (datetime.now(timezone.utc) - timedelta(minutes=5)).isoformat()
             async with db.execute(
                 "SELECT COUNT(DISTINCT agent_id) FROM audit_log WHERE decided_at >= ?",
                 (five_min_ago,),
@@ -377,7 +387,7 @@ class AuditLogger:
                     json.dumps(result.get("pii_found", [])),
                     result.get("recommendation", "allow"),
                     1 if result.get("safe") else 0,
-                    datetime.utcnow().isoformat(),
+                    datetime.now(timezone.utc).isoformat(),
                 ),
             )
             await db.commit()
@@ -537,8 +547,8 @@ class AuditLogger:
         """
         await self._ensure_init()
         if since is None:
-            since = (datetime.utcnow() - timedelta(hours=24)).isoformat()
-        recent_since = (datetime.utcnow() - timedelta(hours=1)).isoformat()
+            since = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+        recent_since = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
 
         agents: dict[str, dict[str, Any]] = {}
         async with aiosqlite.connect(self.db_path) as db:
@@ -696,7 +706,7 @@ class AuditLogger:
                     data.get("before_value"),
                     data.get("after_value"),
                     data.get("metrics_before"),
-                    datetime.utcnow().isoformat(),
+                    datetime.now(timezone.utc).isoformat(),
                 ),
             )
             await db.commit()
@@ -758,7 +768,7 @@ class AuditLogger:
     ) -> dict | None:
         """Return the most recent ALLOWED decision for this key within the time window."""
         await self._ensure_init()
-        since = (datetime.utcnow() - timedelta(minutes=within_minutes)).isoformat()
+        since = (datetime.now(timezone.utc) - timedelta(minutes=within_minutes)).isoformat()
         async with aiosqlite.connect(self.db_path) as db:
             db.row_factory = aiosqlite.Row
             async with db.execute(
@@ -775,7 +785,7 @@ class AuditLogger:
         await self._ensure_init()
         if since is None:
             from datetime import timedelta
-            since = (datetime.utcnow() - timedelta(days=90)).isoformat()
+            since = (datetime.now(timezone.utc) - timedelta(days=90)).isoformat()
         async with aiosqlite.connect(self.db_path) as db:
             db.row_factory = aiosqlite.Row
             async with db.execute(
