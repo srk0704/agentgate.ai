@@ -4,7 +4,7 @@ import json
 import logging
 import os
 import smtplib
-from datetime import datetime
+from datetime import datetime, timezone
 from email.mime.text import MIMEText
 from uuid import uuid4
 
@@ -23,6 +23,10 @@ DEFAULT_ESCALATION_TIMEOUT = int(os.getenv("AGENTGATE_ESCALATION_TIMEOUT_SEC", "
 # In-process store: {escalation_id: asyncio.Event}
 _decisions: dict[str, asyncio.Event] = {}
 _approved: dict[str, bool] = {}
+# Background auto-reject tasks indexed by escalation_id. Created in submit(),
+# cancelled in approve()/reject()/wait_for_decision() so the timeout never
+# fires after a verdict already landed.
+_tasks: dict[str, asyncio.Task] = {}
 
 CREATE_ESCALATION_TABLE = """
 CREATE TABLE IF NOT EXISTS escalations (
@@ -101,7 +105,7 @@ class EscalationQueue:
                     json.dumps(tool_call.context, default=str),
                     risk_score,
                     reason,
-                    datetime.utcnow().isoformat(),
+                    datetime.now(timezone.utc).isoformat(),
                 ),
             )
             await db.commit()
@@ -112,6 +116,13 @@ class EscalationQueue:
         # Register event for wait_for_decision
         _decisions[escalation_id] = asyncio.Event()
         _approved[escalation_id] = False
+
+        # Schedule the auto-reject timeout. Without this the escalation would
+        # remain "pending" forever if no human ever responds.
+        task = asyncio.create_task(
+            cls._auto_reject(escalation_id, DEFAULT_ESCALATION_TIMEOUT)
+        )
+        _tasks[escalation_id] = task
 
         logger.info(
             "Escalation submitted: id=%s tool=%s risk=%d",
@@ -150,13 +161,24 @@ class EscalationQueue:
                 await cls._record_decision(escalation_id, False, "Timeout")
                 return False
         finally:
-            # Always clean up in-memory state — this caller will never wait again.
+            # Always clean up in-memory state — this caller will never wait
+            # again. Cancel the background auto-reject task too: we resolved
+            # the escalation (either via human verdict or local timeout) so
+            # the scheduled task no longer has anything to do.
+            task = _tasks.pop(escalation_id, None)
+            if task is not None and not task.done():
+                task.cancel()
             _decisions.pop(escalation_id, None)
             _approved.pop(escalation_id, None)
 
     @classmethod
     async def approve(cls, escalation_id: str) -> None:
         """Mark an escalation as approved."""
+        # Cancel the pending auto-reject before we record the verdict so it
+        # cannot race in and double-reject after we set the event below.
+        task = _tasks.pop(escalation_id, None)
+        if task is not None and not task.done():
+            task.cancel()
         await cls._record_decision(escalation_id, True, "Human approved")
         _approved[escalation_id] = True
         if escalation_id in _decisions:
@@ -171,6 +193,9 @@ class EscalationQueue:
     @classmethod
     async def reject(cls, escalation_id: str) -> None:
         """Mark an escalation as rejected."""
+        task = _tasks.pop(escalation_id, None)
+        if task is not None and not task.done():
+            task.cancel()
         await cls._record_decision(escalation_id, False, "Human rejected")
         _approved[escalation_id] = False
         if escalation_id in _decisions:
@@ -190,7 +215,7 @@ class EscalationQueue:
                 """UPDATE escalations
                    SET status = ?, decided_at = ?, decision = ?
                    WHERE id = ?""",
-                (status, datetime.utcnow().isoformat(), reason, escalation_id),
+                (status, datetime.now(timezone.utc).isoformat(), reason, escalation_id),
             )
             await db.commit()
 
@@ -272,12 +297,40 @@ class EscalationQueue:
 
     @classmethod
     async def _auto_reject(cls, escalation_id: str, timeout_sec: float | None = None) -> None:
-        """Auto-reject after timeout. Default AGENTGATE_ESCALATION_TIMEOUT_SEC."""
+        """Auto-reject after timeout. Default AGENTGATE_ESCALATION_TIMEOUT_SEC.
+
+        Scheduled by submit(); cancelled by approve()/reject() and by
+        wait_for_decision() when it resolves the escalation itself.
+        """
         if timeout_sec is None:
             timeout_sec = DEFAULT_ESCALATION_TIMEOUT
-        await asyncio.sleep(timeout_sec)
+        try:
+            await asyncio.sleep(timeout_sec)
+        except asyncio.CancelledError:
+            # Normal path: a human (or wait_for_decision local timeout) beat
+            # us to it. Just stop quietly.
+            return
         if escalation_id in _decisions and not _decisions[escalation_id].is_set():
-            await cls.reject(escalation_id)
+            logger.warning(
+                "Escalation %s timed out after %ss — auto-rejecting",
+                escalation_id,
+                timeout_sec,
+            )
+            # Persist the verdict so the dashboard / audit log reflect it,
+            # not just the in-memory state.
+            try:
+                await cls._record_decision(escalation_id, False, "Timeout")
+            except Exception as e:
+                logger.error(
+                    "Failed to persist auto-reject for %s: %s",
+                    escalation_id, e,
+                )
+            _approved[escalation_id] = False
+            _decisions[escalation_id].set()
+            # Clean up after firing — every map keyed on escalation_id.
+            _tasks.pop(escalation_id, None)
+            _decisions.pop(escalation_id, None)
+            _approved.pop(escalation_id, None)
 
     @classmethod
     async def recent(cls, limit: int = 100) -> list[dict]:
