@@ -1,11 +1,32 @@
 from __future__ import annotations
 import asyncio
+import concurrent.futures
 import functools
 import logging
-from typing import Any, Callable, TypeVar
+from typing import Any, Callable, Coroutine, TypeVar
 
 from agentgate.client import GatewayClient
 from agentgate.models import ToolCall
+
+
+def _run_async(coro: Coroutine[Any, Any, Any]) -> Any:
+    """Run a coroutine safely whether or not there is already a running loop.
+
+    The previous implementation called `loop.run_until_complete` inside an
+    already-running loop, which raises ``RuntimeError`` and, in some
+    integrations (e.g. LangChain inside a notebook / Celery task), looked
+    like a deadlock. When a loop is already running we offload to a worker
+    thread that gets its own fresh loop via ``asyncio.run``.
+    """
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        # No loop on this thread — the simple path.
+        return asyncio.run(coro)
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        future = pool.submit(asyncio.run, coro)
+        return future.result()
 
 logger = logging.getLogger(__name__)
 
@@ -109,22 +130,7 @@ def guarded_tool(
                     context=extracted_context,
                 )
 
-                # For sync functions, we need to run the async evaluation in a new event loop
-                # (or use an existing one if available)
-                try:
-                    loop = asyncio.get_running_loop()
-                except RuntimeError:
-                    loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(loop)
-                    should_close = True
-                else:
-                    should_close = False
-
-                try:
-                    decision = loop.run_until_complete(_gate.evaluate(tool_call))
-                finally:
-                    if should_close:
-                        loop.close()
+                decision = _run_async(_gate.evaluate(tool_call))
 
                 if not decision.is_allowed:
                     raise ToolException(
@@ -190,20 +196,7 @@ def guarded_tool_from_langchain(
                     context=context,
                 )
 
-                try:
-                    loop = asyncio.get_running_loop()
-                except RuntimeError:
-                    loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(loop)
-                    should_close = True
-                else:
-                    should_close = False
-
-                try:
-                    decision = loop.run_until_complete(_gate.evaluate(tool_call))
-                finally:
-                    if should_close:
-                        loop.close()
+                decision = _run_async(_gate.evaluate(tool_call))
 
                 if not decision.is_allowed:
                     raise ToolException(
