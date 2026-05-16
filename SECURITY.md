@@ -7,7 +7,7 @@ responsibly.
 
 **Do not open a public GitHub issue for security vulnerabilities.**
 
-Email: security@agentgate.ai
+Email: sk4975@columbia.edu
 
 We will acknowledge your report within 48 hours and provide a fix timeline
 within 7 days for critical issues.
