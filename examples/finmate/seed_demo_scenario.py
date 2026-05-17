@@ -226,6 +226,86 @@ async def main() -> None:
     print("  3 budget queries — all allowed")
 
     # ─────────────────────────────────────────────────────────────────────
+    # Failure-mode coverage: retry storm, sequence loop, PII in output
+    # The loop_detector exempts every tool whose name starts with
+    # get_/list_/fetch_/read_/search_, so the failing/looping scenarios use
+    # non-read-only tool names. We pre-populate session_calls and output_log
+    # directly so the *final* gate.evaluate() call sees the storm / loop
+    # state and produces a scored audit_log row.
+    # ─────────────────────────────────────────────────────────────────────
+    print()
+    print("Late afternoon: retry storm scenario...")
+    from agentgate.session import SessionTracker
+    from agentgate.output_logger import OutputLogger
+    tracker = SessionTracker(DB_PATH)
+    out_logger = OutputLogger(DB_PATH)
+
+    storm_session = "retry-storm-session"
+    for i in range(5):
+        tc = ToolCall(
+            tool_name="process_invoice",
+            args={"invoice_id": "INV-MISSING", "amount": 250},
+            agent_id=AGENT_ID,
+            session_id=storm_session,
+            original_task="Process invoice INV-MISSING — vendor reissue",
+        )
+        await tracker.record(tc)
+        await out_logger.log_tool_result(
+            call_id=f"storm-{i}",
+            tool_name="process_invoice",
+            tool_result={"error": "invoice not found"},
+            agent_id=AGENT_ID,
+            success=False,
+            error="Service unavailable",
+        )
+    await gate.evaluate(ToolCall(
+        tool_name="process_invoice",
+        args={"invoice_id": "INV-MISSING", "amount": 250},
+        agent_id=AGENT_ID,
+        session_id=storm_session,
+        original_task="Process invoice INV-MISSING — vendor reissue",
+        context={"role": "finance_agent"},
+    ))
+    print("  5 failed process_invoice + 1 scored → retry storm detected")
+
+    print()
+    print("Late afternoon: sequence loop scenario...")
+    loop_session = "sequence-loop-session"
+    for tool in (
+        "process_invoice", "approve_expense",
+        "process_invoice", "approve_expense",
+    ):
+        await tracker.record(ToolCall(
+            tool_name=tool,
+            args={"id": "X-001"},
+            agent_id=AGENT_ID,
+            session_id=loop_session,
+            original_task="Reconcile invoice X-001 and approve matching expense",
+        ))
+    await gate.evaluate(ToolCall(
+        tool_name="process_invoice",
+        args={"invoice_id": "X-001", "amount": 150},
+        agent_id=AGENT_ID,
+        session_id=loop_session,
+        original_task="Reconcile invoice X-001 and approve matching expense",
+        context={"role": "finance_agent"},
+    ))
+    print("  [process_invoice → approve_expense] × 2 → sequence loop detected")
+
+    print()
+    print("Late afternoon: PII in tool output scanned...")
+    pii_result = (
+        "Employee record: John Smith, SSN: 123-45-6789, "
+        "email: john.smith@acme.com, salary: $125,000"
+    )
+    await gate.scan_output(
+        output=pii_result,
+        tool_name="get_employee_record",
+        agent_id=AGENT_ID,
+    )
+    print("  Synthetic employee record scanned — PII findings logged")
+
+    # ─────────────────────────────────────────────────────────────────────
     # Verify blast_radius on the $50k payment
     # ─────────────────────────────────────────────────────────────────────
     print()

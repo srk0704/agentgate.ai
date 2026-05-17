@@ -257,15 +257,25 @@ class GatewayClient:
         policy_result = self._policy_evaluator.evaluate(tool_call)
 
         if policy_result.effect == Effect.BLOCK:
-            # Still run injection scoring on policy blocks to surface injection attacks
-            # embedded in content that also violated a policy rule (see DECISION_PRECEDENCE.md).
-            inj_score, inj_reason, attack_type = await self._run_injection_only(tool_call)
-            # session_calls is NOT recorded on this path. AnomalyScorer (inside the
-            # asyncio.gather below) records session calls, and policy blocks return
-            # before gather runs. Policy-blocked calls therefore appear in audit_log
-            # but not session_calls — intentional, keeps the hot policy-check path
-            # synchronous. Do not add session_tracker.record() here without weighing
-            # the performance cost on every policy hit.
+            # Still run lightweight scorers on policy blocks so we can surface
+            # injection attacks AND off-task drift embedded in content that
+            # also violated a policy rule. Without this, anything caught by an
+            # early-deny policy lands in audit_log with drift_score = NULL,
+            # which makes the goal_drift failure-mode count permanently 0 for
+            # the most obvious demos (e.g. export_financials triggered from a
+            # budget-lookup task).
+            #
+            # session_calls is NOT recorded on this path. AnomalyScorer (inside
+            # the asyncio.gather below) records session calls, and policy
+            # blocks return before gather runs. Policy-blocked calls therefore
+            # appear in audit_log but not session_calls — intentional, keeps
+            # the hot policy-check path synchronous. Do not add
+            # session_tracker.record() here without weighing the performance
+            # cost on every policy hit.
+            (inj_score, inj_reason, attack_type), (drift_score, drift_reason) = await asyncio.gather(
+                self._run_injection_only(tool_call),
+                self._run_drift_only(tool_call),
+            )
             return Decision(
                 outcome=DecisionOutcome.BLOCKED,
                 tool_call=tool_call,
@@ -273,6 +283,8 @@ class GatewayClient:
                 injection_score=inj_score,
                 injection_reason=inj_reason,
                 attack_type=attack_type,
+                drift_score=drift_score,
+                drift_reason=drift_reason,
                 blast_radius=blast_radius,
                 policy_matched=policy_result.policy_name,
             )
@@ -469,6 +481,22 @@ class GatewayClient:
         except Exception as e:
             logger.debug("Injection-only scoring failed on policy-blocked call: %s", e)
             return None, None, None
+
+    async def _run_drift_only(
+        self, tool_call: ToolCall
+    ) -> tuple[int | None, str | None]:
+        """Run drift scoring alone — used on policy-blocked decisions so the
+        goal_drift failure mode still gets visibility on calls that an
+        early-deny policy short-circuits."""
+        try:
+            drift_score, drift_reason = await asyncio.wait_for(
+                self._drift_detector.score(tool_call),
+                timeout=self.timeout_ms / 1000,
+            )
+            return drift_score, drift_reason
+        except Exception as e:
+            logger.debug("Drift-only scoring failed on policy-blocked call: %s", e)
+            return None, None
 
     async def scan_output(
         self,

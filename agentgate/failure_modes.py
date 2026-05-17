@@ -236,21 +236,36 @@ DETECTOR_WIRING = {
     },
     "excessive_agency": {
         "table": "audit_log",
+        # The LLM injection scorer marks excessive_agency calls in the 50-70
+        # band (they're disproportionate, not malicious) — requiring >=70
+        # silently dropped the canonical demo case (export-on-budget-task).
+        # attack_type='excessive_agency' is the load-bearing signal; the
+        # score floor stays as a sanity gate, not a strict block threshold.
         "where": (
             "attack_type = 'excessive_agency' "
-            "AND injection_score >= 70 "
-            "AND outcome = 'blocked'"
+            "AND injection_score >= 50"
         ),
         "time_field": "decided_at",
     },
     "retry_storm": {
         "table": "audit_log",
-        "where": "loop_score >= 70 AND loop_score IS NOT NULL",
+        # loop_score >= 70 covers retry storms; differentiate from
+        # sequence_loop via loop_reason since both share the loop_score field.
+        "where": (
+            "loop_score >= 70 AND loop_score IS NOT NULL "
+            "AND loop_reason LIKE '%retry storm%'"
+        ),
         "time_field": "decided_at",
     },
     "sequence_loop": {
         "table": "audit_log",
-        "where": "loop_score >= 85 AND loop_score IS NOT NULL",
+        # _detect_sequence_loop returns a fixed 75 — requiring >=85 meant the
+        # mode could never fire. Gate on loop_reason instead so we can keep
+        # using the existing score and still distinguish from retry_storm.
+        "where": (
+            "loop_score >= 70 AND loop_score IS NOT NULL "
+            "AND loop_reason LIKE '%sequence%'"
+        ),
         "time_field": "decided_at",
     },
     "high_blast_radius": {
