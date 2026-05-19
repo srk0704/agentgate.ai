@@ -127,6 +127,15 @@ async def dashboard_v2() -> FileResponse:
     return FileResponse(p, media_type="text/html")
 
 
+@app.get("/landing", include_in_schema=False)
+async def landing_page() -> FileResponse:
+    """Serve the public landing page (marketing site)."""
+    p = Path(__file__).parent.parent / "landing" / "index.html"
+    if not p.exists():
+        raise HTTPException(status_code=404, detail="Landing page not built")
+    return FileResponse(p, media_type="text/html")
+
+
 # ---------------------------------------------------------------------------
 # Stats
 # ---------------------------------------------------------------------------
