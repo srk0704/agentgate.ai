@@ -558,13 +558,13 @@ footer{
 
 <!-- HERO -->
 <div class="hero">
-  <div class="hero-eyebrow fade-up">
+  <div class="hero-eyebrow">
     <div class="eyebrow-dot"></div>
     Early access · Design partners open
   </div>
-  <h1 class="fade-up fade-up-delay-1">The reliability layer for <em>AI agents</em><br>that take real actions.</h1>
-  <p class="hero-sub fade-up fade-up-delay-2">Every tool call evaluated before execution - blocked if unsafe, escalated if risky, allowed if clean. Agents smarter from every human decision.</p>
-  <div class="hero-actions fade-up fade-up-delay-3">
+  <h1>The reliability layer for <em>AI agents</em><br>that take real actions.</h1>
+  <p class="hero-sub">Every tool call evaluated before execution - blocked if unsafe, escalated if risky, allowed if clean. Agents smarter from every human decision.</p>
+  <div class="hero-actions">
     <a href="#waitlist" class="btn-primary">
       Join waitlist
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
@@ -574,7 +574,7 @@ footer{
       Book a demo
     </a>
   </div>
-  <p class="hero-note fade-up fade-up-delay-4">Works with LangGraph · LangChain · OpenAI Agents SDK · any Python agent</p>
+  <p class="hero-note">Works with LangGraph · LangChain · OpenAI Agents SDK · any Python agent</p>
 
   <!-- DASHBOARD MOCKUP -->
   <div class="product-frame reveal fade-up">
@@ -941,13 +941,6 @@ const observer = new IntersectionObserver(
 
 document.querySelectorAll('.fade-up, .reveal')
   .forEach(el => observer.observe(el));
-
-// Hero content animates on page load, not on scroll — without this, anything
-// already in the initial viewport sits at opacity:0 until the user scrolls.
-setTimeout(() => {
-  document.querySelectorAll('.hero .fade-up')
-    .forEach(el => el.classList.add('visible'));
-}, 100);
 
 const form = document.getElementById('wl-form');
 form.addEventListener('submit', async e => {
