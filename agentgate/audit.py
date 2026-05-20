@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS audit_log (
     idempotency_key     TEXT,
     outcome             TEXT NOT NULL,
     reason              TEXT NOT NULL,
+    agent_guidance      TEXT,
     risk_score          INTEGER,
     risk_reason         TEXT,
     injection_score     INTEGER,
@@ -136,6 +137,7 @@ class AuditLogger:
                 "reliability_score INTEGER", "reliability_summary TEXT",
                 "risk_reason TEXT", "human_decision TEXT", "human_reason TEXT",
                 "oversight_authority TEXT",
+                "agent_guidance TEXT",
             ):
                 try:
                     await db.execute(f"ALTER TABLE audit_log ADD COLUMN {col}")
@@ -173,7 +175,7 @@ class AuditLogger:
                 await db.execute(
                     """INSERT INTO audit_log
                     (id, call_id, agent_id, session_id, tool_name, args, context, original_task,
-                     idempotency_key, outcome, reason,
+                     idempotency_key, outcome, reason, agent_guidance,
                      risk_score, risk_reason, injection_score, injection_reason, attack_type,
                      anomaly_score, anomaly_reason, blast_radius,
                      drift_score, drift_reason, loop_score, loop_reason,
@@ -181,7 +183,7 @@ class AuditLogger:
                      human_decision, human_reason,
                      policy_matched, escalation_id, latency_ms,
                      oversight_authority, decided_at)
-                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                     (
                         str(uuid4()),
                         tc.call_id,
@@ -194,6 +196,7 @@ class AuditLogger:
                         tc.idempotency_key,
                         decision.outcome.value,
                         decision.reason,
+                        decision.agent_guidance,
                         decision.risk_score,
                         decision.risk_reason,
                         decision.injection_score,

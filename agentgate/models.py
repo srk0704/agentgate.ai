@@ -72,6 +72,12 @@ class Decision:
     # Inverted from component scores (where higher = worse) and summarized in plain English.
     reliability_score: int | None = None
     reliability_summary: str | None = None
+    # Closed-loop intervention: a machine-readable nudge for the *agent* (not
+    # the human reviewer). When a failure mode fires, this string is meant to
+    # be injected back into the agent's context window so it knows what
+    # AgentGate caught and what to do about it. None when no intervention is
+    # warranted. See GatewayClient._generate_agent_guidance.
+    agent_guidance: str | None = None
     latency_ms: float = 0.0
     decided_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 

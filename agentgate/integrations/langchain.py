@@ -106,6 +106,12 @@ def guarded_tool(
 
                 decision = await _gate.evaluate(tool_call)
 
+                if decision.agent_guidance:
+                    logger.warning(
+                        "AgentGate guidance: %s",
+                        decision.agent_guidance,
+                    )
+
                 if not decision.is_allowed:
                     raise ToolException(
                         f"AgentGate blocked '{fn.__name__}': {decision.reason}"
@@ -131,6 +137,12 @@ def guarded_tool(
                 )
 
                 decision = _run_async(_gate.evaluate(tool_call))
+
+                if decision.agent_guidance:
+                    logger.warning(
+                        "AgentGate guidance: %s",
+                        decision.agent_guidance,
+                    )
 
                 if not decision.is_allowed:
                     raise ToolException(
@@ -174,6 +186,12 @@ def guarded_tool_from_langchain(
 
                 decision = await _gate.evaluate(tool_call)
 
+                if decision.agent_guidance:
+                    logger.warning(
+                        "AgentGate guidance: %s",
+                        decision.agent_guidance,
+                    )
+
                 if not decision.is_allowed:
                     raise ToolException(
                         f"AgentGate blocked '{fn.__name__}': {decision.reason}"
@@ -197,6 +215,12 @@ def guarded_tool_from_langchain(
                 )
 
                 decision = _run_async(_gate.evaluate(tool_call))
+
+                if decision.agent_guidance:
+                    logger.warning(
+                        "AgentGate guidance: %s",
+                        decision.agent_guidance,
+                    )
 
                 if not decision.is_allowed:
                     raise ToolException(
