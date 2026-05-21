@@ -236,7 +236,7 @@ nav{
 .risk-med{background:#FEF3D7;color:var(--amber)}
 
 /* STATS */
-.stats-section{padding:140px 48px;max-width:1100px;margin:0 auto}
+.stats-section{padding:72px 48px;max-width:1100px;margin:0 auto}
 .stats-eyebrow{
   text-align:center;
   font-size:12px;font-weight:600;letter-spacing:0.1em;
@@ -263,7 +263,7 @@ nav{
 
 /* DETECTORS */
 .detectors-section{
-  padding:140px 48px;
+  padding:72px 48px;
   margin-top:0;
   background:var(--ink);
   color:var(--white);
@@ -320,7 +320,7 @@ nav{
 .det-desc{font-size:13px;color:#7A8E96;line-height:1.5}
 
 /* HOW IT WORKS */
-.how-section{padding:140px 48px;max-width:1100px;margin:0 auto}
+.how-section{padding:72px 48px;max-width:1100px;margin:0 auto}
 .section-eyebrow{
   font-size:12px;font-weight:600;letter-spacing:0.1em;
   text-transform:uppercase;color:var(--ink3);
@@ -330,10 +330,10 @@ nav{
   font-family:var(--serif);
   font-size:clamp(32px,4vw,52px);
   font-weight:400;letter-spacing:-0.02em;
-  color:var(--ink);margin-bottom:72px;
+  color:var(--ink);margin-bottom:32px;
   line-height:1.15;
 }
-.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:72px;padding-bottom:20px}
+.steps{display:grid;grid-template-columns:repeat(4,1fr);gap:40px;padding-bottom:20px}
 .step{min-height:0;display:flex;flex-direction:column}
 .step-n{
   font-family:var(--mono);
@@ -369,7 +369,7 @@ nav{
 
 /* WAITLIST */
 .waitlist-section{
-  padding:140px 48px;
+  padding:72px 48px;
   background:var(--off);
   border-top:1px solid var(--border);
 }
@@ -552,7 +552,7 @@ footer{
 <!-- ANNOUNCEMENT -->
 <div class="announcement">
   <span class="announce-pill">New</span>
-  <span class="announce-text">v0.8.0 — Closed-Loop Intervention: AgentGate now tells your agent how to recover.</span>
+  <span class="announce-text">v0.8.0 — Closed-Loop Intervention shipped. Open source, MIT license.</span>
   <a href="https://github.com/srk0704/agentgate.ai" target="_blank" class="announce-link">View on GitHub →</a>
 </div>
 
@@ -785,7 +785,7 @@ footer{
 <!-- HOW IT WORKS -->
 <div class="how-section reveal" id="how">
   <div class="section-eyebrow">How it works</div>
-  <h2 class="fade-up">Three steps, one integration.</h2>
+  <h2 class="fade-up">Four steps, one integration.</h2>
   <div class="steps">
     <div class="step fade-up fade-up-delay-1">
       <div class="step-n">01</div>
@@ -821,6 +821,19 @@ if decision.is_allowed:
       <div class="step-code">Week 1:  20% escalation rate · 5 reviews/week
 Week 3:  10% escalation rate · 1 review/week
 Month 6: &lt;5% — near autonomous</div>
+    </div>
+    <div class="step fade-up fade-up-delay-4">
+      <div class="step-n">04</div>
+      <div class="step-icon-wrap">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+      </div>
+      <div class="step-title">Intervene</div>
+      <div class="step-body">When something goes wrong, AgentGate tells your agent exactly what to do to recover — in the same session, before a human needs to get involved.</div>
+      <div class="step-code">elif decision.agent_guidance:
+    context.append({
+        "role": "system",
+        "content": decision.agent_guidance
+    })</div>
     </div>
   </div>
 </div>
@@ -1042,7 +1055,7 @@ elif decision.agent_guidance:
   <footer>
     <div class="footer-left">
       <a href="#" class="footer-brand">AgentGate</a>
-      <span class="footer-mit">MIT License · v0.7.0 · © 2026</span>
+      <span class="footer-mit">MIT License · v0.8.0 · © 2026</span>
     </div>
     <div class="footer-links">
       <a href="https://github.com/srk0704/agentgate.ai" target="_blank">GitHub</a>
