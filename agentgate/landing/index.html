@@ -320,7 +320,7 @@ nav{
 .det-desc{font-size:13px;color:#7A8E96;line-height:1.5}
 
 /* HOW IT WORKS */
-.how-section{padding:72px 48px;max-width:1100px;margin:0 auto}
+.how-section{padding:72px 64px;max-width:1200px;margin:0 auto}
 .section-eyebrow{
   font-size:12px;font-weight:600;letter-spacing:0.1em;
   text-transform:uppercase;color:var(--ink3);
@@ -333,7 +333,7 @@ nav{
   color:var(--ink);margin-bottom:32px;
   line-height:1.15;
 }
-.steps{display:grid;grid-template-columns:repeat(4,1fr);gap:40px;padding-bottom:20px}
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:40px;width:100%;padding-bottom:20px}
 .step{min-height:0;display:flex;flex-direction:column}
 .step-n{
   font-family:var(--mono);
@@ -822,19 +822,6 @@ if decision.is_allowed:
 Week 3:  10% escalation rate · 1 review/week
 Month 6: &lt;5% — near autonomous</div>
     </div>
-    <div class="step fade-up fade-up-delay-4">
-      <div class="step-n">04</div>
-      <div class="step-icon-wrap">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-      </div>
-      <div class="step-title">Intervene</div>
-      <div class="step-body">When something goes wrong, AgentGate tells your agent exactly what to do to recover — in the same session, before a human needs to get involved.</div>
-      <div class="step-code">elif decision.agent_guidance:
-    context.append({
-        "role": "system",
-        "content": decision.agent_guidance
-    })</div>
-    </div>
   </div>
 </div>
 
@@ -843,8 +830,7 @@ Month 6: &lt;5% — near autonomous</div>
      style="background:var(--off);
             border-top:1px solid var(--border);
             border-bottom:1px solid var(--border)">
-  <div class="section-eyebrow">New in v0.8.0</div>
-  <h2>Closed-Loop<br>Intervention.</h2>
+  <h2>Closed-Loop Intervention</h2>
   <p style="font-size:17px;color:var(--ink2);
             max-width:560px;line-height:1.65;
             margin-bottom:56px">
