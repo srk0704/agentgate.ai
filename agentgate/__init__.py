@@ -1,6 +1,8 @@
 """AgentGate — access control for AI agents."""
 from __future__ import annotations
 
+__version__ = "0.8.0"
+
 
 def quickcheck() -> None:
     """
@@ -25,7 +27,19 @@ def quickcheck() -> None:
                 "match": {"tool": "wire_transfer"},
                 "effect": "block",
                 "reason": "Wire transfers not permitted via agent",
-            }
+            },
+            # PolicyEvaluator defaults to BLOCK on no-match (security-by-
+            # default, since commit 99a5560). Without an explicit allow for
+            # lookup_customer the second assertion below would fail with
+            # "Expected ALLOWED, got blocked". Allow rule placed *after* the
+            # block rule — evaluator returns on the first match, so the
+            # block still takes precedence for wire_transfer.
+            {
+                "name": "allow_lookup_customer",
+                "match": {"tool": "lookup_customer"},
+                "effect": "allow",
+                "reason": "Read-only lookup permitted by quickcheck",
+            },
         ],
         db_path=_db_path,
     )

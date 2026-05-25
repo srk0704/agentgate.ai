@@ -1,5 +1,19 @@
 # AgentGate
 
+## Installation
+
+```bash
+pip install agentgate
+```
+
+Or install from source:
+
+```bash
+git clone https://github.com/srk0704/agentgate.ai
+cd agentgate.ai
+poetry install
+```
+
 **The reliability layer for AI agents taking consequential actions.**
 
 AgentGate sits between your AI agent and its tools. Every action is evaluated before execution — blocked if unsafe, escalated if risky, allowed if clean. It gets smarter from every decision your team makes.
@@ -25,7 +39,7 @@ AgentGate catches these failures before they execute.
 
 ## What it does
 
-**Detects 47 failure modes** across 9 categories — 11 actively detecting in v0.7.0:
+**Detects 47 failure modes** across 9 categories — 11 actively detecting in v0.8.0:
 
 | Failure Mode | Method | Detection Layer |
 |---|---|---|

@@ -24,7 +24,7 @@ from agentgate.escalation import EscalationQueue
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="AgentGate API", version="0.1.0")
+app = FastAPI(title="AgentGate API", version="0.8.0")
 
 DASHBOARD_HTML = Path(__file__).parent.parent / "dashboard" / "index.html"
 
