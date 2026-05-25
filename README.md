@@ -3,7 +3,7 @@
 ## Installation
 
 ```bash
-pip install agentgate
+pip install agentgate-reliability
 ```
 
 Or install from source:
@@ -106,7 +106,7 @@ Guidance is computed fresh every time from current session state — contains th
 ## Quick start
 
 ```bash
-pip install agentgate
+pip install agentgate-reliability
 ```
 
 ```python
