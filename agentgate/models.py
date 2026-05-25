@@ -78,6 +78,7 @@ class Decision:
     # AgentGate caught and what to do about it. None when no intervention is
     # warranted. See GatewayClient._generate_agent_guidance.
     agent_guidance: str | None = None
+    observe_mode: bool = False
     latency_ms: float = 0.0
     decided_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 

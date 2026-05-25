@@ -47,6 +47,7 @@ CREATE TABLE IF NOT EXISTS audit_log (
     escalation_id       TEXT,
     latency_ms          REAL,
     oversight_authority TEXT,
+    observe_mode        INTEGER DEFAULT 0,
     decided_at          TEXT NOT NULL
 );
 """
@@ -138,6 +139,7 @@ class AuditLogger:
                 "risk_reason TEXT", "human_decision TEXT", "human_reason TEXT",
                 "oversight_authority TEXT",
                 "agent_guidance TEXT",
+                "observe_mode INTEGER DEFAULT 0",
             ):
                 try:
                     await db.execute(f"ALTER TABLE audit_log ADD COLUMN {col}")
@@ -182,8 +184,8 @@ class AuditLogger:
                      reliability_score, reliability_summary,
                      human_decision, human_reason,
                      policy_matched, escalation_id, latency_ms,
-                     oversight_authority, decided_at)
-                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                     oversight_authority, observe_mode, decided_at)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                     (
                         str(uuid4()),
                         tc.call_id,
@@ -217,6 +219,7 @@ class AuditLogger:
                         decision.escalation_id,
                         decision.latency_ms,
                         oversight,
+                        1 if decision.observe_mode else 0,
                         decision.decided_at.isoformat(),
                     ),
                 )

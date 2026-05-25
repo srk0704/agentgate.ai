@@ -60,14 +60,31 @@ class GatewayClient:
 
     def __init__(
         self,
-        policy_path: str,
-        db_path: str,
+        policy_path: str | None = None,
+        db_path: str = "./agentgate.db",
         risk_scorer: RiskScorer | None = None,
         fail_open: bool = True,
         timeout_ms: float = 10000.0,
         escalation_timeout_sec: float = 300.0,
         compliance_mode: bool = False,
+        mode: str = "enforce",
     ):
+        self._mode = mode.lower().strip()
+        if self._mode not in ("observe", "enforce"):
+            raise ValueError(
+                f"Invalid AGENTGATE_MODE '{mode}'. "
+                f"Must be 'observe' or 'enforce'."
+            )
+
+        if self._mode == "enforce" and not policy_path:
+            raise ValueError(
+                "AGENTGATE_POLICY_PATH is required in "
+                "enforce mode. Run "
+                "'agentgate generate-policy' first to "
+                "generate a policy from observations, "
+                "then set AGENTGATE_POLICY_PATH in .env"
+            )
+
         self.fail_open = fail_open
         self.timeout_ms = timeout_ms
         self.escalation_timeout_sec = escalation_timeout_sec
@@ -120,7 +137,12 @@ class GatewayClient:
         self._loop_block = int(os.getenv("AGENTGATE_LOOP_THRESHOLD_BLOCK", "85"))
         self._loop_escalate = int(os.getenv("AGENTGATE_LOOP_THRESHOLD_ESCALATE", "70"))
 
-        self._policy_evaluator = PolicyEvaluator(PolicyLoader(policy_path))
+        if policy_path:
+            self._policy_evaluator = PolicyEvaluator(
+                PolicyLoader(policy_path)
+            )
+        else:
+            self._policy_evaluator = None
         self._audit = AuditLogger(db_path)
         from agentgate.escalation import EscalationQueue
         EscalationQueue.configure(db_path)
@@ -139,13 +161,28 @@ class GatewayClient:
     @classmethod
     def from_env(cls) -> "GatewayClient":
         """Construct client from environment variables."""
+        mode = os.getenv("AGENTGATE_MODE", "enforce")
         return cls(
-            policy_path=os.getenv("AGENTGATE_POLICY_PATH", "./policies.yaml"),
-            db_path=os.getenv("AGENTGATE_DB_PATH", "./agentgate.db"),
-            fail_open=os.getenv("AGENTGATE_FAIL_OPEN", "true").lower() == "true",
-            timeout_ms=float(os.getenv("AGENTGATE_TIMEOUT_MS", "10000")),
-            escalation_timeout_sec=float(os.getenv("AGENTGATE_ESCALATION_TIMEOUT_SEC", "300")),
-            compliance_mode=os.getenv("AGENTGATE_COMPLIANCE_MODE", "false").lower() == "true",
+            policy_path=os.getenv("AGENTGATE_POLICY_PATH"),
+            db_path=os.getenv(
+                "AGENTGATE_DB_PATH", "./agentgate.db"
+            ),
+            fail_open=os.getenv(
+                "AGENTGATE_FAIL_OPEN", "true"
+            ).lower() == "true",
+            timeout_ms=float(
+                os.getenv("AGENTGATE_TIMEOUT_MS", "10000")
+            ),
+            escalation_timeout_sec=float(
+                os.getenv(
+                    "AGENTGATE_ESCALATION_TIMEOUT_SEC",
+                    "300"
+                )
+            ),
+            compliance_mode=os.getenv(
+                "AGENTGATE_COMPLIANCE_MODE", "false"
+            ).lower() == "true",
+            mode=mode,
         )
 
     @classmethod
@@ -175,6 +212,7 @@ class GatewayClient:
         from agentgate.policy import PolicyLoader, PolicyEvaluator
 
         instance = object.__new__(cls)
+        instance._mode = "enforce"
         instance.fail_open = fail_open
         instance.timeout_ms = timeout_ms
         instance.escalation_timeout_sec = escalation_timeout_sec
@@ -210,6 +248,32 @@ class GatewayClient:
         Always returns a Decision — never raises.
         """
         start = time.monotonic()
+        # Observe mode — log everything, block nothing.
+        # Generates training data for agentgate generate-policy.
+        if self._mode == "observe":
+            obs_decision = Decision(
+                outcome=DecisionOutcome.ALLOWED,
+                tool_call=tool_call,
+                reason="Observe mode — logging only, "
+                       "not enforcing",
+                observe_mode=True,
+            )
+            obs_decision.latency_ms = (
+                time.monotonic() - start
+            ) * 1000
+            await self._audit.log(obs_decision)
+            # Progress feedback in development only
+            if os.getenv(
+                "AGENTGATE_ENV", "production"
+            ) == "development":
+                logger.info(
+                    "[AgentGate observe] tool=%s "
+                    "agent=%s — logged (not enforced)",
+                    tool_call.tool_name,
+                    tool_call.agent_id,
+                )
+            return obs_decision
+
         try:
             decision = await self._evaluate_internal(tool_call)
         except Exception as exc:
@@ -261,9 +325,17 @@ class GatewayClient:
         blast_radius = self._blast_radius.estimate(tool_call)
 
         # Step 2: Policy check — synchronous, instant.
-        policy_result = self._policy_evaluator.evaluate(tool_call)
+        if self._policy_evaluator is None:
+            # No policy loaded — allow by default
+            # (should only happen in observe mode,
+            # which returns before reaching here)
+            policy_result = None
+        else:
+            policy_result = self._policy_evaluator.evaluate(
+                tool_call
+            )
 
-        if policy_result.effect == Effect.BLOCK:
+        if policy_result and policy_result.effect == Effect.BLOCK:
             # Still run lightweight scorers on policy blocks so we can surface
             # injection attacks AND off-task drift embedded in content that
             # also violated a policy rule. Without this, anything caught by an
@@ -384,7 +456,7 @@ class GatewayClient:
             drift_score=drift_score, drift_reason=drift_reason,
             loop_score=loop_score, loop_reason=loop_reason,
             blast_radius=blast_radius,
-            policy_matched=policy_result.policy_name,
+            policy_matched=policy_result.policy_name if policy_result else None,
         )
 
         # Step 4: Decision routing (injection wins over explicit policy ALLOW).
@@ -448,7 +520,7 @@ class GatewayClient:
 
         # Escalation check — blast_radius critical forces escalation.
         needs_escalation = (
-            policy_result.effect == Effect.ESCALATE
+            (policy_result and policy_result.effect == Effect.ESCALATE)
             or (risk_score is not None and risk_score >= escalate_threshold)
             or blast_radius.get("severity") == "critical"
             or (anomaly_score is not None and anomaly_score >= anomaly_escalate_threshold)
@@ -461,7 +533,7 @@ class GatewayClient:
             return Decision(
                 outcome=DecisionOutcome.ESCALATED,
                 tool_call=tool_call,
-                reason=policy_result.reason or "Requires human approval",
+                reason=(policy_result.reason if policy_result else None) or "Requires human approval",
                 escalation_id=escalation_id,
                 **common,
             )
