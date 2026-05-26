@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 app = FastAPI(title="AgentGate API", version="0.8.1")
 
 # Paths that never require an API key
-_AUTH_SKIP = frozenset({"/", "/health"})
+_AUTH_SKIP = frozenset({"/health", "/v2"})
 
 
 class _ApiKeyMiddleware(BaseHTTPMiddleware):
