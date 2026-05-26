@@ -1,5 +1,7 @@
 # AgentGate
 
+[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/new/template?template=https://github.com/srk0704/agentgate.ai)
+
 ## Installation
 
 ```bash
@@ -327,6 +329,29 @@ poetry run pytest tests/ -q
 **12 months** — Multi-agent fleet management. SOC2 Type 1. First enterprise contract.
 
 **24 months** — Cross-customer threat intelligence. The Cloudflare model for AI agents.
+
+---
+
+## Deploy to Railway
+
+One-click deploy of the AgentGate 
+API and dashboard to Railway:
+
+[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/new/template?template=https://github.com/srk0704/agentgate.ai)
+
+**Required environment variables 
+to set in Railway dashboard:**
+
+| Variable | Description | Required |
+|---|---|---|
+| `ANTHROPIC_API_KEY` | Anthropic API key for LLM scoring | Yes |
+| `AGENTGATE_MODE` | `observe` or `enforce` | Yes |
+| `AGENTGATE_POLICY_PATH` | Path to policy file | Only in enforce mode |
+| `AGENTGATE_DB_PATH` | SQLite path — defaults to `/data/agentgate.db` | No |
+| `AGENTGATE_ENV` | `development` or `production` — defaults to `production` | No |
+
+After deploying, open:
+  https://your-app.up.railway.app/v2
 
 ---
 
