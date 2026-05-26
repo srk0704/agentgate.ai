@@ -26,8 +26,6 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title="AgentGate API", version="0.8.1")
 
-DASHBOARD_HTML = Path(__file__).parent.parent / "dashboard" / "index.html"
-
 # Paths that never require an API key
 _AUTH_SKIP = frozenset({"/", "/health"})
 
@@ -108,14 +106,6 @@ def _parse_financial_impact(blast_radius_json: str | None) -> float:
 # ---------------------------------------------------------------------------
 # Dashboard
 # ---------------------------------------------------------------------------
-
-
-@app.get("/", include_in_schema=False)
-async def dashboard() -> FileResponse:
-    """Serve the single-page dashboard."""
-    if not DASHBOARD_HTML.exists():
-        raise HTTPException(status_code=404, detail="Dashboard not built")
-    return FileResponse(DASHBOARD_HTML, media_type="text/html")
 
 
 @app.get("/v2", include_in_schema=False)
