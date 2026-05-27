@@ -748,8 +748,8 @@ def cmd_validate_policy(
     )
 
     for i, rule in enumerate(policies):
-        tool = rule.get("tool", "")
-        action = rule.get("action", "")
+        tool = rule.get("match", {}).get("tool", "")
+        action = rule.get("effect", "") or rule.get("action", "")
 
         if tool in seen_tools:
             warnings.append(
@@ -768,7 +768,8 @@ def cmd_validate_policy(
                 f"is set to {action} — intentional?"
             )
 
-        if not action and not rule.get("conditions"):
+        if not action and not rule.get("conditions") \
+           and not rule.get("effect"):
             errors.append(
                 f"Rule {i+1} for '{tool}' has "
                 f"no action or conditions"
