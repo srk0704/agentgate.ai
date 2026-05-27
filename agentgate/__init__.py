@@ -1,7 +1,7 @@
 """AgentGate — access control for AI agents."""
 from __future__ import annotations
 
-__version__ = "0.8.1"
+__version__ = "0.8.2"
 
 
 def quickcheck() -> None:
@@ -69,13 +69,21 @@ def quickcheck() -> None:
             f"Expected ALLOWED, got {allowed.outcome}"
         )
 
-        print("AgentGate quickcheck passed:")
-        print(f"  ❌ wire_transfer  → {blocked.outcome.value}  ({blocked.reason})")
-        print(f"  ✅ lookup_customer → {allowed.outcome.value}  ({allowed.reason})")
+        print("AgentGate is installed and working.")
 
+    import logging
+    # Suppress internal log noise during
+    # quickcheck so users only see the
+    # clean summary output
+    logging.getLogger("agentgate").setLevel(
+        logging.ERROR
+    )
     try:
         asyncio.run(_run())
     finally:
+        logging.getLogger("agentgate").setLevel(
+            logging.WARNING
+        )
         try:
             os.unlink(_db_path)
         except OSError:

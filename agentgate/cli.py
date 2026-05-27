@@ -12,8 +12,17 @@ ENV_TEMPLATE = """\
 
 ANTHROPIC_API_KEY=your-key-here
 AGENTGATE_DB_PATH=./agentgate.db
-AGENTGATE_POLICY_PATH=./policy.yaml
 AGENTGATE_ENV=development
+
+# Mode: observe (learn) or enforce (protect)
+# Start with observe — AgentGate will log
+# everything without blocking anything.
+# Run: agentgate generate-policy
+# when ready to generate your policy.
+AGENTGATE_MODE=observe
+
+# Uncomment after running generate-policy:
+# AGENTGATE_POLICY_PATH=./policy.yaml
 """
 
 
@@ -40,26 +49,39 @@ def cmd_init(args: argparse.Namespace) -> None:
     print("✓ Created .env.example")
     print()
     print("Next steps:")
+    print()
     print("  1. cp .env.example .env")
     print("     Add your ANTHROPIC_API_KEY")
     print()
-    print("  2. Run agentgate check to verify")
-    print("     installation (no API key needed)")
+    print("  2. Set AGENTGATE_MODE=observe")
+    print("     in .env — AgentGate will log")
+    print("     everything without blocking.")
     print()
     print("  3. Add 3 lines to your agent:")
     print()
+    print("     from agentgate.client import"
+          " GatewayClient")
     print("     gate = GatewayClient.from_env()")
-    print("     decision = await gate.evaluate(tool_call)")
+    print("     decision = await"
+          " gate.evaluate(tool_call)")
     print("     if decision.is_allowed:")
-    print("         result = await my_tool(**args)")
+    print("         result = await"
+          " my_tool(**args)")
     print()
-    print("  4. Start the dashboard:")
-    print("     uvicorn agentgate.api.main:app --port 8000")
+    print("  4. Run your agent normally.")
+    print("     AgentGate observes and logs.")
     print()
-    print("  5. Open http://localhost:8000/v2")
+    print("  5. Generate your policy:")
+    print("     agentgate generate-policy")
     print()
-    print("Need help? Book a call:")
-    print("  https://calendly.com/sk4975-columbia/30min")
+    print("  6. Review policy.yaml then set:")
+    print("     AGENTGATE_MODE=enforce")
+    print("     AGENTGATE_POLICY_PATH="
+          "./policy.yaml")
+    print()
+    print("  Full guide: ONBOARDING.md")
+    print("  Book a call: calendly.com/"
+          "sk4975-columbia/30min")
 
 
 def cmd_generate_policy(
