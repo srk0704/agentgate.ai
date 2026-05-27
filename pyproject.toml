@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "agentgate-reliability"
-version = "0.8.3"
+version = "0.8.4"
 description = "The reliability layer for AI agents taking consequential actions"
 authors = ["Siddhant Kumar <sk4975@columbia.edu>"]
 license = "MIT"

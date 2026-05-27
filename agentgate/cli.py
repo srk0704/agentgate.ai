@@ -670,7 +670,10 @@ async def _generate_policy_async(
     )
 
     # ── Step 8: Summary ──────────────────────
-    print(f"\n✓ {output_path} generated")
+    print(
+        f"\n✓ policy.yaml written to "
+        f"{output_path.resolve()}"
+    )
     print(
         f"  {len(tool_stats)} tools analysed"
     )

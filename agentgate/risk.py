@@ -65,7 +65,14 @@ class RiskScorer:
         recent_calls: list[dict] | None = None,
     ) -> tuple[int, str]:
         import anthropic
-        client = anthropic.AsyncAnthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+        api_key = os.getenv("ANTHROPIC_API_KEY")
+        if not api_key or api_key == "your-key-here":
+            raise ValueError(
+                "ANTHROPIC_API_KEY not set"
+            )
+        client = anthropic.AsyncAnthropic(
+            api_key=api_key
+        )
 
         # Build trajectory section if we have recent calls in this session.
         if recent_calls:
