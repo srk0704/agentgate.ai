@@ -52,8 +52,20 @@ class RiskScorer:
 
         try:
             result = await self._llm_score(tool_call, recent_calls)
-        except Exception as e:
-            logger.warning("Risk scorer LLM failed [%s]: %s — using heuristic", type(e).__name__, e)
+        except Exception as exc:
+            # ValueError means key missing/invalid —
+            # expected in dev, log quietly
+            if isinstance(exc, ValueError):
+                logger.debug(
+                    "Risk scorer skipping LLM: %s",
+                    exc
+                )
+            else:
+                logger.warning(
+                    "Risk scorer LLM failed "
+                    "[%s]: %s — using heuristic",
+                    type(exc).__name__, exc
+                )
             result = self._heuristic_score(tool_call)
 
         _cache[cache_key] = result

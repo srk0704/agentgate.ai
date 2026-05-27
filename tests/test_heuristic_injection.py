@@ -178,8 +178,9 @@ async def test_compliance_mode_uses_heuristic(tool_call_with_injection):
 
 
 @pytest.mark.asyncio
-async def test_standard_mode_uses_llm(tool_call_with_injection):
+async def test_standard_mode_uses_llm(tool_call_with_injection, monkeypatch):
     """In standard mode, the LLM IS called."""
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
     scorer = InjectionScorer(compliance_mode=False)
 
     mock_response = AsyncMock()

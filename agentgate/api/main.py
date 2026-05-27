@@ -24,7 +24,7 @@ from agentgate.escalation import EscalationQueue
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="AgentGate API", version="0.8.4")
+app = FastAPI(title="AgentGate API", version="0.8.5")
 
 # Paths that never require an API key
 _AUTH_SKIP = frozenset({"/health", "/v2"})
