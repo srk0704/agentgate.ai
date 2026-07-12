@@ -51,21 +51,33 @@ research basis behind every default threshold.
 │  ┌─────────────────────────────────────────────────────────────┐ │
 │  │ 1. PolicyEngine (YAML)                          ~0ms         │ │
 │  │    • match tool + conditions                                  │ │
-│  │    • effect: block → immediate BLOCKED                        │ │
-│  │    • effect: allow → immediate ALLOWED (skip LLM)            │ │
-│  │    • effect: escalate → go to step 3                         │ │
+│  │    • effect: block → immediate BLOCKED (skips scoring,       │ │
+│  │      except injection/drift still run so blocked calls       │ │
+│  │      still show up in failure-mode stats)                    │ │
+│  │    • effect: allow → continues to step 2 — an explicit       │ │
+│  │      allow does NOT skip scoring; injection/risk/anomaly/    │ │
+│  │      drift/loop can still block or escalate it                │ │
+│  │    • effect: escalate → continues to step 2                  │ │
+│  │    • no match → continues to step 2                          │ │
 │  └──────────────────────────────┬──────────────────────────────┘ │
 │                                 │ not blocked                      │
 │  ┌──────────────────────────────▼──────────────────────────────┐ │
 │  │ 2. Parallel Scoring                             ~100-2000ms  │ │
 │  │                                                               │ │
-│  │  RiskScorer          InjectionScorer     AnomalyScorer       │ │
-│  │  (Claude Haiku)      (Claude Haiku)      (pure logic)        │ │
-│  │  0-100 score         0-100 score         0-100 score         │ │
-│  │  + reason            + attack_type       + reason            │ │
+│  │  RiskScorer      InjectionScorer   AnomalyScorer             │ │
+│  │  (Claude Haiku)  (Claude Haiku +   (pure logic)               │ │
+│  │  0-100 score      heuristic regex, 0-100 score               │ │
+│  │  + reason         max of both)     + reason                  │ │
+│  │                   0-100 score                                 │ │
+│  │                   + attack_type                                │ │
+│  │                                                                 │ │
+│  │  DriftDetector (structural + LLM)   LoopDetector (DB query)   │ │
+│  │  0-100 score + reason               0-100 score + reason      │ │
 │  │                                                               │ │
-│  │  asyncio.gather() — all three run in parallel                 │ │
-│  │  5s timeout → fail open (configurable)                       │ │
+│  │  asyncio.gather() — all five run in parallel                  │ │
+│  │  AGENTGATE_TIMEOUT_MS timeout (default 10s) → fail open,     │ │
+│  │  except critical/high blast-radius actions, which block      │ │
+│  │  on timeout instead                                            │ │
 │  └──────────────────────────────┬──────────────────────────────┘ │
 │                                 │                                   │
 │  ┌──────────────────────────────▼──────────────────────────────┐ │
@@ -73,15 +85,22 @@ research basis behind every default threshold.
 │  │    injection ≥ 70  → BLOCKED                                  │ │
 │  │    risk ≥ 80       → BLOCKED                                  │ │
 │  │    anomaly ≥ 80    → BLOCKED                                  │ │
-│  │    risk/anomaly ≥ 60 or policy=escalate → ESCALATED          │ │
+│  │    drift ≥ 85      → BLOCKED                                  │ │
+│  │    loop ≥ 85        → BLOCKED                                 │ │
+│  │    policy=escalate, or risk ≥ 60, or anomaly ≥ 50, or        │ │
+│  │      drift ≥ 60, or loop ≥ 70, or blast radius = critical    │ │
+│  │      → ESCALATED                                              │ │
 │  │    else            → ALLOWED                                  │ │
+│  │    (all thresholds configurable via env vars — see README)   │ │
 │  └──────────────────────────────┬──────────────────────────────┘ │
 │                                 │                                   │
 │  ┌──────────────────────────────▼──────────────────────────────┐ │
-│  │ 4. EscalationQueue (if escalated)            up to 60s       │ │
+│  │ 4. EscalationQueue (if escalated)   up to AGENTGATE_          │ │
+│  │                                     ESCALATION_TIMEOUT_SEC    │ │
+│  │                                     (default 300s)            │ │
 │  │    • Stored in SQLite                                         │ │
-│  │    • Human approves/rejects via dashboard or API             │ │
-│  │    • Auto-rejects after 60s timeout                          │ │
+│  │    • Human approves/rejects via Slack, dashboard, or API     │ │
+│  │    • Auto-rejects after the timeout                          │ │
 │  └──────────────────────────────┬──────────────────────────────┘ │
 │                                 │                                   │
 │  ┌──────────────────────────────▼──────────────────────────────┐ │

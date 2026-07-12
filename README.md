@@ -58,8 +58,18 @@ AgentGate catches these failures before they execute.
 | High blast radius | Heuristic financial impact | Pre-execution |
 
 **Two detection boundaries:**
-- Pre-execution — scans tool call inputs before the tool runs
-- Post-execution — scans tool results for hidden instructions before the agent reads them
+- Pre-execution — scans tool call inputs before the tool runs (`gate.evaluate(tool_call)`)
+- Post-execution — scans tool results for hidden instructions before the agent reads them (`gate.scan_tool_result(result, tool_name=...)`) — catches indirect prompt injection smuggled in a webpage, email, or API response the agent reads back
+
+```python
+result = await my_tool(**args)
+scan = await gate.scan_tool_result(result, tool_name="fetch_webpage", agent_id="my-agent")
+if not scan["safe"]:
+    # don't let the agent read this result as-is — scan["injection_reason"] explains why
+    ...
+```
+
+HTTP equivalent for non-Python integrations: `POST /scan/tool-result`.
 
 **Self-learning loop** — every human approval and rejection becomes labeled training data. AgentGate automatically raises escalation thresholds, adds policy rules, and improves over time. No model retraining. Policy updates in milliseconds.
 
@@ -179,7 +189,7 @@ policies:
 
 ## Dashboard
 
-Two dashboard versions — run the server and open in browser:
+Run the server and open in browser:
 
 ```bash
 AGENTGATE_DB_PATH=./agentgate.db \
@@ -187,10 +197,10 @@ AGENTGATE_POLICY_PATH=./policy.yaml \
 uvicorn agentgate.api.main:app --host 0.0.0.0 --port 8000
 ```
 
-- `http://localhost:8000` — v1 (dark, data-dense, engineer-facing)
-- `http://localhost:8000/v2` — v2 (white, narrative, executive-facing)
+- `http://localhost:8000/v2` — the dashboard (white, narrative, executive-facing)
+- `http://localhost:8000/landing` — the marketing landing page
 
-**v2 tabs:**
+**Tabs:**
 - **Overview** — plain English narrative: "Your agent caught 8 threats today"
 - **Failure modes** — three zones: Active (with line sparklines), Monitoring, Coming soon
 - **Escalations** — full context, actionable pre-decision checklist, approve/reject
@@ -200,13 +210,38 @@ uvicorn agentgate.api.main:app --host 0.0.0.0 --port 8000
 
 ---
 
+## Slack escalations
+
+Escalations post to Slack with one-click Approve/Reject buttons a reviewer
+can act on from their phone — no dashboard required.
+
+```bash
+SLACK_WEBHOOK_URL=https://hooks.slack.com/services/...
+SLACK_SIGNING_SECRET=...   # from your Slack app's Basic Information page
+```
+
+Setup:
+1. Create a Slack app at api.slack.com/apps, add an Incoming Webhook for
+   your channel, and set `SLACK_WEBHOOK_URL` to it.
+2. Under **Interactivity & Shortcuts**, turn Interactivity on and set the
+   Request URL to `https://your-agentgate-host/slack/interactions`.
+3. Set `SLACK_SIGNING_SECRET` to the app's Signing Secret. AgentGate
+   verifies every button click against it — without a matching signature,
+   the request is rejected before it can approve or reject anything.
+
+Without `SLACK_SIGNING_SECRET` set, escalation messages still post to
+Slack but fall back to plain text — there's nothing to receive a click on,
+so decide via the dashboard or `POST /escalations/{id}/approve`.
+
+---
+
 ## Architecture
 
 Every tool call goes through this pipeline:
 Agent → BlastRadiusEstimator → PolicyEngine → [parallel scoring] → Decision → AuditLog
 ↓
 RiskScorer (LLM + trajectory context)
-InjectionScorer (LLM)
+InjectionScorer (LLM + heuristic pattern match, max of both)
 AnomalyScorer (DB query)
 DriftDetector (structural + LLM)
 LoopDetector (DB query)
