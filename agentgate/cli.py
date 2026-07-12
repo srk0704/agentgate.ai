@@ -6,6 +6,16 @@ import os
 import sys
 from pathlib import Path
 
+from dotenv import find_dotenv, load_dotenv
+
+# usecwd=True: search from the customer's current working directory, not
+# from wherever this package happens to be installed (site-packages for a
+# normal pip install, or the agentgate.ai source checkout for an editable
+# install) — otherwise a source/editable install picks up the wrong .env
+# entirely when the frame-based default search walks up from the package's
+# own file location instead of the caller's project.
+load_dotenv(find_dotenv(usecwd=True), override=False)
+
 ENV_TEMPLATE = """\
 # AgentGate environment variables
 # Copy this to .env and fill in your values
@@ -23,6 +33,10 @@ AGENTGATE_MODE=observe
 
 # Uncomment after running generate-policy:
 # AGENTGATE_POLICY_PATH=./policy.yaml
+
+# Slack escalations (optional) — see README for setup:
+# SLACK_WEBHOOK_URL=https://hooks.slack.com/services/your/webhook/url
+# SLACK_SIGNING_SECRET=your-app-signing-secret
 """
 
 
@@ -82,6 +96,57 @@ def cmd_init(args: argparse.Namespace) -> None:
     print("  Full guide: ONBOARDING.md")
     print("  Book a call: calendly.com/"
           "sk4975-columbia/30min")
+
+
+def _qualifying_identifier_conditions(
+    identifier_args: dict, count: int
+) -> list[dict]:
+    """Pick out identifier-like string args worth a novel-value check.
+
+    Floor of 2: a constant value never has a "new" case to catch. Ceiling
+    of 0.8: a field that's almost always a different value on every call
+    (request IDs, nonces, timestamps) isn't a bounded "known set" — treating
+    it as one would flag nearly every call.
+    """
+    result = []
+    for arg, seen_values in identifier_args.items():
+        cardinality = len(seen_values)
+        if cardinality >= 2 and cardinality / count <= 0.8:
+            result.append({
+                "arg": arg,
+                "known_values": sorted(seen_values),
+            })
+    return result
+
+
+def _confirm(prompt: str, *, force: bool, default_yes: bool = False) -> bool:
+    """Ask an interactive yes/no question.
+
+    If force is set, skips the prompt and returns True — this is the
+    escape hatch for non-interactive use (CI, Docker, scripts). If stdin
+    isn't a TTY and force wasn't passed, fails with a clear message
+    instead of crashing on EOFError.
+    """
+    if force:
+        return True
+    if not sys.stdin.isatty():
+        print(
+            f"{prompt}\n"
+            "Not running in an interactive terminal — "
+            "re-run with --force to proceed without prompting."
+        )
+        sys.exit(1)
+    try:
+        answer = input(prompt).strip().lower()
+    except EOFError:
+        print(
+            "\nNo input received — "
+            "re-run with --force to proceed without prompting."
+        )
+        sys.exit(1)
+    if not answer:
+        return default_yes
+    return answer == "y"
 
 
 def cmd_generate_policy(
@@ -144,10 +209,9 @@ async def _generate_policy_async(
             f"  Generated policy may not reflect "
             f"full production behavior.\n"
         )
-        answer = input(
-            "Generate anyway? [y/N] "
-        ).strip().lower()
-        if answer != "y":
+        if not _confirm(
+            "Generate anyway? [y/N] ", force=args.force
+        ):
             print("Cancelled.")
             sys.exit(0)
 
@@ -167,6 +231,7 @@ async def _generate_policy_async(
     tool_stats: dict = defaultdict(lambda: {
         "count": 0,
         "numeric_args": defaultdict(list),
+        "identifier_args": defaultdict(set),
         "is_readonly": False,
         "is_destructive": False,
         "sample_args": [],
@@ -202,6 +267,10 @@ async def _generate_policy_async(
                             stats[
                                 "numeric_args"
                             ][k].append(float(v))
+                        elif isinstance(v, str):
+                            stats[
+                                "identifier_args"
+                            ][k].add(v)
                     if len(
                         stats["sample_args"]
                     ) < 3:
@@ -259,8 +328,15 @@ async def _generate_policy_async(
                 p90 = sorted_vals[
                     int(len(sorted_vals) * 0.9)
                 ]
-                escalate_at = round(p90 * 2, -2)
-                block_at = round(max_val * 10, -2)
+                # Escalate just above the highest amount ever observed, not
+                # 2x the p90 — a flat multiplier of the 90th percentile can
+                # sit *below* the actual max, which would auto-allow the
+                # single largest (and most anomalous) payment in the whole
+                # training set. Block at a hard ceiling well beyond
+                # anything observed, not 10x the max — 10x on a single
+                # outlier produces a threshold too high to ever fire.
+                escalate_at = round(max_val * 1.2, -2)
+                block_at = round(max_val * 3, -2)
                 conditions.append({
                     "arg": arg,
                     "escalate_at": escalate_at,
@@ -269,6 +345,18 @@ async def _generate_policy_async(
                     "max": max_val,
                     "count": len(values),
                 })
+
+            # Novel-recipient escalation: flag any identifier-like arg value
+            # never seen during observation, regardless of amount. Amount
+            # thresholds alone can't catch a normal-sized payment to a
+            # brand-new payee — this is a standard fraud-control heuristic
+            # (first payment to a new payee gets reviewed) that needs no LLM.
+            identifier_conditions = (
+                _qualifying_identifier_conditions(
+                    stats["identifier_args"], count
+                )
+            )
+
             heuristic_rules.append({
                 "tool": tool,
                 "effect": "threshold",
@@ -278,6 +366,9 @@ async def _generate_policy_async(
                     f"observations"
                 ),
                 "conditions": conditions,
+                "identifier_conditions": (
+                    identifier_conditions
+                ),
             })
 
         elif freq_ratio < 0.01:
@@ -292,16 +383,42 @@ async def _generate_policy_async(
             })
 
         else:
-            heuristic_rules.append({
-                "tool": tool,
-                "effect": "escalate",
-                "heuristic_reason": (
-                    f"Unknown classification — "
-                    f"escalate by default. "
-                    f"Observed {count}x."
-                ),
-                "conditions": [],
-            })
+            # Before falling back to blanket escalation, see if there's a
+            # bounded, repeated identifier field (e.g. a recipient/to
+            # address) to gate on instead — allow known values, escalate
+            # only new ones. Blanket-escalating every call on an
+            # unclassified but routine tool (e.g. send_email) pages a human
+            # for every ordinary transactional email, which trains
+            # reviewers to rubber-stamp the queue.
+            gating = _qualifying_identifier_conditions(
+                stats["identifier_args"], count
+            )
+            if gating:
+                arg = gating[0]["arg"]
+                heuristic_rules.append({
+                    "tool": tool,
+                    "effect": "known_value_gate",
+                    "heuristic_reason": (
+                        f"Unknown classification, but "
+                        f"'{arg}' repeats across a "
+                        f"bounded set of values — "
+                        f"allow known values, escalate "
+                        f"new ones. Observed {count}x."
+                    ),
+                    "conditions": [],
+                    "identifier_conditions": gating[:1],
+                })
+            else:
+                heuristic_rules.append({
+                    "tool": tool,
+                    "effect": "escalate",
+                    "heuristic_reason": (
+                        f"Unknown classification — "
+                        f"escalate by default. "
+                        f"Observed {count}x."
+                    ),
+                    "conditions": [],
+                })
 
     # ── Step 4: AI enrichment ────────────────
     ai_enriched: dict[str, dict] = {}
@@ -505,6 +622,45 @@ async def _generate_policy_async(
             or rule["conditions"]
         ):
             first = True
+
+            # Novel-recipient rules first — must be checked ahead of the
+            # amount-based rules below so a normal-sized payment to a
+            # first-time payee still escalates instead of falling through
+            # to the amount-only "allow" rule.
+            for idcond in rule.get(
+                "identifier_conditions", []
+            ):
+                arg = idcond["arg"]
+                base = (
+                    f"{tool}_{arg}"
+                    .replace(".", "_")
+                )
+                final_rules.append({
+                    "comment": (
+                        comment if first else None
+                    ),
+                    "name": (
+                        f"escalate_{base}_new_value"
+                    ),
+                    "match": {"tool": tool},
+                    "conditions": [{
+                        "field": f"args.{arg}",
+                        "op": "not_in",
+                        "value": idcond[
+                            "known_values"
+                        ],
+                    }],
+                    "effect": "escalate",
+                    "reason": (
+                        f"{arg} value not seen "
+                        f"during observation — "
+                        f"first-time value requires "
+                        f"review regardless of "
+                        f"amount"
+                    ),
+                })
+                first = False
+
             for cond in rule["conditions"]:
                 arg = cond["arg"]
                 ai_thresh = (
@@ -568,6 +724,38 @@ async def _generate_policy_async(
                     ),
                 })
                 first = False
+        elif final_effect == "known_value_gate":
+            idcond = rule["identifier_conditions"][0]
+            arg = idcond["arg"]
+            base = f"{tool}_{arg}".replace(".", "_")
+            final_rules.append({
+                "comment": comment,
+                "name": f"escalate_{base}_new_value",
+                "match": {"tool": tool},
+                "conditions": [{
+                    "field": f"args.{arg}",
+                    "op": "not_in",
+                    "value": idcond["known_values"],
+                }],
+                "effect": "escalate",
+                "reason": (
+                    f"{arg} value not seen during "
+                    f"observation — first-time value "
+                    f"requires review"
+                ),
+            })
+            final_rules.append({
+                "comment": None,
+                "name": f"allow_{tool}_known_{arg}",
+                "match": {"tool": tool},
+                "conditions": [],
+                "effect": "allow",
+                "reason": (
+                    f"{tool} permitted — {arg} "
+                    f"matches a previously observed "
+                    f"value"
+                ),
+            })
         else:
             final_rules.append({
                 "comment": comment,
@@ -589,9 +777,22 @@ async def _generate_policy_async(
             f"policy.generated.yaml\n"
             f"  [3] Cancel\n"
         )
-        choice = input(
-            "Choice [1/2/3]: "
-        ).strip()
+        if not sys.stdin.isatty():
+            print(
+                "Not running in an interactive terminal — "
+                "re-run with --force to overwrite without prompting."
+            )
+            sys.exit(1)
+        try:
+            choice = input(
+                "Choice [1/2/3]: "
+            ).strip()
+        except EOFError:
+            print(
+                "\nNo input received — "
+                "re-run with --force to overwrite without prompting."
+            )
+            sys.exit(1)
         if choice == "2":
             output_path = Path(
                 "policy.generated.yaml"

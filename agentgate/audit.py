@@ -403,6 +403,18 @@ class AuditLogger:
             )
             await db.commit()
 
+    async def recent_pii_scans(self, limit: int = 100) -> list[dict]:
+        """Get recent PII scan results, most recent first."""
+        await self._ensure_init()
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            async with db.execute(
+                "SELECT * FROM pii_scan_log ORDER BY scanned_at DESC LIMIT ?",
+                (limit,),
+            ) as cur:
+                rows = await cur.fetchall()
+        return [dict(r) for r in rows]
+
     async def get_decision_count(
         self,
         agent_id: str | None = None,

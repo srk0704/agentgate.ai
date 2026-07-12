@@ -69,7 +69,9 @@ def quickcheck() -> None:
             f"Expected ALLOWED, got {allowed.outcome}"
         )
 
-        print("AgentGate is installed and working.")
+        print("AgentGate quickcheck passed:")
+        print("  ❌ wire_transfer   → blocked")
+        print("  ✅ lookup_customer → allowed")
 
     import logging
     # Suppress internal log noise during

@@ -5,6 +5,8 @@ import os
 import time
 from typing import Callable
 
+from dotenv import find_dotenv, load_dotenv
+
 from agentgate.models import Decision, DecisionOutcome, Effect, ToolCall
 from agentgate.anomaly import AnomalyScorer
 from agentgate.audit import AuditLogger
@@ -13,6 +15,13 @@ from agentgate.injection import InjectionScorer
 from agentgate.policy import PolicyEvaluator, PolicyLoader
 from agentgate.risk import RiskScorer
 from agentgate.session import SessionTracker
+
+# usecwd=True: search from the customer's current working directory, not
+# from wherever this package happens to be installed — otherwise a source/
+# editable install (`git clone && poetry install`) walks up from the
+# agentgate.ai checkout's own file location and can pick up a completely
+# unrelated .env instead of the customer's project one.
+load_dotenv(find_dotenv(usecwd=True), override=False)
 
 logger = logging.getLogger(__name__)
 
@@ -157,6 +166,8 @@ class GatewayClient:
         self._loop_detector = LoopDetector(db_path=db_path)
         from agentgate.pii_detector import PiiDetector
         self._pii_detector = PiiDetector()
+        from agentgate.output_logger import OutputLogger
+        self._output_logger = OutputLogger(db_path)
 
     @classmethod
     def from_env(cls) -> "GatewayClient":
@@ -240,6 +251,8 @@ class GatewayClient:
         instance._loop_detector = LoopDetector(db_path=db_path)
         from agentgate.pii_detector import PiiDetector
         instance._pii_detector = PiiDetector()
+        from agentgate.output_logger import OutputLogger
+        instance._output_logger = OutputLogger(db_path)
         return instance
 
     async def evaluate(self, tool_call: ToolCall) -> Decision:
@@ -262,15 +275,19 @@ class GatewayClient:
                 time.monotonic() - start
             ) * 1000
             await self._audit.log(obs_decision)
-            # Progress feedback in development only
+            # Progress feedback in development only. print(), not
+            # logger.info() — this library never configures a logging
+            # handler (a library shouldn't; that's the host app's call),
+            # and Python's default "handler of last resort" only surfaces
+            # WARNING+, so an INFO-level message here would be silently
+            # dropped for anyone who hasn't set up logging themselves.
+            # ONBOARDING.md promises this line is visible out of the box.
             if os.getenv(
                 "AGENTGATE_ENV", "production"
             ) == "development":
-                logger.info(
-                    "[AgentGate observe] tool=%s "
-                    "agent=%s — logged (not enforced)",
-                    tool_call.tool_name,
-                    tool_call.agent_id,
+                print(
+                    f"[AgentGate observe] tool={tool_call.tool_name} "
+                    f"agent={tool_call.agent_id} — logged (not enforced)"
                 )
             return obs_decision
 
@@ -312,7 +329,12 @@ class GatewayClient:
                 decision.latency_ms,
             )
         elif decision.outcome == DecisionOutcome.ESCALATED:
-            logger.info(
+            # warning, not info — matches BLOCKED above. Python's default
+            # "handler of last resort" only surfaces WARNING+ when no
+            # handler is configured, so an info-level escalation was
+            # invisible in a customer's console while blocks were not —
+            # easy to mistake for escalations silently not firing at all.
+            logger.warning(
                 "ESCALATED agent=%s tool=%s escalation_id=%s risk=%s anomaly=%s latency=%.0fms",
                 tc.agent_id, tc.tool_name, decision.escalation_id,
                 decision.risk_score, decision.anomaly_score, decision.latency_ms,
@@ -687,6 +709,52 @@ class GatewayClient:
             )
 
         return None
+
+    async def scan_tool_result(
+        self,
+        tool_result: dict | str,
+        tool_name: str,
+        agent_id: str = "unknown",
+        call_id: str | None = None,
+        success: bool = True,
+    ) -> dict:
+        """
+        Scan a tool's return value for hidden instructions before the agent
+        reads it — the post-execution detection boundary (indirect prompt
+        injection: a webpage, email, or API response the agent reads back
+        that contains its own embedded instructions). Complements
+        evaluate(), which only scans inputs before execution.
+
+        Usage:
+            result = await my_tool(**args)
+            scan = await gate.scan_tool_result(result, tool_name="fetch_webpage", agent_id="my-agent")
+            if not scan["safe"]:
+                # don't let the agent read this result as-is
+                ...
+
+        Returns:
+            {"safe": bool, "injection_score": int, "injection_reason": str}
+
+        Fail-open: errors return {"safe": True, "injection_score": 0, "injection_reason": ""}.
+        """
+        import uuid
+        try:
+            score, reason = await self._output_logger.log_tool_result(
+                call_id=call_id or str(uuid.uuid4()),
+                tool_name=tool_name,
+                tool_result=tool_result,
+                agent_id=agent_id,
+                success=success,
+            )
+        except Exception as e:
+            logger.warning("Tool result scan error: %s — failing open", e)
+            return {"safe": True, "injection_score": 0, "injection_reason": ""}
+
+        return {
+            "safe": score < self._injection_block_threshold,
+            "injection_score": score,
+            "injection_reason": reason,
+        }
 
     async def scan_output(
         self,

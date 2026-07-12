@@ -235,30 +235,63 @@ class EscalationQueue:
             f"Agent: `{tool_call.agent_id}`\n"
             f"Risk Score: {risk_score}/100\n"
             f"Reason: {reason}\n"
-            f"Args: ```{json.dumps(tool_call.args, indent=2, default=str)}```\n"
-            f"\nApprove: `/approve {escalation_id}`\n"
-            f"Reject: `/reject {escalation_id}`"
+            f"Args: ```{json.dumps(tool_call.args, indent=2, default=str)}```"
         )
 
         # Try Slack
         slack_url = os.getenv("SLACK_WEBHOOK_URL")
         if slack_url:
+            # Interactive Approve/Reject buttons when SLACK_SIGNING_SECRET
+            # is configured (POST /slack/interactions handles the click).
+            # Without it, fall back to plain text pointing at the REST API —
+            # a webhook alone can post messages but can't receive clicks,
+            # so there's nothing to wire the buttons to.
+            has_interactions = bool(os.getenv("SLACK_SIGNING_SECRET"))
+            blocks = [
+                {
+                    "type": "section",
+                    "text": {"type": "mrkdwn", "text": message},
+                }
+            ]
+            if has_interactions:
+                blocks.append({
+                    "type": "actions",
+                    "elements": [
+                        {
+                            "type": "button",
+                            "text": {"type": "plain_text", "text": "✅ Approve"},
+                            "style": "primary",
+                            "action_id": "approve_escalation",
+                            "value": escalation_id,
+                        },
+                        {
+                            "type": "button",
+                            "text": {"type": "plain_text", "text": "❌ Reject"},
+                            "style": "danger",
+                            "action_id": "reject_escalation",
+                            "value": escalation_id,
+                        },
+                    ],
+                })
+            else:
+                blocks.append({
+                    "type": "context",
+                    "elements": [{
+                        "type": "mrkdwn",
+                        "text": (
+                            "Set SLACK_SIGNING_SECRET and enable "
+                            "Interactivity on your Slack app for "
+                            "Approve/Reject buttons here. Until then, "
+                            f"decide via `POST /escalations/{escalation_id}"
+                            f"/approve` or `/reject`, or the dashboard."
+                        ),
+                    }],
+                })
             try:
                 async with httpx.AsyncClient() as client:
                     await client.post(
                         slack_url,
-                        json={
-                            "text": message,
-                            "blocks": [
-                                {
-                                    "type": "section",
-                                    "text": {
-                                        "type": "mrkdwn",
-                                        "text": message,
-                                    },
-                                }
-                            ],
-                        },
+                        json={"text": message, "blocks": blocks},
                     )
             except Exception as e:
                 logger.error("Slack notification failed: %s", e)

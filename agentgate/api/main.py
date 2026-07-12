@@ -3,16 +3,21 @@ import asyncio
 import json
 import logging
 import os
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
+from uuid import uuid4
 
 import aiosqlite
+import httpx
 
-from dotenv import load_dotenv
+from dotenv import find_dotenv, load_dotenv
 # override=False so explicit env vars (e.g. set on the uvicorn command line or
-# by pytest's monkeypatch.setenv) win over .env defaults.
-load_dotenv(override=False)
+# by pytest's monkeypatch.setenv) win over .env defaults. usecwd=True so a
+# source/editable install searches from the customer's working directory
+# instead of walking up from this file's own location in the package source.
+load_dotenv(find_dotenv(usecwd=True), override=False)
 
 from fastapi import FastAPI, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, JSONResponse, Response
@@ -258,34 +263,139 @@ class ApprovalRequest(BaseModel):
     reason: Optional[str] = None
 
 
-@app.post("/escalations/{escalation_id}/approve")
-async def approve_escalation(escalation_id: str, body: ApprovalRequest) -> dict:
+class EscalationConflict(Exception):
+    """Raised when an escalation can't be decided — not found or already decided."""
+    def __init__(self, status_code: int, detail: str):
+        self.status_code = status_code
+        self.detail = detail
+
+
+async def _decide_escalation(
+    escalation_id: str, approved: bool, reason: Optional[str]
+) -> dict:
+    """Shared approve/reject path for the REST endpoints and Slack
+    interactions — same validation, same audit trail, regardless of who
+    clicked the button."""
     escalation = await EscalationQueue.get_by_id(escalation_id)
     if not escalation:
-        raise HTTPException(status_code=404, detail="Escalation not found")
+        raise EscalationConflict(404, "Escalation not found")
     if escalation["status"] != "pending":
-        raise HTTPException(status_code=400, detail=f"Escalation is already {escalation['status']}")
-    await EscalationQueue.approve(escalation_id)
+        raise EscalationConflict(
+            400, f"Escalation is already {escalation['status']}"
+        )
+    if approved:
+        await EscalationQueue.approve(escalation_id)
+        outcome, status = "escalation_approved", "approved"
+    else:
+        await EscalationQueue.reject(escalation_id)
+        outcome, status = "escalation_rejected", "rejected"
     audit = _audit()
     await audit.update_escalation_outcome(
-        escalation_id, "escalation_approved", "approved", body.reason
+        escalation_id, outcome, status, reason
     )
-    return {"escalation_id": escalation_id, "status": "approved", "reason": body.reason}
+    return {"escalation_id": escalation_id, "status": status, "reason": reason}
+
+
+@app.post("/escalations/{escalation_id}/approve")
+async def approve_escalation(escalation_id: str, body: ApprovalRequest) -> dict:
+    try:
+        return await _decide_escalation(escalation_id, True, body.reason)
+    except EscalationConflict as e:
+        raise HTTPException(status_code=e.status_code, detail=e.detail)
 
 
 @app.post("/escalations/{escalation_id}/reject")
 async def reject_escalation(escalation_id: str, body: ApprovalRequest) -> dict:
-    escalation = await EscalationQueue.get_by_id(escalation_id)
-    if not escalation:
-        raise HTTPException(status_code=404, detail="Escalation not found")
-    if escalation["status"] != "pending":
-        raise HTTPException(status_code=400, detail=f"Escalation is already {escalation['status']}")
-    await EscalationQueue.reject(escalation_id)
-    audit = _audit()
-    await audit.update_escalation_outcome(
-        escalation_id, "escalation_rejected", "rejected", body.reason
-    )
-    return {"escalation_id": escalation_id, "status": "rejected", "reason": body.reason}
+    try:
+        return await _decide_escalation(escalation_id, False, body.reason)
+    except EscalationConflict as e:
+        raise HTTPException(status_code=e.status_code, detail=e.detail)
+
+
+def _verify_slack_signature(
+    signing_secret: str, timestamp: str, body: bytes, signature: str
+) -> bool:
+    """Verify Slack's HMAC request signature (Slack's documented scheme).
+
+    Without this, anyone who learns the /slack/interactions URL — not hard,
+    Slack app manifests and reverse proxies leak URLs — could approve or
+    reject arbitrary escalations, including real payments, with a bare
+    HTTP POST and no Slack workspace membership at all.
+    """
+    import hashlib
+    import hmac as hmac_lib
+
+    try:
+        if abs(time.time() - int(timestamp)) > 60 * 5:
+            return False
+    except (TypeError, ValueError):
+        return False
+    basestring = f"v0:{timestamp}:{body.decode('utf-8')}".encode("utf-8")
+    computed = "v0=" + hmac_lib.new(
+        signing_secret.encode("utf-8"), basestring, hashlib.sha256
+    ).hexdigest()
+    return hmac_lib.compare_digest(computed, signature or "")
+
+
+@app.post("/slack/interactions")
+async def slack_interactions(request: Request) -> Response:
+    """Receives Slack's interactive-button callback (approve/reject clicks
+    on an escalation message) and applies the same decision path as the
+    REST endpoints.
+
+    Requires SLACK_SIGNING_SECRET to be set — see README for the Slack
+    app setup (enable Interactivity, point the Request URL here).
+    """
+    signing_secret = os.getenv("SLACK_SIGNING_SECRET")
+    if not signing_secret:
+        raise HTTPException(
+            status_code=501,
+            detail="SLACK_SIGNING_SECRET is not configured on this server",
+        )
+
+    raw_body = await request.body()
+    if not _verify_slack_signature(
+        signing_secret,
+        request.headers.get("X-Slack-Request-Timestamp", ""),
+        raw_body,
+        request.headers.get("X-Slack-Signature", ""),
+    ):
+        raise HTTPException(status_code=401, detail="Invalid Slack signature")
+
+    # Parse the urlencoded body directly instead of request.form() — Slack
+    # always sends application/x-www-form-urlencoded here, and Starlette's
+    # generic form parser requires the python-multipart dependency for a
+    # format we never receive.
+    from urllib.parse import parse_qs
+    fields = parse_qs(raw_body.decode("utf-8"))
+    payload = json.loads(fields.get("payload", ["{}"])[0])
+    action = (payload.get("actions") or [{}])[0]
+    action_id = action.get("action_id", "")
+    escalation_id = action.get("value", "")
+    user = payload.get("user", {}).get("username", "someone")
+    response_url = payload.get("response_url")
+
+    if action_id not in ("approve_escalation", "reject_escalation"):
+        raise HTTPException(status_code=400, detail=f"Unknown action_id: {action_id}")
+
+    approved = action_id == "approve_escalation"
+    try:
+        await _decide_escalation(escalation_id, approved, f"Decided via Slack by {user}")
+        verb = "✅ Approved" if approved else "❌ Rejected"
+        text = f"{verb} by *{user}* — escalation `{escalation_id}`"
+    except EscalationConflict as e:
+        text = f"⚠️ Could not record decision: {e.detail}"
+
+    # Replace the original message so the buttons don't stay clickable and
+    # every reviewer sees who already acted on it.
+    if response_url:
+        async with httpx.AsyncClient() as client:
+            await client.post(
+                response_url,
+                json={"replace_original": "true", "text": text},
+            )
+
+    return Response(status_code=200)
 
 
 @app.get("/escalations/{escalation_id}")
@@ -559,6 +669,41 @@ async def scan_output(body: ScanOutputRequest) -> dict:
     return result
 
 
+class ScanToolResultRequest(BaseModel):
+    tool_result: str
+    tool_name: str
+    agent_id: str = "unknown"
+    call_id: Optional[str] = None
+    success: bool = True
+
+
+@app.post("/scan/tool-result")
+async def scan_tool_result(body: ScanToolResultRequest) -> dict:
+    """
+    Scan a tool's return value for hidden instructions before the agent
+    reads it — the post-execution detection boundary (indirect prompt
+    injection embedded in a webpage, email, or API response the agent
+    reads back). For non-Python integrations; Python callers should use
+    GatewayClient.scan_tool_result() directly.
+    """
+    from agentgate.output_logger import OutputLogger
+
+    logger_out = OutputLogger(os.getenv("AGENTGATE_DB_PATH", "./agentgate.db"))
+    score, reason = await logger_out.log_tool_result(
+        call_id=body.call_id or str(uuid4()),
+        tool_name=body.tool_name,
+        tool_result=body.tool_result,
+        agent_id=body.agent_id,
+        success=body.success,
+    )
+    threshold = int(os.getenv("AGENTGATE_INJECTION_THRESHOLD_BLOCK", "70"))
+    return {
+        "safe": score < threshold,
+        "injection_score": score,
+        "injection_reason": reason,
+    }
+
+
 # ---------------------------------------------------------------------------
 # Output log
 # ---------------------------------------------------------------------------
@@ -569,6 +714,15 @@ async def output_log(agent_id: Optional[str] = Query(default=None), limit: int =
     from agentgate.output_logger import OutputLogger
     logger_out = OutputLogger(os.getenv("AGENTGATE_DB_PATH", "./agentgate.db"))
     entries = await logger_out.recent(limit=limit)
+    if agent_id:
+        entries = [e for e in entries if e.get("agent_id") == agent_id]
+    return {"count": len(entries), "entries": entries}
+
+
+@app.get("/pii-scan-log")
+async def pii_scan_log(agent_id: Optional[str] = Query(default=None), limit: int = Query(default=100, ge=1, le=1000)) -> dict:
+    audit = _audit()
+    entries = await audit.recent_pii_scans(limit=limit)
     if agent_id:
         entries = [e for e in entries if e.get("agent_id") == agent_id]
     return {"count": len(entries), "entries": entries}

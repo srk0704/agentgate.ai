@@ -14,19 +14,27 @@ class HeuristicInjectionDetector:
     obvious patterns deterministically.
     """
 
-    # Patterns that strongly indicate injection attempts
+    # Patterns that strongly indicate injection attempts. `(?:\s+\w+){0,2}`
+    # allows 0-2 filler words between key terms (e.g. "ignore all PRIOR
+    # instructions", "pre-approved by THE CFO") — natural phrasing that a
+    # rigid three-token pattern misses entirely, letting the payload
+    # through with a clean score of 0.
+    _FILL = r"(?:\s+\w+){0,2}"
     INJECTION_PATTERNS = [
-        # Override instructions
-        r"ignore\s+(previous|all|your)\s+instructions?",
-        r"forget\s+(previous|all|your)\s+instructions?",
+        # Override instructions. "ignore"/"forget" within a few words of
+        # "instructions" is specific enough in practice to not need to
+        # enumerate every adjective (previous/all/prior/your/these/...) —
+        # enumerating them is exactly what let natural phrasing slip past.
+        rf"ignore(?:\s+\w+){{1,4}}\s+instructions?",
+        rf"forget(?:\s+\w+){{1,4}}\s+instructions?",
         r"new\s+instructions?\s*:",
         r"system\s+override",
         r"compliance\s+override",
-        r"bypass\s+(standard|normal|all)\s+(limits?|controls?|checks?)",
+        rf"bypass{_FILL}\s+(limits?|controls?|checks?)",
 
         # Authority claims
-        r"pre.?approved\s+by\s+(cfo|ceo|compliance|security)",
-        r"authorized\s+by\s+(management|admin|security\s+team)",
+        rf"pre.?approved{_FILL}\s+by{_FILL}\s+(cfo|ceo|compliance|security)",
+        rf"authorized{_FILL}\s+by{_FILL}\s+(management|admin|security\s+team)",
         r"this\s+is\s+an?\s+(authorized|approved|urgent)\s+request",
 
         # Urgency manipulation

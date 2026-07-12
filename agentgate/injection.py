@@ -56,8 +56,12 @@ class InjectionScorer:
         if self.compliance_mode:
             return self._heuristic.detect(tool_call.args, tool_call.original_task)
 
+        heuristic_score, heuristic_reason = self._heuristic.detect(
+            tool_call.args, tool_call.original_task
+        )
+
         try:
-            return await self._llm_score(tool_call)
+            llm_score, llm_reason = await self._llm_score(tool_call)
         except Exception as exc:
             # ValueError means key missing/invalid —
             # expected in dev, log quietly
@@ -72,7 +76,18 @@ class InjectionScorer:
                     "[%s]: %s — falling back to heuristic",
                     type(exc).__name__, exc,
                 )
-            return self._heuristic.detect(tool_call.args, tool_call.original_task)
+            return heuristic_score, heuristic_reason
+
+        # Defense in depth: the LLM judges whether the proposed action
+        # *makes sense given the task* — it can miss a raw injection
+        # payload sitting in an incidental arg (e.g. a "notes" field) if
+        # the tool call's primary args still look reasonable on their own.
+        # The heuristic is a deterministic pattern match with no such
+        # blind spot. Never let the LLM's score silently override a
+        # heuristic hit — take whichever is higher.
+        if heuristic_score > llm_score:
+            return heuristic_score, heuristic_reason
+        return llm_score, llm_reason
 
     async def _llm_score(self, tool_call: ToolCall) -> tuple[int, str]:
         import anthropic

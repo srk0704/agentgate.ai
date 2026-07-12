@@ -64,22 +64,34 @@ class OutputLogger:
         self,
         call_id: str,
         tool_name: str,
-        tool_result: dict,
+        tool_result: dict | str,
         agent_id: str,
         success: bool,
         error: str | None = None,
         financial_impact: float | None = None,
-    ) -> None:
-        """Insert a new row. outcome_type = 'success' if success else 'failure'."""
+    ) -> tuple[int, str]:
+        """Insert a new row. outcome_type = 'success' if success else 'failure'.
+
+        Returns (injection_score, injection_reason) from the post-execution
+        scan so callers can act on it, not just log it.
+        """
         await self._ensure_init()
         row_id = str(uuid4())
         outcome_type = "success" if success else "failure"
 
         # Scan the tool result for injection patterns (post-execution boundary).
         # original_task=None: we're scanning the result content, not comparing
-        # it to a task.
+        # it to a task. Tool results are very often a plain string (page
+        # text, an email body, an API response) rather than a dict — wrap
+        # those so the detector actually sees the content instead of
+        # silently scanning an empty dict.
+        scan_input = (
+            tool_result
+            if isinstance(tool_result, dict)
+            else {"result": tool_result}
+        )
         tr_score, tr_reason = _tool_result_detector.detect(
-            tool_result if isinstance(tool_result, dict) else {},
+            scan_input,
             original_task=None,
         )
         if tr_score > 0:
@@ -112,6 +124,8 @@ class OutputLogger:
                 ),
             )
             await db.commit()
+
+        return tr_score, tr_reason
 
     async def log_agent_response(
         self,
