@@ -160,6 +160,7 @@ strong { font-weight: 600; color: var(--color-text-primary); }
 }
 .sb-badge.red   { background: var(--color-background-danger);  color: var(--color-text-danger); }
 .sb-badge.green { background: var(--color-background-success); color: var(--color-text-success); }
+.sb-badge.amber { background: var(--color-background-warning); color: var(--color-text-warning); }
 
 /* ── Sidebar footer health widget ──────────────────────────────────────── */
 .sb-foot {
@@ -1866,6 +1867,17 @@ strong { font-weight: 600; color: var(--color-text-primary); }
   color: var(--color-text-tertiary);
   margin-left: auto;
 }
+.auv2-observe-note {
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+  padding: 4px 0 10px;
+}
+.auv2-observe-note button {
+  background: transparent; border: none;
+  color: var(--color-text-info);
+  font-size: 12px; padding: 0; cursor: pointer;
+  text-decoration: underline;
+}
 
 .auv2-day-div {
   display: flex;
@@ -2487,16 +2499,12 @@ strong { font-weight: 600; color: var(--color-text-primary); }
       <div class="sb-item" data-tab="failure-modes" onclick="switchTabV2('failure-modes')"><span class="sb-icon">⊡</span>Failure modes</div>
       <div class="sb-item" data-tab="escalations"   onclick="switchTabV2('escalations')"><span class="sb-icon">△</span>Escalations<span class="sb-badge red" id="nav-esc-badge" style="display:none">0</span></div>
       <div class="sb-item" data-tab="audit"         onclick="switchTabV2('audit')"><span class="sb-icon">≡</span>Audit log</div>
+      <div class="sb-item" data-tab="output-scans"  onclick="switchTabV2('output-scans')"><span class="sb-icon">⛊</span>Output scans<span class="sb-badge amber" id="nav-output-badge" style="display:none">0</span></div>
     </div>
     <div class="sb-group">
       <div class="sb-group-label">Improve</div>
       <div class="sb-item" data-tab="learning" onclick="switchTabV2('learning')"><span class="sb-icon">⟳</span>Learning loop<span class="sb-badge green" id="nav-learning-badge" style="display:none">0</span></div>
       <div class="sb-item" data-tab="agents"   onclick="switchTabV2('agents')"><span class="sb-icon">⬡</span>Agents</div>
-    </div>
-    <div class="sb-group">
-      <div class="sb-group-label">Export</div>
-      <div class="sb-item" data-tab="eval"       onclick="switchTabV2('eval')"><span class="sb-icon">↗</span>Eval dataset</div>
-      <div class="sb-item" data-tab="compliance" onclick="switchTabV2('compliance')"><span class="sb-icon">⊞</span>Compliance report</div>
     </div>
   </nav>
 
@@ -2618,9 +2626,9 @@ strong { font-weight: 600; color: var(--color-text-primary); }
         <div class="fmv2-zone-header">
           <span class="fmv2-zone-label">Coming soon</span>
           <div class="fmv2-zone-line"></div>
-          <span class="fmv2-zone-count" id="fmv2-coming-count"></span>
+          <button class="resolved-toggle" id="fmv2-coming-toggle" onclick="fmv2ToggleComing()"></button>
         </div>
-        <div class="fmv2-coming-grid" id="fmv2-coming-grid"></div>
+        <div class="fmv2-coming-grid" id="fmv2-coming-grid" style="display:none"></div>
       </div>
     </div>
   </div>
@@ -2649,7 +2657,23 @@ strong { font-weight: 600; color: var(--color-text-primary); }
         </div>
         <span class="auv2-count" id="auv2-count"></span>
       </div>
+      <div class="auv2-observe-note" id="auv2-observe-note" style="display:none"></div>
       <div id="auv2-list"></div>
+    </div>
+  </div>
+
+  <!-- OUTPUT SCANS ──────────────────────────────────────────────────── -->
+  <div class="content v2-content" id="content-output-scans">
+    <div class="auv2-page">
+      <div class="auv2-filter-bar">
+        <div class="auv2-filter-group">
+          <button class="auv2-fg-btn on" onclick="osv2SetFilter('all')">All</button>
+          <button class="auv2-fg-btn" onclick="osv2SetFilter('injection')">Hidden instructions</button>
+          <button class="auv2-fg-btn" onclick="osv2SetFilter('pii')">PII</button>
+        </div>
+        <span class="auv2-count" id="osv2-count"></span>
+      </div>
+      <div id="osv2-list"></div>
     </div>
   </div>
 
@@ -2697,23 +2721,6 @@ strong { font-weight: 600; color: var(--color-text-primary); }
     </div>
   </div>
 
-  <!-- EVAL DATASET ──────────────────────────────────────────────────── -->
-  <div class="content v2-content" id="content-eval">
-    <div class="stub">
-      <h2>Eval dataset export</h2>
-      <p>Export your labeled production decisions as an eval dataset compatible with Braintrust, LangSmith, or any eval framework. Available in the next release.</p>
-      <p style="margin-top:16px"><a onclick="switchTabV2('overview')">← Back to Overview</a></p>
-    </div>
-  </div>
-
-  <!-- COMPLIANCE ────────────────────────────────────────────────────── -->
-  <div class="content v2-content" id="content-compliance">
-    <div class="stub">
-      <h2>Compliance report</h2>
-      <p>Generate a SOC2 / EU AI Act compliance report from your audit log. Available in the next release.</p>
-      <p style="margin-top:16px"><a onclick="switchTabV2('overview')">← Back to Overview</a></p>
-    </div>
-  </div>
 </main>
 
 <div class="toast" id="toast"></div>
@@ -2775,6 +2782,8 @@ let pendingEscs        = [];
 let fmCatalog          = null;
 let fmStats            = null;
 let learningChanges    = [];
+let outputScans        = [];   // merged output-log + pii-scan-log, most recent first
+let osv2Filter         = "all";
 let timeRange          = "today";
 let activePage         = "overview";
 let refreshTimer       = null;
@@ -2942,6 +2951,24 @@ async function loadLearning() {
   renderV2Overview();
 }
 
+function osv2IsFlagged(s) {
+  return s.kind === "injection"
+    ? (s.tool_result_injection_score || 0) > 0
+    : !s.safe;
+}
+
+async function loadOutputScans() {
+  const [ol, pl] = await Promise.all([
+    safeJson(BASE + "/output-log?limit=100"),
+    safeJson(BASE + "/pii-scan-log?limit=100"),
+  ]);
+  const injections = ((ol && ol.entries) || []).map(e => ({ ...e, kind: "injection", when: e.logged_at }));
+  const piiScans    = ((pl && pl.entries) || []).map(e => ({ ...e, kind: "pii", when: e.scanned_at }));
+  outputScans = [...injections, ...piiScans].sort((a, b) => (b.when || "").localeCompare(a.when || ""));
+  renderSidebar();
+  if (activePage === "output-scans") renderOutputScans();
+}
+
 /* ─────────────────────────────────────────────────────────────────────────
    Sidebar (logo agent, nav badges, footer health)
    ───────────────────────────────────────────────────────────────────────── */
@@ -2973,6 +3000,14 @@ function renderSidebar() {
     learnBadge.textContent = learningChanges.length;
   } else {
     learnBadge.style.display = "none";
+  }
+  const outputBadge = $("nav-output-badge");
+  const flaggedScans = outputScans.filter(osv2IsFlagged).length;
+  if (flaggedScans > 0) {
+    outputBadge.style.display = "inline-block";
+    outputBadge.textContent = flaggedScans;
+  } else {
+    outputBadge.style.display = "none";
   }
 
   // Footer health widget
@@ -3111,17 +3146,30 @@ function renderHero(filtered) {
   let learningDetail = "";
   if (learningChanges.length > 0) {
     const tools = new Set(learningChanges.map(c => c.tool_name).filter(Boolean));
-    learningDetail = " — auto-tuning " + Array.from(tools).slice(0, 2).map(t => `<strong>${escHtml(t)}</strong>`).join(" and ");
+    learningDetail = " auto-tuned " + Array.from(tools).slice(0, 2).map(t => `<strong>${escHtml(t)}</strong>`).join(" and ") + " based on that history.";
   }
+
+  // `approved` counts human-approved escalations (dashboard, REST, or
+  // Slack) — a person made that call. Only learningChanges reflects the
+  // self-learning loop actually auto-applying a policy change. Don't
+  // credit the loop for a human's decision; the Learning loop tab reports
+  // its own activity separately and would contradict this copy otherwise.
+  let approvedDetail = "";
+  if (approved > 0) {
+    approvedDetail = " Your team resolved <strong>" + approved + "</strong> escalation" +
+      (approved === 1 ? "" : "s") + " this week.";
+  }
+  const learningSentence = learningChanges.length > 0
+    ? " The learning loop" + learningDetail
+    : "";
 
   const lbl = RANGE_LABEL[timeRange];
   const body =
     "<strong>" + escHtml(agentName) + "</strong> handled <strong>" + total +
     "</strong> action" + (total === 1 ? "" : "s") + " " + lbl + ". " +
     "AgentGate caught <strong>" + unsafe + "</strong> issue" + (unsafe === 1 ? "" : "s") +
-    " before they executed" + issueDetail + ". " +
-    "The learning loop auto-resolved <strong>" + approved + "</strong> escalation" +
-    (approved === 1 ? "" : "s") + " this week" + learningDetail + ".";
+    " before they executed" + issueDetail + "." +
+    approvedDetail + learningSentence;
   $("hero-body").innerHTML = body;
 
   // Chips
@@ -3133,7 +3181,12 @@ function renderHero(filtered) {
   chips.push(pendingEscs.length > 0
     ? `<span class="chip warning"><span class="chip-dot" style="background:var(--color-text-warning)"></span>${pendingEscs.length} pending review</span>`
     : `<span class="chip success"><span class="chip-dot" style="background:var(--color-text-success)"></span>none pending</span>`);
-  chips.push(`<span class="chip"><span class="chip-dot" style="background:var(--color-text-tertiary)"></span>${approved} auto-resolved</span>`);
+  if (approved > 0) {
+    chips.push(`<span class="chip"><span class="chip-dot" style="background:var(--color-text-tertiary)"></span>${approved} resolved</span>`);
+  }
+  if (learningChanges.length > 0) {
+    chips.push(`<span class="chip"><span class="chip-dot" style="background:var(--color-text-tertiary)"></span>${learningChanges.length} auto-tuned</span>`);
+  }
   $("hero-chips").innerHTML = chips.join("");
 }
 
@@ -3750,6 +3803,12 @@ function renderTraceBody(d) {
 // so it uses its own fmTabStats global, fetched WITHOUT a since param.
 let fmv2Charts = {};
 let fmTabStats = null;
+let fmv2ComingOpen = false;
+
+function fmv2ToggleComing() {
+  fmv2ComingOpen = !fmv2ComingOpen;
+  renderFmV2();
+}
 
 /* Map a mode (id + category) to one of four accent colors used by the
    card's left border, badge, sparkline, and stat. */
@@ -3972,7 +4031,12 @@ function renderFmV2() {
       }).join("");
 
   // ── Coming soon zone ─────────────────────────────────────────────────
-  $("fmv2-coming-count").textContent = coming.length + " in development";
+  // Collapsed by default — this is a roadmap teaser, not something a
+  // reviewer needs to evaluate today, and 12 full cards is the single
+  // biggest thing on the page if left open.
+  const comingToggle = $("fmv2-coming-toggle");
+  comingToggle.textContent = (fmv2ComingOpen ? "Hide" : "Show") + " " + coming.length + " in development";
+  $("fmv2-coming-grid").style.display = fmv2ComingOpen ? "grid" : "none";
   $("fmv2-coming-grid").innerHTML = coming.slice(0, 12).map(m => {
     const layer = m.detection_layer || "Pre-execution";
     const tier  = m.tier
@@ -4066,6 +4130,7 @@ function toggleResolved() {
    Audit log tab v2 — cards, inline trace, reads from allDecisions
    ───────────────────────────────────────────────────────────────────────── */
 let auv2Filter = "all";
+let auv2ShowObserve = false;
 let auv2Expanded = new Set();
 
 function auv2SetFilter(f) {
@@ -4355,8 +4420,34 @@ function auv2FormatDate(iso) {
   } catch(e) { return iso; }
 }
 
+function auv2ToggleObserve() {
+  auv2ShowObserve = !auv2ShowObserve;
+  renderAuditV2();
+}
+
 function renderAuditV2() {
   let decisions = filterByTimeRange(allDecisions, timeRange);
+
+  // Observe mode logs every call with outcome "allowed" while a customer
+  // bootstraps (ONBOARDING.md recommends 500+ calls before generating a
+  // policy) — at that volume it's 90%+ of the audit log and buries the
+  // handful of real enforce-mode decisions a reviewer actually came here
+  // for. Hidden by default; explicitly re-orderable via the toggle below.
+  const observeHidden = decisions.filter(d => d.observe_mode == 1).length;
+  if (!auv2ShowObserve) {
+    decisions = decisions.filter(d => d.observe_mode != 1);
+  }
+  const noteEl = $("auv2-observe-note");
+  if (noteEl) {
+    if (observeHidden > 0) {
+      noteEl.style.display = "block";
+      noteEl.innerHTML = auv2ShowObserve
+        ? `Showing ${observeHidden} observe-mode log${observeHidden === 1 ? "" : "s"} (logged only, not enforced). <button onclick="auv2ToggleObserve()">Hide</button>`
+        : `${observeHidden} observe-mode log${observeHidden === 1 ? "" : "s"} hidden (logged only, not enforced). <button onclick="auv2ToggleObserve()">Show</button>`;
+    } else {
+      noteEl.style.display = "none";
+    }
+  }
 
   if (auv2Filter !== "all") {
     if (auv2Filter === "escalated") {
@@ -4421,6 +4512,84 @@ function renderAuditV2() {
     });
 
   list.innerHTML = html;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Output scans tab — the post-execution boundary: hidden instructions
+   found in tool results (scan_tool_result / POST /scan/tool-result) and
+   PII found in agent output (scan_output / POST /scan/output). Both write
+   to their own tables with no prior UI — this is the first one.
+   ───────────────────────────────────────────────────────────────────────── */
+function osv2SetFilter(f) {
+  osv2Filter = f;
+  document.querySelectorAll("#content-output-scans .auv2-fg-btn").forEach(b => {
+    const onclickAttr = b.getAttribute("onclick") || "";
+    b.classList.toggle("on", onclickAttr.includes("'" + f + "'"));
+  });
+  renderOutputScans();
+}
+
+function osv2BuildCard(s) {
+  const isInjection = s.kind === "injection";
+  const flagged = osv2IsFlagged(s);
+  const stripeClass = flagged
+    ? (isInjection ? "auv2-stripe-blocked" : "auv2-stripe-escalated")
+    : "auv2-stripe-allowed";
+  const pillLabel = isInjection
+    ? (flagged ? "Hidden instructions found" : "Clean")
+    : (flagged ? "PII " + escHtml(s.recommendation || "flagged") : "Clean");
+  const pillClass = flagged ? (isInjection ? "auv2-pill-blocked" : "auv2-pill-escalated") : "auv2-pill-allowed";
+
+  const detailText = isInjection
+    ? (s.tool_result_injection_reason || "")
+    : (() => {
+        try {
+          const found = JSON.parse(s.pii_found || "[]");
+          return found.length ? "Found: " + found.join(", ") : "";
+        } catch { return ""; }
+      })();
+
+  return `
+    <div class="auv2-card">
+      <div class="auv2-inner">
+        <div class="auv2-stripe ${stripeClass}"></div>
+        <div class="auv2-body">
+          <div class="auv2-top">
+            <span class="auv2-pill ${pillClass}">${pillLabel}</span>
+            <span class="auv2-tool">${escHtml(s.tool_name || "unknown")}</span>
+            <span class="auv2-sep">·</span>
+            <span class="auv2-agent">${escHtml(s.agent_id || "")}</span>
+            <span class="auv2-time">${escHtml(timeAgo(s.when))}</span>
+          </div>
+          ${detailText ? `<div class="auv2-reason">${escHtml(detailText)}</div>` : ""}
+        </div>
+      </div>
+    </div>`;
+}
+
+function renderOutputScans() {
+  let scans = outputScans;
+  if (osv2Filter !== "all") scans = scans.filter(s => s.kind === osv2Filter);
+
+  const countEl = $("osv2-count");
+  if (countEl) countEl.textContent = scans.length + " scan" + (scans.length !== 1 ? "s" : "");
+
+  const list = $("osv2-list");
+  if (!list) return;
+
+  if (!scans.length) {
+    list.innerHTML =
+      '<div style="text-align:center;padding:32px;color:var(--color-text-tertiary);font-size:13px">' +
+      (outputScans.length
+        ? "No scans match this filter."
+        : "No output scans yet. Call gate.scan_tool_result() after a tool " +
+          "executes, or POST /scan/output, to start scanning tool results " +
+          "and agent output for hidden instructions and PII.") +
+      "</div>";
+    return;
+  }
+
+  list.innerHTML = scans.map(osv2BuildCard).join("");
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -4966,10 +5135,9 @@ const TAB_META = {
   "failure-modes": { title: "Failure modes",    sub: "47 failure modes across 9 categories",        showTime: false },
   "escalations":   { title: "Escalations",      sub: "Actions awaiting human review",               showTime: false },
   "audit":         { title: "Audit log",        sub: "Complete decision history",                   showTime: true  },
+  "output-scans":  { title: "Output scans",     sub: "Hidden instructions and PII in tool results", showTime: false },
   "learning":      { title: "Learning loop",    sub: "How your agent improves over time",           showTime: false },
   "agents":        { title: "Agents",           sub: "Per-agent health and reliability",            showTime: true  },
-  "eval":          { title: "Eval dataset",     sub: "Export labeled decisions",                    showTime: false },
-  "compliance":    { title: "Compliance report",sub: "EU AI Act-ready audit bundle",                showTime: false },
 };
 function switchTabV2(tabName) {
   if (!TAB_META[tabName]) tabName = "overview";
@@ -4993,6 +5161,7 @@ function switchTabV2(tabName) {
   else if (tabName === "failure-modes"){ loadFmV2(); }
   else if (tabName === "escalations")  { loadEscalations().then(() => { loadResolvedEscalations().then(renderEscTab); }); }
   else if (tabName === "audit")        renderAuditV2();
+  else if (tabName === "output-scans") renderOutputScans();
   else if (tabName === "learning")     loadLearningV2();
   else if (tabName === "agents")       renderAgentsV2();
 }
@@ -5066,6 +5235,7 @@ async function boot() {
     loadFmCatalog(),
     loadFmStats(),
     loadLearning(),
+    loadOutputScans(),
   ]);
   connectWs();
   if (refreshTimer) clearInterval(refreshTimer);
@@ -5074,6 +5244,7 @@ async function boot() {
     loadEscalations();
     loadFmStats();
     loadLearning();
+    loadOutputScans();
   }, 30000);
 }
 boot();
