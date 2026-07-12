@@ -41,7 +41,7 @@ AgentGate catches these failures before they execute.
 
 ## What it does
 
-**Detects 47 failure modes** across 9 categories — 11 actively detecting in v0.8.0:
+**Detects 47 failure modes** across 9 categories — 11 actively detecting in v0.9.0:
 
 | Failure Mode | Method | Detection Layer |
 |---|---|---|
@@ -348,8 +348,9 @@ poetry run pytest tests/ -q
 | Four-dimension reliability scoring | ✅ Complete |
 | Self-learning loop | ✅ Complete |
 | Closed-Loop Intervention | ✅ Complete |
-| Dashboard v1 (engineer) | ✅ Complete |
-| Dashboard v2 (executive) | ✅ Complete |
+| Dashboard | ✅ Complete |
+| Slack escalations (interactive approve/reject) | ✅ Complete |
+| Output scan dashboard (injection + PII) | ✅ Complete |
 | FinMate demo | ✅ Complete |
 | First design partner | 🎯 Next |
 
@@ -396,4 +397,4 @@ MIT
 
 ---
 
-*v0.8.0 · May 2026*
+*v0.9.0 · July 2026*
